@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Agentic — Autonomous Pre-Market Intelligence</title>
-  <meta name="description" content="Agentic deploys autonomous AI agents that verify the candles, run a 12/26/9 MACD momentum engine and deliver a mobile-first pre-market brief to your inbox every day at 07:00 MYT. Pay as you go from $5 USD." />
+  <meta name="description" content="Agentic deploys autonomous AI agents: a 07:00 MYT stock brief and a 1,000-lead B2B Excel scraper. Pay as you go from $5 USD." />
   <meta name="theme-color" content="#0F172A" />
   <meta property="og:title" content="Agentic — Autonomous Pre-Market Intelligence" />
-  <meta property="og:description" content="Pre-market briefs at 07:00 MYT from a ready-to-deploy AI agent. 5 credits per stock, per week. No recurring lock-in." />
+  <meta property="og:description" content="Two live AI agents. A 07:00 MYT stock brief and a 1,000-lead B2B Excel scraper. Pay as you go." />
   <meta property="og:type" content="website" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M8 22.5 L13.5 15.5 L18 19.5 L24 9.5' fill='none' stroke='%2322D3EE' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='9.5' r='2.4' fill='%236366F1'/%3E%3C/svg%3E" />
@@ -16,7 +16,7 @@
   <a class="skip-link" href="#main">Skip to content</a>
 
   <!-- ======================================================================
-       Shared SVG definitions (gradients + glow filter used across the page)
+       Shared SVG definitions
        ====================================================================== -->
   <svg class="svg-sprite" aria-hidden="true" focusable="false" width="0" height="0">
     <defs>
@@ -38,6 +38,10 @@
         <stop offset="0.55" stop-color="#22D3EE" />
         <stop offset="1" stop-color="#0EA5E9" />
       </radialGradient>
+      <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#F59E0B" />
+        <stop offset="1" stop-color="#FCD34D" />
+      </linearGradient>
       <filter id="mascotGlow" x="-60%" y="-60%" width="220%" height="220%">
         <feGaussianBlur stdDeviation="2.4" result="blur" />
         <feMerge>
@@ -49,7 +53,7 @@
   </svg>
 
   <!-- ======================================================================
-       Sticky glassmorphic navbar
+       Sticky glass navbar
        ====================================================================== -->
   <header class="navbar" id="navbar">
     <div class="container nav-inner">
@@ -91,18 +95,16 @@
           <div class="hero-copy">
             <span class="badge-live">
               <span class="live-dot" aria-hidden="true"></span>
-              Live · Delivers daily at 07:00 MYT
+              Live · 07:00 MYT delivery
               <span class="badge-divider" aria-hidden="true">|</span>
               <span id="nextBriefIn">next brief soon</span>
             </span>
 
-            <h1>Wake up to the market,<br /><span class="text-grad">already analysed.</span></h1>
+            <h1>Market intel before<br /><span class="text-grad">your first coffee.</span></h1>
 
             <p class="lead">
-              Agentic deploys autonomous AI agents that verify the OHLC candles, run a
-              12/26/9 MACD momentum engine, and synthesise curated company news — then
-              deliver a mobile-friendly pre-market brief to your inbox every day at
-              <strong>07:00 MYT</strong>.
+              Autonomous agents verify candles, score MACD momentum, then email your
+              07:00 MYT brief.
             </p>
 
             <div class="hero-cta">
@@ -113,15 +115,15 @@
             <ul class="hero-trust">
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                5 credits per stock / week
+                5 credits / stock / week
               </li>
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Pay as you go, no auto-renew
+                No auto-renew
               </li>
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Verified data, zero hype
+                Verified data only
               </li>
             </ul>
           </div>
@@ -138,40 +140,38 @@
               </div>
               <div id="homeBrief" aria-live="polite"></div>
             </div>
-            <p class="preview-note">Tap a ticker — this is the exact brief your agent emails at 07:00 MYT.</p>
+            <p class="preview-note">Tap a ticker — the exact 07:00 MYT brief.</p>
           </div>
         </div>
       </div>
 
-      <!-- Stats band -->
       <div class="container">
         <div class="stats-band">
           <div class="stat">
             <span class="stat-value">07:00</span>
-            <span class="stat-label">MYT daily delivery</span>
+            <span class="stat-label">MYT daily</span>
           </div>
           <div class="stat">
             <span class="stat-value">12/26/9</span>
-            <span class="stat-label">MACD momentum engine</span>
+            <span class="stat-label">MACD engine</span>
           </div>
           <div class="stat">
             <span class="stat-value">100%</span>
-            <span class="stat-label">Verified OHLC candles</span>
+            <span class="stat-label">Verified OHLC</span>
           </div>
           <div class="stat">
             <span class="stat-value">5 <em>credits</em></span>
-            <span class="stat-label">Per stock, per week</span>
+            <span class="stat-label">Per stock / week</span>
           </div>
         </div>
       </div>
 
-      <!-- How it works -->
       <section class="section" aria-labelledby="howTitle">
         <div class="container">
           <div class="section-head">
-            <span class="eyebrow">How the agents work</span>
-            <h2 id="howTitle">Four steps. Fully autonomous.</h2>
-            <p>No prompts to write, no dashboards to babysit. You pick the tickers once — the agent handles the rest on a schedule.</p>
+            <span class="eyebrow">How it works</span>
+            <h2 id="howTitle">Four steps, fully autonomous.</h2>
+            <p>Pick tickers once. The agent handles the rest.</p>
           </div>
 
           <div class="steps-grid">
@@ -182,8 +182,9 @@
                   <path d="M4 6h16M4 12h10M4 18h7" /><circle cx="18" cy="16" r="3" /><path d="M20.5 18.5L23 21" />
                 </svg>
               </span>
-              <h3>Pick your watchlist</h3>
-              <p>Choose from a curated list of liquid US equities and ETFs. One stock runs 5 credits; larger top-ups unlock 2–6 tickers.</p>
+              <h3>Pick your tickers</h3>
+              <p>Up to 6 US names.</p>
+              <span class="mini-pill">5 credits / stock</span>
             </article>
 
             <article class="step-card">
@@ -193,8 +194,9 @@
                   <path d="M12 3l7 3v5c0 4.4-2.9 8.3-7 9.5C7.9 19.3 5 15.4 5 11V6z" /><path d="M9 11.5l2 2 4-4" />
                 </svg>
               </span>
-              <h3>Data gets verified</h3>
-              <p>Daily OHLC candles are cleaned and checked for gaps, splits and stale prints before a single calculation runs.</p>
+              <h3>Verify the candles</h3>
+              <p>Gaps, splits and stale prints removed.</p>
+              <span class="mini-pill">Clean OHLC</span>
             </article>
 
             <article class="step-card">
@@ -204,8 +206,9 @@
                   <path d="M3 17l5-6 4 4 3-4 6 6" /><path d="M3 20h18" />
                 </svg>
               </span>
-              <h3>Momentum + news synthesis</h3>
-              <p>The 12/26/9 MACD engine scores trend strength, then three curated headlines are merged into one plain-English read.</p>
+              <h3>Score momentum</h3>
+              <p>MACD plus three curated headlines.</p>
+              <span class="mini-pill">MACD + News</span>
             </article>
 
             <article class="step-card">
@@ -215,22 +218,22 @@
                   <rect x="3" y="5" width="18" height="14" rx="2.5" /><path d="M3.5 6.5L12 13l8.5-6.5" />
                 </svg>
               </span>
-              <h3>Delivered at 07:00 MYT</h3>
-              <p>A mobile-first email lands before your trading day starts — every single day of your 7-day access window.</p>
+              <h3>Deliver at 07:00</h3>
+              <p>Mobile email, every day of your week.</p>
+              <span class="mini-pill">07:00 MYT</span>
             </article>
           </div>
         </div>
       </section>
 
-      <!-- CTA band -->
       <div class="container">
         <div class="cta-band">
           <div>
-            <h2>Your next brief is one activation away.</h2>
-            <p>Top up in USD, pick your tickers, and let the agent take the 6am shift.</p>
+            <h2>Meet your 6am analyst.</h2>
+            <p>Top up, pick tickers, done.</p>
           </div>
           <div class="cta-band-actions">
-            <a class="btn btn-primary btn-lg" href="#agents">Meet the agent</a>
+            <a class="btn btn-primary btn-lg" href="#agents">Meet the agents</a>
             <a class="btn btn-ghost btn-lg" href="#plans">Buy credits</a>
           </div>
         </div>
@@ -243,50 +246,69 @@
     <section class="view" data-view="agents" id="view-agents">
       <div class="container page-head">
         <span class="eyebrow">Agentic Agent marketplace</span>
-        <h1>Deploy an analyst that never sleeps.</h1>
-        <p>Every agent runs autonomously on verified market data. Activate with credits — no seats, no contracts, nothing to cancel.</p>
+        <h1>Two live agents. Zero busywork.</h1>
+        <p>Pay per run with credits. No seats, no contracts.</p>
       </div>
 
       <div class="container agent-layout">
-        <!-- Flagship agent -->
+        <!-- Flagship: Stock Market News Agent -->
         <article class="agent-card agent-card-featured" id="stockAgentCard">
           <div class="agent-visual">
             <div class="agent-visual-glow" aria-hidden="true"></div>
-            <svg class="mascot" viewBox="0 0 128 132" role="img" aria-label="Stock Market News Agent mascot — a friendly AI robot with a bullish chart antenna">
+
+            <!-- Cute pro-trader mascot: fedora + tie + floating candles -->
+            <svg class="mascot" viewBox="0 0 210 160" role="img" aria-label="Stock Market News Agent mascot — a cute robot trader in a fedora with a floating bullish candlestick">
               <g class="mascot-bob">
-                <g class="mascot-antenna">
-                  <path d="M64 36 V27" stroke="#334155" stroke-width="3.5" stroke-linecap="round" />
+                <!-- floating bullish candles -->
+                <g class="mascot-candle">
                   <g stroke="#10B981" stroke-width="2" stroke-linecap="round">
-                    <path d="M46 25 V15" /><path d="M58 22 V11" /><path d="M70 18 V7" /><path d="M82 14 V4" />
+                    <path d="M170 72 V58" /><path d="M180 62 V46" /><path d="M190 50 V34" />
                   </g>
                   <g fill="#10B981">
-                    <rect x="43" y="18" width="6" height="5" rx="1.6" />
-                    <rect x="55" y="14" width="6" height="6" rx="1.6" />
-                    <rect x="67" y="10" width="6" height="7" rx="1.6" />
+                    <rect x="166.5" y="62" width="7" height="10" rx="1.6" />
+                    <rect x="176.5" y="52" width="7" height="10" rx="1.6" />
+                    <rect x="186.5" y="40" width="7" height="10" rx="1.6" fill="#34D399" />
                   </g>
-                  <rect x="79" y="6" width="6" height="8" rx="1.6" fill="#34D399" />
-                  <path d="M40 27 L88 8" stroke="#22D3EE" stroke-width="1.4" stroke-dasharray="4 4" opacity="0.55" fill="none" />
+                  <path d="M160 88 L196 44" fill="none" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round" />
+                  <path d="M196 44 L189 46 M196 44 L194 51" fill="none" stroke="#22D3EE" stroke-width="2.4" stroke-linecap="round" />
                 </g>
 
+                <!-- ears -->
                 <g fill="#1E293B" stroke="#22D3EE" stroke-width="1.6">
-                  <rect x="12" y="58" width="9" height="20" rx="4.5" />
-                  <rect x="107" y="58" width="9" height="20" rx="4.5" />
+                  <rect x="24" y="76" width="9" height="20" rx="4.5" />
+                  <rect x="143" y="76" width="9" height="20" rx="4.5" />
                 </g>
 
-                <rect x="20" y="34" width="88" height="72" rx="26" fill="url(#mascotHead)" stroke="url(#mascotRim)" stroke-width="2.4" />
-                <rect x="32" y="46" width="64" height="48" rx="18" fill="#0B1220" opacity="0.75" />
+                <!-- head -->
+                <rect x="34" y="46" width="108" height="80" rx="30" fill="url(#mascotHead)" stroke="url(#mascotRim)" stroke-width="2.4" />
+                <rect x="46" y="58" width="84" height="60" rx="21" fill="#0B1220" opacity="0.75" />
 
+                <!-- blinking eyes -->
                 <g class="mascot-eyes">
-                  <ellipse cx="50" cy="65" rx="8.6" ry="9.6" fill="url(#mascotEye)" filter="url(#mascotGlow)" />
-                  <ellipse cx="78" cy="65" rx="8.6" ry="9.6" fill="url(#mascotEye)" filter="url(#mascotGlow)" />
-                  <circle cx="52.4" cy="61.6" r="2.4" fill="#F0FDFF" opacity="0.95" />
-                  <circle cx="80.4" cy="61.6" r="2.4" fill="#F0FDFF" opacity="0.95" />
+                  <ellipse cx="68" cy="84" rx="9" ry="10" fill="url(#mascotEye)" filter="url(#mascotGlow)" />
+                  <ellipse cx="108" cy="84" rx="9" ry="10" fill="url(#mascotEye)" filter="url(#mascotGlow)" />
+                  <circle cx="70.5" cy="80.5" r="2.4" fill="#F0FDFF" opacity="0.95" />
+                  <circle cx="110.5" cy="80.5" r="2.4" fill="#F0FDFF" opacity="0.95" />
                 </g>
 
-                <circle cx="38" cy="82" r="3.4" fill="#F472B6" opacity="0.35" />
-                <circle cx="90" cy="82" r="3.4" fill="#F472B6" opacity="0.35" />
-                <path class="mascot-smile" d="M54 82 Q64 90.5 74 82" fill="none" stroke="#22D3EE" stroke-width="3" stroke-linecap="round" />
-                <rect x="56" y="98" width="16" height="2.6" rx="1.3" fill="#22D3EE" opacity="0.35" />
+                <!-- cheeks + smile -->
+                <circle cx="56" cy="101" r="3.4" fill="#F472B6" opacity="0.35" />
+                <circle cx="120" cy="101" r="3.4" fill="#F472B6" opacity="0.35" />
+                <path class="mascot-smile" d="M76 100 Q88 109 100 100" fill="none" stroke="#22D3EE" stroke-width="3" stroke-linecap="round" />
+
+                <!-- collar + tie -->
+                <path d="M64 126 L88 142 L112 126 L104 126 L88 134 L72 126 Z" fill="#F8FAFC" />
+                <path d="M84 130 L92 137 L88 152 L84 137 Z" fill="#DC2626" />
+                <path d="M84 130 L92 137 L88 132 Z" fill="#B91C1C" opacity="0.7" />
+
+                <!-- tilted fedora -->
+                <g class="mascot-hat" transform="rotate(-7 88 46)">
+                  <rect x="58" y="14" width="60" height="34" rx="13" fill="url(#mascotHead)" stroke="url(#mascotRim)" stroke-width="2" />
+                  <rect x="58" y="34" width="60" height="10" rx="3" fill="url(#goldGrad)" />
+                  <rect x="58" y="34" width="16" height="10" rx="3" fill="#6366F1" />
+                  <path d="M70 22 Q88 16 106 22" fill="none" stroke="#64748B" stroke-width="1.6" opacity="0.55" />
+                  <ellipse cx="88" cy="48" rx="55" ry="11" fill="#0B1220" stroke="url(#mascotRim)" stroke-width="2" />
+                </g>
               </g>
             </svg>
 
@@ -301,18 +323,14 @@
               <h2>Stock Market News Agent</h2>
               <span class="price-tag">5 Credits / Stock · 7-Day Access</span>
             </div>
-            <p class="agent-desc">
-              A pre-market analyst that reads the tape before you do. Verified candles, a 12/26/9
-              MACD momentum read, a 52-week range check and three curated headlines — compressed
-              into one brief you can finish with your first coffee.
-            </p>
+            <p class="agent-desc">Verified candles, MACD bias and curated news — one pre-market brief.</p>
 
-            <ul class="agent-features">
-              <li>Verified OHLC candles with 52-week range context</li>
-              <li>MACD 12/26/9 bias — Buy · Hold · Sell momentum bar</li>
-              <li>3 curated headlines synthesised into one plain-English read</li>
-              <li>07:00 MYT email delivery · mobile-first layout</li>
-            </ul>
+            <div class="pill-row">
+              <span class="mini-pill">07:00 MYT Daily</span>
+              <span class="mini-pill">MACD + News</span>
+              <span class="mini-pill">52-Week Range</span>
+              <span class="mini-pill">7-Day Access</span>
+            </div>
 
             <div class="agent-actions">
               <button type="button" class="btn btn-ghost" data-open-sample>View Live Sample Output</button>
@@ -324,7 +342,96 @@
           </div>
         </article>
 
-        <!-- Coming soon teasers -->
+        <!-- Second live agent: B2B Lead Scraper -->
+        <article class="agent-card agent-card-featured agent-card-scraper" id="leadScraperCard">
+          <div class="agent-visual agent-visual-scraper">
+            <div class="agent-visual-glow agent-visual-glow-green" aria-hidden="true"></div>
+
+            <!-- Cute data-scout mascot: sweeping magnifier + floating XLS card -->
+            <svg class="mascot mascot-scraper" viewBox="0 0 230 160" role="img" aria-label="B2B Lead Scraper Agent mascot — a cute robot holding a sweeping magnifying glass next to an XLS card">
+              <g class="mascot-bob">
+                <!-- floating XLS card -->
+                <g class="mascot-xls" transform="rotate(-7 28 78)">
+                  <rect x="6" y="50" width="46" height="58" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" />
+                  <path d="M6 58 Q6 50 14 50 L44 50 Q52 50 52 58 L52 64 L6 64 Z" fill="#16A34A" />
+                  <text x="29" y="61" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="7.5" font-weight="800" fill="#F0FDF4">XLS</text>
+                  <rect x="13" y="72" width="32" height="3" rx="1.5" fill="#CBD5E1" />
+                  <rect x="13" y="80" width="24" height="3" rx="1.5" fill="#E2E8F0" />
+                  <rect x="13" y="88" width="30" height="3" rx="1.5" fill="#E2E8F0" />
+                  <rect x="13" y="96" width="18" height="3" rx="1.5" fill="#E2E8F0" />
+                </g>
+
+                <!-- ears + antenna -->
+                <g fill="#1E293B" stroke="#10B981" stroke-width="1.6">
+                  <rect x="40" y="62" width="9" height="20" rx="4.5" />
+                  <rect x="131" y="62" width="9" height="20" rx="4.5" />
+                </g>
+                <path d="M90 30 V20" stroke="#334155" stroke-width="3.4" stroke-linecap="round" />
+                <circle cx="90" cy="16" r="4.6" fill="#34D399" filter="url(#mascotGlow)" />
+
+                <!-- head -->
+                <rect x="50" y="30" width="80" height="80" rx="28" fill="url(#mascotHead)" stroke="url(#mascotRim)" stroke-width="2.4" />
+                <rect x="60" y="42" width="60" height="56" rx="18" fill="#0B1220" opacity="0.75" />
+
+                <!-- blinking eyes -->
+                <g class="mascot-eyes">
+                  <ellipse cx="76" cy="66" rx="8.2" ry="9.2" fill="url(#mascotEye)" filter="url(#mascotGlow)" />
+                  <ellipse cx="104" cy="66" rx="8.2" ry="9.2" fill="url(#mascotEye)" filter="url(#mascotGlow)" />
+                  <circle cx="78.2" cy="62.8" r="2.2" fill="#F0FDFF" opacity="0.95" />
+                  <circle cx="106.2" cy="62.8" r="2.2" fill="#F0FDFF" opacity="0.95" />
+                </g>
+
+                <!-- smile + cheeks -->
+                <circle cx="63" cy="84" r="3.1" fill="#F472B6" opacity="0.35" />
+                <circle cx="117" cy="84" r="3.1" fill="#F472B6" opacity="0.35" />
+                <path class="mascot-smile" d="M80 84 Q90 92 100 84" fill="none" stroke="#22D3EE" stroke-width="3" stroke-linecap="round" />
+
+                <!-- body + arm -->
+                <rect x="66" y="108" width="48" height="26" rx="13" fill="#22314A" stroke="url(#mascotRim)" stroke-width="1.8" />
+                <path d="M114 112 L146 106" stroke="#22314A" stroke-width="11" stroke-linecap="round" />
+                <path d="M114 112 L146 106" stroke="#22D3EE" stroke-width="1.6" stroke-linecap="round" opacity="0.5" />
+                <circle cx="150" cy="105" r="8" fill="#22314A" stroke="#22D3EE" stroke-width="1.8" />
+
+                <!-- sweeping magnifier -->
+                <g class="mascot-scan">
+                  <line x1="150" y1="105" x2="170" y2="78" stroke="#CBD5E1" stroke-width="6" stroke-linecap="round" />
+                  <circle cx="181" cy="64" r="19" fill="rgba(34,211,238,0.14)" stroke="#E2E8F0" stroke-width="4" />
+                  <path d="M172 54 Q179 48 188 51" fill="none" stroke="#A5F3FC" stroke-width="2.4" stroke-linecap="round" opacity="0.8" />
+                </g>
+              </g>
+            </svg>
+
+            <span class="agent-status">
+              <span class="status-dot" aria-hidden="true"></span>
+              Ready & Online · Up to 1,000 Leads (.xlsx)
+            </span>
+          </div>
+
+          <div class="agent-body">
+            <div class="agent-title-row">
+              <h2>B2B Lead Scraper Agent</h2>
+              <span class="price-tag price-tag-green">15 Credits / Run · 1,000 Leads</span>
+            </div>
+            <p class="agent-desc">Extracts up to 1,000 verified B2B leads from 10 search terms into Excel.</p>
+
+            <div class="pill-row">
+              <span class="mini-pill">1,000 Leads · .xlsx</span>
+              <span class="mini-pill">10 Search Terms</span>
+              <span class="mini-pill">25-Row Preview</span>
+              <span class="mini-pill">Live Progress</span>
+            </div>
+
+            <div class="agent-actions">
+              <button type="button" class="btn btn-ghost" data-open-columns>View Excel Columns</button>
+              <button type="button" class="btn btn-subscribe is-disabled" id="scraperSubscribeBtn" disabled aria-disabled="true">Subscribe</button>
+            </div>
+            <p class="subscribe-caption" id="scraperSubscribeCaption">
+              Needs 15 credits (1,000 leads). <a href="#plans">Top up in Manage My Plan</a>.
+            </p>
+          </div>
+        </article>
+
+        <!-- Coming soon -->
         <div class="teaser-grid">
           <article class="agent-card agent-card-teaser">
             <div class="teaser-top">
@@ -337,11 +444,11 @@
               <span class="status-pill status-soon">Coming Soon</span>
             </div>
             <h3>Crypto Whale Alert Agent</h3>
-            <p>Watches on-chain movements and exchange netflows, then flags abnormal whale activity before it hits the timeline.</p>
-            <ul class="teaser-meta">
-              <li>On-chain flow monitoring</li>
-              <li>24/7 event triggers</li>
-            </ul>
+            <p>Tracks on-chain whale moves and exchange netflows.</p>
+            <div class="pill-row">
+              <span class="mini-pill">On-chain</span>
+              <span class="mini-pill">24/7 Triggers</span>
+            </div>
             <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Crypto Whale Alert Agent">Join the waitlist</button>
           </article>
 
@@ -356,11 +463,11 @@
               <span class="status-pill status-soon">Coming Soon</span>
             </div>
             <h3>Earnings Call Summarizer</h3>
-            <p>Turns 60-minute earnings calls into a three-bullet takeaway — guidance changes, tone shifts and the questions management dodged.</p>
-            <ul class="teaser-meta">
-              <li>Live transcript digestion</li>
-              <li>Guidance delta scoring</li>
-            </ul>
+            <p>Turns 60-minute calls into three bullet takeaways.</p>
+            <div class="pill-row">
+              <span class="mini-pill">Transcripts</span>
+              <span class="mini-pill">Guidance Delta</span>
+            </div>
             <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Earnings Call Summarizer">Join the waitlist</button>
           </article>
         </div>
@@ -374,7 +481,7 @@
       <div class="container page-head center">
         <span class="eyebrow">Pay as you go · USD</span>
         <h1>Manage My Plan</h1>
-        <p>Top up credits when you need them. 5 credits covers one stock for 7 days — no recurring lock-in, no cancellation maze.</p>
+        <p>Credits never auto-renew. 5 credits = 1 stock for 7 days.</p>
       </div>
 
       <div class="container">
@@ -384,17 +491,16 @@
             <span class="wallet-strip-value"><strong data-credit-count>4</strong> Credits</span>
           </div>
           <p class="wallet-strip-copy">
-            Credits are consumed when you activate a 7-day subscription (5 credits per stock).
-            Anything unused stays in your wallet — there is no auto-renewal.
+            Unused credits stay in your wallet. Spend them on any agent, anytime.
           </p>
-          <a class="btn btn-ghost btn-sm" href="#configure">Configure an agent</a>
+          <a class="btn btn-ghost btn-sm" href="#agents">Browse agents</a>
         </div>
       </div>
 
       <div class="container">
         <div class="pack-grid" id="packGrid"><!-- rendered by app.js --></div>
         <p class="fine center pack-footnote">
-          All prices in USD. Demo checkout — no real payment is processed and credits are added instantly for testing.
+          Prices in USD. Demo checkout — credits are added instantly for testing.
         </p>
       </div>
 
@@ -402,7 +508,7 @@
         <div class="panel subs-panel">
           <div class="panel-head">
             <h2>Active subscriptions</h2>
-            <p>Every activation creates its own 7-day window. Expired windows drop off automatically.</p>
+            <p>Each activation runs its own 7-day window.</p>
           </div>
           <div id="activeSubsList"></div>
         </div>
@@ -415,50 +521,41 @@
     <section class="view" data-view="about" id="view-about">
       <div class="container page-head">
         <span class="eyebrow">About Agentic</span>
-        <h1>We built the analyst you can't afford to hire.</h1>
-        <p>Agentic started as a spreadsheet, a cron job and two people who were tired of scrolling charts at 6am.</p>
+        <h1>The analyst you can't afford to hire.</h1>
+        <p>Built by two traders who were tired of 6am chart scrolling.</p>
       </div>
 
       <div class="container about-grid">
         <div class="about-copy panel">
           <h2>Our story</h2>
           <p>
-            In 2024 we were running a small trading desk with a big problem: the information that
-            actually mattered — verified price action, momentum, and the two or three headlines that
-            explain a gap — arrived in five different places at five different times. By the time it
-            was assembled, the pre-market window was gone.
+            The data that mattered lived in five places at five different times. By the time we
+            assembled it, the pre-market window was gone.
           </p>
           <p>
-            So we automated it. What began as a nightly script that emailed us a single NVDA brief
-            turned into a network of autonomous agents that every morning at <strong>07:00 MYT</strong>
-            do the boring, disciplined work of reading the tape properly.
+            So we automated it: nightly scripts became autonomous agents that do the boring,
+            disciplined reading for us — every morning at <strong>07:00 MYT</strong>.
           </p>
           <p>
-            Today Agentic is a pay-as-you-go marketplace. You buy credits, you deploy an agent, and
-            you get seven days of pre-market intelligence at a price that scales with your watchlist —
-            not your seat count.
+            Agentic is pay-as-you-go on purpose. Buy credits, deploy an agent, get results.
           </p>
-          <h2 class="mt">Why pre-market intelligence?</h2>
-          <p>
-            The first 30 minutes of a US session are where retail traders lose the most edge. Briefs
-            that arrive <em>after</em> the open are entertainment. We wanted a brief you could read
-            with your first coffee — before the market gives you the answer for free.
-          </p>
+          <h2 class="mt">Why pre-market?</h2>
+          <p>Briefs that arrive after the open are entertainment. Ours arrive before the answer is free.</p>
         </div>
 
         <aside class="about-aside">
           <div class="aside-card">
-            <h3>What we will never do</h3>
+            <h3>What we never do</h3>
             <ul class="cross-list">
-              <li>Tell you to buy or sell a specific position size</li>
-              <li>Execute a trade or touch custody of your money</li>
-              <li>Publish a headline we haven't matched to a source</li>
-              <li>Hide a recurring charge behind a free trial</li>
+              <li>Give position sizes or trade calls</li>
+              <li>Touch custody of your money</li>
+              <li>Publish unsourced headlines</li>
+              <li>Hide recurring charges</li>
             </ul>
           </div>
           <div class="aside-card aside-card-accent">
             <h3>Delivery promise</h3>
-            <p><strong>07:00 MYT</strong>, every day of your 7-day window. If a data feed is late, the agent waits for verified candles rather than shipping a guess.</p>
+            <p><strong>07:00 MYT</strong>, every day of your window. Late feed? The agent waits for verified candles instead of guessing.</p>
           </div>
         </aside>
       </div>
@@ -466,26 +563,26 @@
       <section class="section" aria-labelledby="standardsTitle">
         <div class="container">
           <div class="section-head">
-            <span class="eyebrow">Data accuracy standards</span>
+            <span class="eyebrow">Data standards</span>
             <h2 id="standardsTitle">Boring inputs. Trustworthy outputs.</h2>
-            <p>Every number in a brief can be traced back to a rule below.</p>
+            <p>Every number traces back to a rule.</p>
           </div>
 
           <div class="standards-grid">
             <article class="standard-card">
               <span class="standard-num">01</span>
               <h3>Verified OHLC candles</h3>
-              <p>Daily open/high/low/close series are validated for missing sessions, split adjustments, duplicate prints and stale ticks before use.</p>
+              <p>Missing sessions, splits, duplicates and stale ticks are removed before use.</p>
             </article>
             <article class="standard-card">
               <span class="standard-num">02</span>
-              <h3>12/26/9 MACD momentum engine</h3>
-              <p>The standard 12-period EMA vs 26-period EMA spread, smoothed by a 9-period signal line. Bias is expressed as Buy, Hold or Sell — never as a price target.</p>
+              <h3>12/26/9 MACD engine</h3>
+              <p>Bias is expressed as Buy, Hold or Sell — never as a price target.</p>
             </article>
             <article class="standard-card">
               <span class="standard-num">03</span>
               <h3>Curated news synthesis</h3>
-              <p>Three headlines per ticker, each matched to a named source and timestamp, then condensed into one plain-English paragraph without editorial spin.</p>
+              <p>Three sourced headlines condensed into one plain-English paragraph.</p>
             </article>
           </div>
         </div>
@@ -502,37 +599,37 @@
             <details class="faq-item">
               <summary>How do credits work?</summary>
               <div class="faq-body">
-                <p>Credits are prepaid units of monitoring. One stock for seven days costs 5 credits. A 2-stock watchlist costs 10 credits per activation, a 3-stock watchlist costs 15, and so on. Credits never expire while your account is active and there is no auto-renewal.</p>
+                <p>One stock for seven days costs 5 credits. The Lead Scraper costs 15 credits per 1,000-lead run. Credits never expire and never auto-renew.</p>
               </div>
             </details>
             <details class="faq-item">
-              <summary>What time does the brief arrive?</summary>
+              <summary>When does the brief arrive?</summary>
               <div class="faq-body">
-                <p>Every day at <strong>07:00 MYT</strong> (Asia/Kuala_Lumpur, UTC+8) for the full length of your 7-day window. The email is built mobile-first, so it reads well on a phone without zooming.</p>
+                <p>Every day at <strong>07:00 MYT</strong> for the length of your 7-day window. Mobile-first, no zooming.</p>
               </div>
             </details>
             <details class="faq-item">
               <summary>Which stocks can I monitor?</summary>
               <div class="faq-body">
-                <p>A curated set of liquid US equities and ETFs: NVDA, AAPL, TSLA, PLTR, SPY, MSFT, AMZN, META, GOOGL, AMD, QQQ and NFLX. The configuration grid only lights up tickers your credit balance can afford.</p>
+                <p>NVDA, AAPL, TSLA, PLTR, SPY, MSFT, AMZN, META, GOOGL, AMD, QQQ and NFLX. The grid only unlocks what you can afford.</p>
               </div>
             </details>
             <details class="faq-item">
-              <summary>Can I change my watchlist mid-week?</summary>
+              <summary>How does the Lead Scraper deliver?</summary>
               <div class="faq-body">
-                <p>Each activation holds its own fixed 7-day watchlist so the brief stays consistent. To change tickers, let the current window run out — or activate a second window with the new selection once you have enough credits.</p>
+                <p>It searches your 10 terms, stops at 1,000 unique leads, and builds an .xlsx with only the columns you picked.</p>
               </div>
             </details>
             <details class="faq-item">
-              <summary>What happens if I have fewer than 5 credits?</summary>
+              <summary>What if I have fewer than 5 credits?</summary>
               <div class="faq-body">
-                <p>The Subscribe button on the Stock Market News Agent stays locked until you hold at least 5 credits. Top up in Manage My Plan — a $5 Starter Top-Up is exactly enough for one stock for one week.</p>
+                <p>The Subscribe buttons stay locked. A $5 Starter Top-Up is exactly one stock for one week.</p>
               </div>
             </details>
             <details class="faq-item">
               <summary>Is this financial advice?</summary>
               <div class="faq-body">
-                <p>No. Agentic produces informational and educational summaries for tracking purposes only. Nothing produced by an agent is a recommendation, solicitation or personalised advice. Always do your own research.</p>
+                <p>No. Everything is informational and educational tracking only. Always do your own research.</p>
               </div>
             </details>
           </div>
@@ -542,13 +639,13 @@
       <div class="container">
         <div class="disclaimer-card">
           <h3>Financial disclaimer</h3>
-          <p>For informational and educational tracking purposes only. Not financial advice. Market data can be delayed, incomplete or revised. Agentic Labs is not a broker, dealer, investment adviser or fiduciary.</p>
+          <p>For informational and educational tracking purposes only. Not financial advice. Agentic Labs is not a broker, dealer, investment adviser or fiduciary.</p>
         </div>
       </div>
     </section>
 
     <!-- ====================================================================
-         VIEW · CONFIGURE
+         VIEW · CONFIGURE (stock agent)
          ==================================================================== -->
     <section class="view" data-view="configure" id="view-configure">
       <div class="container">
@@ -559,18 +656,16 @@
         <div class="page-head configure-head">
           <span class="eyebrow">Step 2 of 3 · Configuration</span>
           <h1>Build your 7-day watchlist</h1>
-          <p>Stock Market News Agent · briefs delivered daily at 07:00 MYT · 5 credits per stock.</p>
+          <p>07:00 MYT delivery · 5 credits per stock.</p>
         </div>
 
-        <!-- Locked state: not enough credits to configure anything -->
         <div class="notice notice-warn" id="configureLocked" hidden>
           <strong>You need at least 5 credits to activate a 7-day subscription.</strong>
-          <p>Your current balance is <span data-credit-count>4</span> credits. Top up with a $5 Starter Top-Up — that is exactly 5 credits, enough for one stock for a week.</p>
+          <p>Your balance is <span data-credit-count>4</span> credits. A $5 Starter Top-Up is exactly enough for one stock for a week.</p>
           <a class="btn btn-primary" href="#plans">Top up in Manage My Plan</a>
         </div>
 
         <div id="configureBody">
-          <!-- Dynamic credit calculator header -->
           <div class="calc-card">
             <div class="calc-grid">
               <div class="calc-cell">
@@ -593,7 +688,6 @@
             </div>
           </div>
 
-          <!-- Stock selection -->
           <div class="panel">
             <div class="panel-head">
               <h2>1. Select your stocks</h2>
@@ -602,15 +696,14 @@
             <div class="stock-grid" id="stockGrid" role="group" aria-label="Select stocks to monitor"><!-- rendered by app.js --></div>
             <p class="topup-link-row">
               <span>Need more stocks?</span>
-              <a href="#plans">Top up credits in Manage My Plan <span aria-hidden="true">→</span></a>
+              <a href="#plans">Top up in Manage My Plan <span aria-hidden="true">→</span></a>
             </p>
           </div>
 
-          <!-- Subscriber details -->
           <div class="panel">
             <div class="panel-head">
               <h2>2. Subscriber details</h2>
-              <p>We use this address for delivery and receipts only.</p>
+              <p>Delivery and receipts only.</p>
             </div>
 
             <form id="configureForm" class="config-form" novalidate>
@@ -626,13 +719,11 @@
                 <span class="field-error" id="emailError" role="alert"></span>
               </div>
 
-              <div class="config-summary" id="configSummary">
-                <!-- filled by app.js -->
-              </div>
+              <div class="config-summary" id="configSummary"><!-- filled by app.js --></div>
 
               <div class="activate-row">
                 <button type="submit" class="btn btn-lg btn-activate" id="activateBtn">Confirm & Spend 5 Credits (7 Days)</button>
-                <p class="fine">Credits are deducted immediately. First brief arrives tomorrow at 07:00 MYT.</p>
+                <p class="fine">First brief arrives tomorrow at 07:00 MYT.</p>
               </div>
             </form>
           </div>
@@ -641,7 +732,98 @@
     </section>
 
     <!-- ====================================================================
-         VIEW · SUCCESS
+         VIEW · SCRAPER RESULTS
+         ==================================================================== -->
+    <section class="view" data-view="scraper-results" id="view-scraper-results">
+      <div class="container">
+        <a class="back-link" href="#agents">
+          <span aria-hidden="true">←</span> Back to Agentic Agent
+        </a>
+
+        <div class="page-head configure-head">
+          <span class="eyebrow">B2B Lead Scraper Agent</span>
+          <h1>Your Excel is being built.</h1>
+          <p>Live extraction progress · first 25 rows preview · .xlsx at 100%.</p>
+        </div>
+
+        <div class="panel" id="scraperEmpty" hidden>
+          <div class="panel-head">
+            <h2>No scrape running</h2>
+            <p>Start a job to watch live progress and download your leads.</p>
+          </div>
+          <a class="btn btn-primary" href="#agents">Open the Lead Scraper</a>
+        </div>
+
+        <div id="scraperMain" hidden>
+          <div class="scraper-grid">
+            <div class="ring-card" id="ringCard">
+              <div class="ring-wrap">
+                <svg class="ring" viewBox="0 0 140 140" role="img" aria-label="Lead collection progress">
+                  <circle class="ring-track" cx="70" cy="70" r="58" />
+                  <circle class="ring-fill" id="ringFill" cx="70" cy="70" r="58" transform="rotate(-90 70 70)" />
+                </svg>
+                <div class="ring-center">
+                  <strong id="ringPercent">0%</strong>
+                  <span id="ringCount">0 / 1,000 leads</span>
+                </div>
+              </div>
+              <span class="webhook-badge" id="scraperStatus">
+                <span class="webhook-dot" aria-hidden="true"></span>
+                <span class="webhook-text">Starting…</span>
+              </span>
+              <p class="ring-hint">10 leads = 1% · stops at 1,000</p>
+            </div>
+
+            <div class="panel job-card">
+              <div class="panel-head">
+                <h2>Job details</h2>
+                <p id="jobMeta">—</p>
+              </div>
+
+              <dl class="summary-grid compact" id="jobSummary"></dl>
+
+              <div class="field resume-field">
+                <label for="resumeJobId">Resume / check Job ID</label>
+                <div class="resume-row">
+                  <input type="text" id="resumeJobId" placeholder="lead_xxxxx" autocomplete="off" spellcheck="false" />
+                  <button type="button" class="btn btn-ghost" id="resumeBtn">Check</button>
+                </div>
+              </div>
+
+              <p class="fine">Cloud extraction takes ~20–45 mins for 1,000 leads. Safe to close this tab — return anytime with your Job ID.</p>
+            </div>
+          </div>
+
+          <div class="panel result-panel">
+            <div class="panel-head row-head">
+              <div>
+                <h2>Preview</h2>
+                <p id="tableMeta">First 25 rows · selected columns only</p>
+              </div>
+              <span class="mini-pill" id="previewPill">0 rows</span>
+            </div>
+
+            <div class="table-scroll">
+              <table class="leads-table" id="leadsTable">
+                <thead></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div class="download-bar">
+              <div class="download-info">
+                <strong id="downloadTitle">Excel (.xlsx)</strong>
+                <span id="downloadSub">Unlocks at 1,000 leads</span>
+              </div>
+              <button type="button" class="btn btn-primary" id="downloadBtn" disabled>Download Full Excel (.xlsx)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
+         VIEW · SUCCESS (stock subscription)
          ==================================================================== -->
     <section class="view" data-view="success" id="view-success">
       <div class="container success-wrap">
@@ -669,12 +851,12 @@
             <a class="btn btn-primary" href="#plans">Top Up More Credits</a>
           </div>
 
-          <p class="fine success-fine">A confirmation was logged for your email. Your first brief arrives tomorrow at 07:00 MYT.</p>
+          <p class="fine success-fine">First brief arrives tomorrow at 07:00 MYT.</p>
         </div>
 
         <div class="success-card success-empty" id="successEmpty" hidden>
           <h1>No activation to show yet.</h1>
-          <p>Activate the Stock Market News Agent to start receiving 07:00 MYT pre-market briefs.</p>
+          <p>Activate the Stock Market News Agent to start receiving 07:00 MYT briefs.</p>
           <div class="success-actions">
             <a class="btn btn-primary" href="#agents">Browse Agentic Agent</a>
             <a class="btn btn-ghost" href="#plans">Buy credits</a>
@@ -700,7 +882,7 @@
           </span>
           <span class="brand-text">Agentic</span>
         </a>
-        <p>Autonomous pre-market intelligence for people who would rather not scroll charts at 6am.</p>
+        <p>Autonomous agents for pre-market intel and B2B lead extraction.</p>
         <p class="footer-tag">Static site · zero dependencies · GitHub Pages ready</p>
       </div>
 
@@ -714,10 +896,10 @@
 
       <div class="footer-col">
         <h3>Resources</h3>
-        <!-- TODO: replace with your own repository URL after you fork this project -->
+        <!-- TODO: replace with your own repository URL -->
         <a id="ghLink" href="https://github.com/your-username/agentic-webpage" target="_blank" rel="noopener noreferrer">GitHub repository</a>
         <a href="#configure">Configure an agent</a>
-        <a href="#agents">Sample output</a>
+        <a href="#scraper-results">Scraper results</a>
         <button type="button" class="linklike" id="demoResetFooter">Demo Reset: 4 Credits</button>
       </div>
     </div>
@@ -741,7 +923,7 @@
         <strong data-credit-count>4</strong>
         <span>credits available</span>
       </div>
-      <p class="wallet-hint">1 stock for 7 days = 5 credits. No auto-renewal — your balance changes only when you top up or activate.</p>
+      <p class="wallet-hint">1 stock for 7 days = 5 credits. A 1,000-lead scrape = 15 credits. No auto-renewal.</p>
       <div class="wallet-actions">
         <a class="btn btn-primary btn-sm" href="#plans">Manage My Plan</a>
         <button type="button" class="btn btn-ghost btn-sm" id="demoResetPopover">Demo Reset: 4 Credits</button>
@@ -764,9 +946,7 @@
     </div>
   </div>
 
-  <!-- ======================================================================
-       Modal + toast shells
-       ====================================================================== -->
+  <!-- Modal + toast shells -->
   <div class="modal-root" id="modalRoot" hidden>
     <div class="modal-backdrop" data-modal-close></div>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">

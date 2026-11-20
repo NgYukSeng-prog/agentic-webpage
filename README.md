@@ -1,12 +1,17 @@
 # Agentic — Autonomous Pre-Market Intelligence
 
 A production-ready, **zero-dependency** static SaaS web app for a marketplace of autonomous
-financial AI agents. Built with plain HTML, CSS and vanilla JavaScript — no build step, no npm,
-no framework. It deploys directly from the root of your `main` branch on GitHub Pages.
+AI agents. Built with plain HTML, CSS and vanilla JavaScript — no build step, no npm, no
+framework. It deploys directly from the root of your `main` branch on GitHub Pages.
 
-The flagship agent is the **Stock Market News Agent**: a pay-as-you-go agent that emails a
-mobile-first pre-market brief every day at **07:00 MYT** (UTC+8). Credits are priced in USD
-($5 = 5 credits = one stock for 7 days).
+Two agents are live:
+
+- **Stock Market News Agent** — a pay-as-you-go 07:00 MYT pre-market brief.
+  `5 credits = 1 stock for 7 days`.
+- **B2B Lead Scraper Agent** — up to 1,000 verified B2B leads from 10 search terms, exported
+  to `.xlsx`. `15 credits per run`, with a live circular progress ring (`10 leads = 1%`),
+  25-row preview and client-side demo export when the backend is offline.
+======>>>>>>> REPLACE
 
 ---
 
@@ -14,10 +19,10 @@ mobile-first pre-market brief every day at **07:00 MYT** (UTC+8). Credits are pr
 
 ```
 agentic-webpage/
-├── index.html   # All six views, sticky glass navbar, footer, wallet widget, SVG mascot
-├── styles.css   # Design tokens, fintech dark theme, mascot animations, responsive layout
-├── config.js    # ← the only file you normally need to edit (webhook URL + stock universe)
-├── app.js       # Hash router, localStorage credit store, credit logic, webhook POST
+├── index.html   # Seven views, glass navbar, footer, wallet widget, two animated mascots
+├── styles.css   # Design tokens, mascot keyframes, progress ring, tables, responsive layout
+├── config.js    # ← endpoints, credit prices, stock universe, scraper countries/columns
+├── app.js       # Router, credit store, both agent flows, polling, XLSX writer
 └── README.md
 ```
 
@@ -143,6 +148,20 @@ The ready-to-paste Code-node bodies are in
 `../my-agent-stack/n8n-code/fetch-active-subscribers.js` (also on the server at
 `~/my-agent-stack/n8n-code/`). Full node-by-node setup: `../my-agent-stack/WEBHOOK_CONNECT.md`.
 
+### B2B Lead Scraper endpoints
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/webhook/subscribe-lead-scraper` | `POST` | Creates a job. Body: `{ job_id, agent_id, name, email, country, search_terms, selected_columns, target_rows: 1000, credits_spent: 15 }` |
+| `/webhook/lead-scraper-status?job_id=…` | `GET` | Returns `{ status, collected_count, preview_rows? }`; polled every 5s |
+| `/webhook/download-leads?job_id=…` | `GET` | Streams the finished `.xlsx` |
+
+**Offline fallback:** if the start call fails (CORS, 404, inactive workflow) or a status poll
+fails, the job switches to `mode: "demo"`. The ring then animates `+10 leads` every 160 ms up to
+1,000, deterministic sample rows are generated from the chosen country and search terms, and the
+download button builds a **real `.xlsx` in the browser** (store-only ZIP + OOXML, zero
+dependencies). The preview table always renders only the columns the user selected.
+
 ---
 
 ## 5. Configuration reference
@@ -159,6 +178,16 @@ The ready-to-paste Code-node bodies are in
 | `STORAGE_KEY` | `agentic.state.v1` | localStorage key |
 | `AGENT_ID` / `AGENT_NAME` | stock agent | Identity in the webhook payload |
 | `SUPPORTED_STOCKS` | 12 tickers | Drives the configuration grid |
+| `LEAD_SCRAPER_CREDITS` | `15` | Credits per 1,000-lead scrape |
+| `LEAD_SCRAPER_START_URL` | n8n endpoint | `POST` job start |
+| `LEAD_SCRAPER_STATUS_URL` | n8n endpoint | `GET ?job_id=` polled every 5s |
+| `LEAD_SCRAPER_DOWNLOAD_URL` | n8n endpoint | `GET ?job_id=` for the `.xlsx` |
+| `LEAD_SCRAPER_TARGET_ROWS` | `1000` | Ring target (10 leads = 1%) |
+| `LEAD_SCRAPER_POLL_MS` | `5000` | Status poll interval |
+| `LEAD_SCRAPER_COUNTRIES` | 22 options | Country selector, incl. Other |
+| `LEAD_SCRAPER_SAMPLE_TERMS` | 10 terms | Placeholders + Fill Sample button |
+| `LEAD_SCRAPER_REQUIRED_COLUMNS` | 3 | Company, email, phone (always on) |
+| `LEAD_SCRAPER_OPTIONAL_COLUMNS` | 6 | Website, address, maps, rating, category, hours |
 
 Add or remove entries in `SUPPORTED_STOCKS` (`{ symbol, name, tag }`) and the selection grid
 regenerates automatically. Keep the list short and liquid — it is designed to stay usable on a
@@ -168,31 +197,31 @@ regenerates automatically. Keep the list short and liquid — it is designed to 
 
 ## 6. Credit rules (the important business logic)
 
-- **Rate:** 5 credits = 1 stock for 7 days.
-- **New visitors start with 4 credits**, so the locked state is easy to demo.
+- **Stock brief:** 5 credits = 1 stock for 7 days. **Lead Scraper:** 15 credits per 1,000-lead run.
+- **New visitors start with 4 credits**, so both locked states are easy to demo.
 - `maxAffordableStocks = Math.floor(credits / 5)`.
-- On `#agents`, the **Subscribe** button is:
-  - **grey** (`#94A3B8` / text `#F8FAFC`), `disabled`, `cursor: not-allowed` when `credits < 5`,
-    with the caption *"Requires at least 5 credits for 7 days (1 stock). Top up in Manage My
-    Plan."*;
-  - **vibrant red** (`#DC2626`, hover `#B91C1C`) and navigates to `#configure` when `credits >= 5`.
+- On `#agents`, both **Subscribe** buttons share the same gate:
+  - **grey** (`#94A3B8` / text `#F8FAFC`), `disabled`, `cursor: not-allowed` below the price
+    (5 or 15 credits) with a one-line top-up caption;
+  - **vibrant red** (`#DC2626`, hover `#B91C1C`) and enabled at or above the price.
+- Stock Subscribe opens `#configure`; Lead Scraper Subscribe opens the configuration modal.
 - On `#configure` the grid locks every unselected ticker (`opacity: 0.45`, `disabled`,
   tooltip *"Insufficient credits for +1 stock (needs +5 credits)"*) once
   `selectedStocks.length >= maxAffordableStocks`. Deselecting unlocks immediately.
-- Cost is deducted at activation and the success page shows the remaining balance, which is
-  mirrored instantly in the fixed bottom-left credit pill.
+- Credits are deducted immediately (5 × stocks, or 15 flat) and mirrored in the fixed
+  bottom-left credit pill.
 
 ### Quick test script
 
 | Step | Expected |
 | --- | --- |
-| Load the site (fresh visitor) | Pill reads **Credits: 4**; Subscribe is grey + disabled |
-| `#plans` → *Starter Top-Up* → **Purchase Credits (USD)** → **Pay $5.00 (Demo)** | Pill reads **9** |
-| `#agents` | Subscribe turns red and is clickable |
-| `#configure` | 1 stock pre-selected · calculator shows `5 Credits` · all other tickers locked at cap |
-| Deselect NVDA, select TSLA + AAPL (with 9 credits only 1 slot) | Only 1 selectable — lock re-applies |
+| Load the site (fresh visitor) | Pill reads **Credits: 4**; both Subscribe buttons grey + disabled |
+| `#plans` → *Starter Top-Up* → **Pay $5.00 (Demo)** | Pill reads **9**; stock Subscribe turns red |
+| `#configure` | 1 stock pre-selected · calculator shows `5 Credits` · other tickers locked at cap |
 | Fill name + email → **Confirm & Spend 5 Credits (7 Days)** | Success page + pill shows **4** |
-| Footer → **Demo Reset: 4 Credits** | Balance back to 4, active subscriptions cleared |
+| Top up $10 + $5 again → 19 credits | Lead Scraper Subscribe turns red |
+| Lead Scraper → **Subscribe** → 1 term + email → **Confirm & Spend 15 Credits** | `#scraper-results`; ring fills +1% per 10 leads; table fills; `.xlsx` download enables at 100% |
+| Footer → **Demo Reset: 4 Credits** | Balance back to 4, subscriptions + scraper job cleared |
 
 ---
 
@@ -206,7 +235,16 @@ State is stored in `localStorage` under `agentic.state.v1`:
   "email": "you@example.com",
   "name": "Alex Tan",
   "subscriptions": [ { "id": "sub_…", "watchlist": ["NVDA"], "startedAt": "…", "expiresAt": "…" } ],
-  "lastSubscription": { }
+  "lastSubscription": { },
+  "scraperJob": {
+    "job_id": "lead_…",
+    "country": "Malaysia",
+    "search_terms": ["CNC machining"],
+    "selected_columns": ["company_name", "email", "phone", "website"],
+    "collected_count": 420,
+    "mode": "demo",
+    "status": "running"
+  }
 }
 ```
 
