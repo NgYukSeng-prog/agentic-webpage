@@ -350,7 +350,9 @@
     closeMobileNav();
     closeWallet();
     closeModal(false);
-    stopScraperTimers();
+
+    /* Keep the live job poller running between #scraper-results and #agents. */
+    if (route !== 'agents' && route !== 'scraper-results') stopScraperTimers();
 
     if (route === 'configure') {
       /* #configure is now a modal: show #agents underneath, then open it. */
@@ -362,6 +364,15 @@
     if (route === 'plans') renderPlans();
     if (route === 'success') renderSuccess();
     if (route === 'scraper-results') renderScraperResults();
+
+    renderScraperCardStatus();
+    if (route === 'agents') ensureScraperRunning();
+
+    if ((route === 'agents' || route === 'scraper-results') &&
+        state.scraperJob && state.scraperJob.status === 'completed' &&
+        state.scraperJob.email_sent !== true && state.scraperJob.mode === 'live') {
+      startEmailTrail();
+    }
 
     document.title = TITLES[route] || TITLES.home;
     window.scrollTo(0, 0);
@@ -406,6 +417,7 @@
 
     /* Safe no-op when neither config modal is open. */
     renderConfigure();
+    renderScraperCardStatus();
   }
 
   /* Second live agent — same grey/red gate, 3-credit minimum. */
@@ -1319,6 +1331,7 @@
 
   function resetDemo() {
     stopScraperTimers();
+    stopEmailTrail();
     state = defaultState();
     selectedStocks = [];
     lastWebhookResult = null;
@@ -1602,6 +1615,9 @@
     return ids.filter(function (id) { return LEAD_COLUMN_LABELS[id]; });
   }
 
+  let emailTrailTimer = null;
+  let emailTrailTries = 0;
+
   function stopScraperTimers() {
     if (scraperPollTimer) {
       window.clearInterval(scraperPollTimer);
@@ -1611,6 +1627,88 @@
       window.clearInterval(scraperDemoTimer);
       scraperDemoTimer = null;
     }
+  }
+
+  function scraperPageActive() {
+    const route = currentRoute();
+    return route === 'scraper-results' || route === 'agents';
+  }
+
+  function stopEmailTrail() {
+    if (emailTrailTimer) {
+      window.clearInterval(emailTrailTimer);
+      emailTrailTimer = null;
+    }
+    emailTrailTries = 0;
+  }
+
+  /* After completion, poll up to 3× more (3s apart) for the SMTP flag. */
+  function startEmailTrail() {
+    if (emailTrailTimer) return;
+    const job = state.scraperJob;
+    if (!job || job.mode === 'demo' || job.email_sent === true) return;
+
+    emailTrailTries = 0;
+    emailTrailTimer = window.setInterval(function () {
+      const current = state.scraperJob;
+      if (!current || current.email_sent === true || emailTrailTries >= 3) {
+        stopEmailTrail();
+        return;
+      }
+      emailTrailTries += 1;
+      pollScraperStatus(true);
+    }, 3000);
+  }
+
+  /* Compact live/finished status on the B2B agent card in #agents. */
+  function renderScraperCardStatus() {
+    const wrap = $('#scraperCardStatus');
+    if (!wrap) return;
+
+    const job = state.scraperJob;
+    if (!job) {
+      wrap.hidden = true;
+      wrap.innerHTML = '';
+      return;
+    }
+
+    const target = scraperTarget(job);
+    const count = clamp(Math.floor(Number(job.collected_count) || 0), 0, target);
+    const percent = Math.min(100, Math.floor((count / target) * 100));
+    const status = String(job.status || '').toLowerCase();
+
+    if (status === 'completed') {
+      wrap.hidden = false;
+      wrap.innerHTML =
+        '<div class="card-job-done"><a class="card-job-ready" href="#scraper-results">' +
+        '✓ Latest Run Ready (' + target.toLocaleString('en-US') + ' leads)</a></div>';
+      return;
+    }
+
+    if (status === 'queued' || status === 'pending') {
+      wrap.hidden = false;
+      wrap.innerHTML =
+        '<div class="card-job-live">' +
+        '<span class="card-job-pill"><span class="job-live-dot"></span>Queued · Waiting for worker...</span>' +
+        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
+        '</div>';
+      return;
+    }
+
+    if (status === 'running' || status === 'processing' || status === 'waiting') {
+      wrap.hidden = false;
+      wrap.innerHTML =
+        '<div class="card-job-live">' +
+        '<span class="card-job-pill"><span class="job-live-dot"></span>Running · ' +
+        count.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') +
+        ' leads (' + percent + '%)</span>' +
+        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
+        '</div>';
+      return;
+    }
+
+    wrap.hidden = true;
+    wrap.innerHTML = '';
   }
 
   function setScraperBadge(kind, text) {
@@ -1758,6 +1856,9 @@
         'First 25 rows · ' + count.toLocaleString('en-US') + ' of ' +
         target.toLocaleString('en-US') + ' leads · ' + getSelectedColumns(job).length + ' columns';
     }
+
+    /* Keep the #agents card badge in sync with every tick. */
+    renderScraperCardStatus();
   }
 
   function currentPreviewRows(job) {
@@ -1831,6 +1932,10 @@
     const btn = $('#downloadBtn');
     if (btn) btn.disabled = false;
 
+    /* SMTP may land a few seconds after the scrape — trail it briefly. */
+    if (job.email_sent === true) stopEmailTrail();
+    else startEmailTrail();
+
     if (!silent) toast('Lead list complete — Excel download ready.', 'success');
   }
 
@@ -1839,7 +1944,9 @@
     if (!job) return;
     job.status = 'failed';
     stopScraperTimers();
+    stopEmailTrail();
     saveState();
+    renderScraperCardStatus();
     setScraperBadge('fail', reason ? 'Job failed · ' + reason : 'Job failed');
     toast('The scrape could not finish. Start a new run.', 'warn');
   }
@@ -1921,15 +2028,16 @@
 
   function startLivePolling(job) {
     if (scraperPollTimer || scraperDemoTimer) return;
-    if (currentRoute() !== 'scraper-results') return;
+    if (!scraperPageActive()) return;
     setScraperBadge('pending', 'Cloud extraction running…');
     pollScraperStatus();
     scraperPollTimer = window.setInterval(pollScraperStatus, LEAD_POLL_MS);
   }
 
-  function pollScraperStatus() {
+  function pollScraperStatus(force) {
     const job = state.scraperJob;
-    if (!job || !LEAD_STATUS_URL || job.mode === 'demo' || job.status === 'completed') return;
+    if (!job || !LEAD_STATUS_URL || job.mode === 'demo') return;
+    if (!force && job.status === 'completed') return;
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? window.setTimeout(function () { controller.abort(); }, 8000) : null;
@@ -1965,6 +2073,9 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
+        const wasComplete =
+          job.status === 'completed' || job.status === 'complete' ||
+          job.status === 'success' || job.status === 'done';
         const status = String(data.status || job.status || 'running').toLowerCase();
         job.status = status;
 
@@ -1977,7 +2088,7 @@
 
         if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1 ||
             Number(job.collected_count) >= scraperTarget(job)) {
-          completeScraperJob(false);
+          completeScraperJob(wasComplete);
           return;
         }
 
@@ -2025,7 +2136,7 @@
   /* ----- offline demo: +10 leads (= +1%) every 160ms ----- */
   function startDemoScrape() {
     if (scraperDemoTimer) return;
-    if (currentRoute() !== 'scraper-results') return;
+    if (!scraperPageActive()) return;
     const job = state.scraperJob;
     if (!job) return;
 
@@ -2377,6 +2488,10 @@
       if (errorEl) errorEl.textContent = problems.join(' ');
       return;
     }
+
+    /* A new run replaces the previous one — clear its pollers first. */
+    stopScraperTimers();
+    stopEmailTrail();
 
     const job = {
       job_id: 'lead_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
