@@ -8,9 +8,9 @@ Two agents are live:
 
 - **Stock Market News Agent** — a pay-as-you-go 07:00 MYT pre-market brief.
   `5 credits = 1 stock for 7 days`.
-- **B2B Lead Scraper Agent** — up to 1,000 verified B2B leads from 10 search terms, exported
-  to `.xlsx`. `15 credits per run`, with a live circular progress ring (`10 leads = 1%`),
-  25-row preview and client-side demo export when the backend is offline.
+- **B2B Lead Scraper Agent** — up to 500 verified B2B leads from up to 10 search terms, exported
+  to `.xlsx`. `1 term = 50 leads = 3 credits`, with a live circular ring scaled to the job
+  target, 25-row preview and client-side demo export when the backend is offline.
 ======>>>>>>> REPLACE
 
 ---
@@ -52,9 +52,10 @@ python -m http.server 8080
 4. Select branch **`main`** and folder **`/ (root)`**, then **Save**.
 5. Your app is live at `https://<username>.github.io/<repo>/`.
 
-Hash routing (`#home`, `#agents`, `#plans`, `#about`, `#configure`, `#success`) is used on
-purpose: every route is a direct link that works on GitHub Pages without server rewrites, and
-the browser back/forward buttons behave exactly as users expect.
+Hash routing (`#home`, `#agents`, `#plans`, `#about`, `#configure`, `#scraper-results`,
+`#success`) is used on purpose: every route is a direct link that works on GitHub Pages
+without server rewrites, and the browser back/forward buttons behave exactly as users expect.
+`#configure` opens the stock configuration modal over `#agents`.
 
 > Update the footer GitHub link (`id="ghLink"` in `index.html`) to point at your own repository.
 
@@ -152,15 +153,16 @@ The ready-to-paste Code-node bodies are in
 
 | Endpoint | Method | Purpose |
 | --- | --- | --- |
-| `/webhook/subscribe-lead-scraper` | `POST` | Creates a job. Body: `{ job_id, agent_id, name, email, country, search_terms, selected_columns, target_rows: 1000, credits_spent: 15 }` |
+| `/webhook/subscribe-lead-scraper` | `POST` | Creates a job. Body: `{ job_id, agent_id, name, email, country, search_terms, selected_columns, target_rows, credits_spent }` where both values are `terms × 50` and `terms × 3` |
 | `/webhook/lead-scraper-status?job_id=…` | `GET` | Returns `{ status, collected_count, preview_rows? }`; polled every 5s |
 | `/webhook/download-leads?job_id=…` | `GET` | Streams the finished `.xlsx` |
 
 **Offline fallback:** if the start call fails (CORS, 404, inactive workflow) or a status poll
-fails, the job switches to `mode: "demo"`. The ring then animates `+10 leads` every 160 ms up to
-1,000, deterministic sample rows are generated from the chosen country and search terms, and the
-download button builds a **real `.xlsx` in the browser** (store-only ZIP + OOXML, zero
-dependencies). The preview table always renders only the columns the user selected.
+fails, the job switches to `mode: "demo"`. The ring then animates smoothly in ~1% steps up to
+`target_rows` (terms × 50), deterministic sample rows are generated from the chosen country and
+search terms, and the download button builds a **real `.xlsx` in the browser** with exactly
+`target_rows` rows (store-only ZIP + OOXML, zero dependencies). The preview table always renders
+only the columns the user selected.
 
 ---
 
@@ -178,11 +180,14 @@ dependencies). The preview table always renders only the columns the user select
 | `STORAGE_KEY` | `agentic.state.v1` | localStorage key |
 | `AGENT_ID` / `AGENT_NAME` | stock agent | Identity in the webhook payload |
 | `SUPPORTED_STOCKS` | 12 tickers | Drives the configuration grid |
-| `LEAD_SCRAPER_CREDITS` | `15` | Credits per 1,000-lead scrape |
+| `LEAD_SCRAPER_CREDITS_PER_TERM` | `3` | Credits per search term |
+| `LEAD_SCRAPER_LEADS_PER_TERM` | `50` | Leads per search term |
+| `LEAD_SCRAPER_MIN_CREDITS` | `3` | Minimum credits to open the scraper |
+| `LEAD_SCRAPER_MAX_TERMS` | `10` | Max terms (500 leads) |
+| `LEAD_SCRAPER_CREDITS` | `3` | Legacy alias for the minimum |
 | `LEAD_SCRAPER_START_URL` | n8n endpoint | `POST` job start |
 | `LEAD_SCRAPER_STATUS_URL` | n8n endpoint | `GET ?job_id=` polled every 5s |
 | `LEAD_SCRAPER_DOWNLOAD_URL` | n8n endpoint | `GET ?job_id=` for the `.xlsx` |
-| `LEAD_SCRAPER_TARGET_ROWS` | `1000` | Ring target (10 leads = 1%) |
 | `LEAD_SCRAPER_POLL_MS` | `5000` | Status poll interval |
 | `LEAD_SCRAPER_COUNTRIES` | 22 options | Country selector, incl. Other |
 | `LEAD_SCRAPER_SAMPLE_TERMS` | 10 terms | Placeholders + Fill Sample button |
@@ -197,19 +202,24 @@ regenerates automatically. Keep the list short and liquid — it is designed to 
 
 ## 6. Credit rules (the important business logic)
 
-- **Stock brief:** 5 credits = 1 stock for 7 days. **Lead Scraper:** 15 credits per 1,000-lead run.
+- **Stock brief:** 5 credits = 1 stock for 7 days. **Lead Scraper:** 3 credits per term
+  (1 term = 50 leads), with a 3-credit minimum.
 - **New visitors start with 4 credits**, so both locked states are easy to demo.
 - `maxAffordableStocks = Math.floor(credits / 5)`.
 - On `#agents`, both **Subscribe** buttons share the same gate:
   - **grey** (`#94A3B8` / text `#F8FAFC`), `disabled`, `cursor: not-allowed` below the price
-    (5 or 15 credits) with a one-line top-up caption;
+    (5 or 3 credits) with a one-line top-up caption;
   - **vibrant red** (`#DC2626`, hover `#B91C1C`) and enabled at or above the price.
-- Stock Subscribe opens `#configure`; Lead Scraper Subscribe opens the configuration modal.
-- On `#configure` the grid locks every unselected ticker (`opacity: 0.45`, `disabled`,
+- Stock Subscribe and `#configure` both open the stock configuration modal over `#agents`;
+  Lead Scraper Subscribe opens its own matching modal.
+- In the stock modal the grid locks every unselected ticker (`opacity: 0.45`, `disabled`,
   tooltip *"Insufficient credits for +1 stock (needs +5 credits)"*) once
   `selectedStocks.length >= maxAffordableStocks`. Deselecting unlocks immediately.
-- Credits are deducted immediately (5 × stocks, or 15 flat) and mirrored in the fixed
-  bottom-left credit pill.
+- The scraper modal quotes live: `terms × 3` credits / `terms × 50` leads, disables Confirm at
+  0 terms or when the balance is short, and shows *"Need N more credits"*.
+- Credits are deducted immediately and mirrored in the fixed bottom-left pill, which flashes a
+  floating `+N` / `-N` delta. Required-credit totals pulse (`creditPulse`, 350 ms) whenever a
+  ticker or term changes.
 
 ### Quick test script
 
@@ -217,10 +227,13 @@ regenerates automatically. Keep the list short and liquid — it is designed to 
 | --- | --- |
 | Load the site (fresh visitor) | Pill reads **Credits: 4**; both Subscribe buttons grey + disabled |
 | `#plans` → *Starter Top-Up* → **Pay $5.00 (Demo)** | Pill reads **9**; stock Subscribe turns red |
-| `#configure` | 1 stock pre-selected · calculator shows `5 Credits` · other tickers locked at cap |
-| Fill name + email → **Confirm & Spend 5 Credits (7 Days)** | Success page + pill shows **4** |
-| Top up $10 + $5 again → 19 credits | Lead Scraper Subscribe turns red |
-| Lead Scraper → **Subscribe** → 1 term + email → **Confirm & Spend 15 Credits** | `#scraper-results`; ring fills +1% per 10 leads; table fills; `.xlsx` download enables at 100% |
+| `#configure` or stock **Subscribe** | Stock modal over `#agents` · 1 stock · `5 Credits` · other tickers locked at cap |
+| Select a second ticker | Modal total pulses from `5` to `10 Credits` |
+| Fill name + email → **Confirm & Spend 5 Credits (7 Days)** | Success page + pill shows **4** (−5 delta) |
+| Top up $10 + $5 again → 19 credits | Scraper Subscribe turns red |
+| Scraper **Subscribe** → 1 term | Pill: `50 leads (1 term)` · total `3 credits` · **Scrape 50 Leads** |
+| Type a 2nd term | Pill: `100 leads (2 terms)` · total `6 credits` · **Scrape 100 Leads** |
+| Confirm with enough credits | `#scraper-results`; ring is `0 / 100` and fills to 100%; `.xlsx` has 100 rows |
 | Footer → **Demo Reset: 4 Credits** | Balance back to 4, subscriptions + scraper job cleared |
 
 ---

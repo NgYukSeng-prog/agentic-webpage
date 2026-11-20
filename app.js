@@ -37,11 +37,14 @@
   const AGENT_NAME = CFG.AGENT_NAME || 'Stock Market News Agent';
   const STOCKS = Array.isArray(CFG.SUPPORTED_STOCKS) ? CFG.SUPPORTED_STOCKS : [];
 
-  /* B2B Lead Scraper configuration (15 credits per 1,000-lead run). */
-  const LEAD_CREDITS = toPositiveInt(CFG.LEAD_SCRAPER_CREDITS, 15);
+  /* B2B Lead Scraper: 1 search term = 50 leads = 3 credits (max 10 terms). */
+  const LEAD_CREDITS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_CREDITS_PER_TERM, 3);
+  const LEAD_LEADS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_LEADS_PER_TERM, 50);
+  const LEAD_MIN_CREDITS = toPositiveInt(CFG.LEAD_SCRAPER_MIN_CREDITS, 3);
+  const LEAD_MAX_TERMS = toPositiveInt(CFG.LEAD_SCRAPER_MAX_TERMS, 10);
+  const LEAD_MAX_TARGET = LEAD_LEADS_PER_TERM * LEAD_MAX_TERMS;
   const LEAD_AGENT_ID = CFG.LEAD_SCRAPER_AGENT_ID || 'b2b-lead-scraper';
   const LEAD_AGENT_NAME = CFG.LEAD_SCRAPER_AGENT_NAME || 'B2B Lead Scraper Agent';
-  const LEAD_TARGET = toPositiveInt(CFG.LEAD_SCRAPER_TARGET_ROWS, 1000);
   const LEAD_POLL_MS = toPositiveInt(CFG.LEAD_SCRAPER_POLL_MS, 5000);
   const LEAD_START_URL = CFG.LEAD_SCRAPER_START_URL || '';
   const LEAD_STATUS_URL = CFG.LEAD_SCRAPER_STATUS_URL || '';
@@ -349,7 +352,13 @@
     closeModal(false);
     stopScraperTimers();
 
-    if (route === 'configure') enterConfigure();
+    if (route === 'configure') {
+      /* #configure is now a modal: show #agents underneath, then open it. */
+      $$('.view').forEach(function (view) {
+        view.classList.toggle('is-active', view.getAttribute('data-view') === 'agents');
+      });
+      enterConfigure();
+    }
     if (route === 'plans') renderPlans();
     if (route === 'success') renderSuccess();
     if (route === 'scraper-results') renderScraperResults();
@@ -359,6 +368,29 @@
   }
 
   /* ======================= E. CREDIT UI / SUBSCRIBE ======================= */
+  let lastRenderedCredits = null;
+
+  /* Brief scale/glow when a required-credit total changes. */
+  function pulseCredit(el) {
+    if (!el) return;
+    el.classList.remove('credit-pulse');
+    void el.offsetWidth;
+    el.classList.add('credit-pulse');
+  }
+
+  /* Floating +N / -N badge on the wallet pill. */
+  function showCreditDelta(delta) {
+    const pill = $('.credit-pill');
+    if (!pill || !delta) return;
+    const badge = document.createElement('span');
+    badge.className = 'credit-delta ' + (delta > 0 ? 'is-up' : 'is-down');
+    badge.textContent = (delta > 0 ? '+' : '') + delta;
+    pill.appendChild(badge);
+    window.setTimeout(function () {
+      if (badge.parentNode) badge.parentNode.removeChild(badge);
+    }, 1400);
+  }
+
   function syncCreditUI() {
     $$('[data-credit-count]').forEach(function (el) {
       el.textContent = String(state.credits);
@@ -366,15 +398,22 @@
     updateSubscribeButton();
     updateScraperButton();
     renderWalletSubs();
-    if (currentRoute() === 'configure') renderConfigure();
+
+    if (lastRenderedCredits !== null && lastRenderedCredits !== state.credits) {
+      showCreditDelta(state.credits - lastRenderedCredits);
+    }
+    lastRenderedCredits = state.credits;
+
+    /* Safe no-op when neither config modal is open. */
+    renderConfigure();
   }
 
-  /* Second live agent — same grey/red gate, 15 credits. */
+  /* Second live agent — same grey/red gate, 3-credit minimum. */
   function updateScraperButton() {
     const btn = $('#scraperSubscribeBtn');
     if (!btn) return;
     const caption = $('#scraperSubscribeCaption');
-    const enough = Number(state.credits) >= LEAD_CREDITS;
+    const enough = Number(state.credits) >= LEAD_MIN_CREDITS;
 
     /* Belt and braces: clear BOTH the property and any stale HTML attribute. */
     if (enough) {
@@ -394,8 +433,9 @@
       caption.hidden = enough;
       caption.innerHTML = enough
         ? ''
-        : 'Needs ' + LEAD_CREDITS +
-          ' credits (1,000 leads). <a href="#plans">Top up in Manage My Plan</a>.';
+        : 'Needs at least ' + LEAD_MIN_CREDITS +
+          ' credits (1 term · ' + LEAD_LEADS_PER_TERM +
+          ' leads). <a href="#plans">Top up in Manage My Plan</a>.';
     }
   }
 
@@ -721,7 +761,72 @@
     renderConfigure();
   }
 
-  function enterConfigure() {
+  let stockModalOpen = false;
+  let lastStockCost = null;
+
+  /* Stock configuration is a modal with the same shell as the scraper modal. */
+  function openStockModal() {
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Stock Market News Agent</h2>' +
+        '<p class="modal-sub">07:00 MYT delivery · ' + CREDITS_PER_STOCK + ' credits per stock · ' +
+        SUB_DAYS + '-day access</p>' +
+        '<div class="notice notice-warn" id="configureLocked" hidden>' +
+        '<strong>You need at least ' + CREDITS_PER_STOCK + ' credits for a 7-day subscription.</strong>' +
+        '<p>Your balance is <span data-credit-count>' + state.credits +
+        '</span> credits. A $5 top-up buys one stock for a week.</p>' +
+        '<a class="btn btn-primary btn-sm" href="#plans">Top up in Manage My Plan</a>' +
+        '</div>' +
+        '<div id="configureBody">' +
+        '<div class="calc-card modal-calc"><div class="calc-grid">' +
+        '<div class="calc-cell"><span class="calc-label">Available</span>' +
+        '<span class="calc-value" id="calcAvailable">0 Credits</span></div>' +
+        '<div class="calc-cell"><span class="calc-label">Selected</span>' +
+        '<span class="calc-value" id="calcSelected">0</span></div>' +
+        '<div class="calc-cell"><span class="calc-label">Duration</span>' +
+        '<span class="calc-value" id="calcDuration">' + SUB_DAYS + ' Days</span></div>' +
+        '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+        '<span class="calc-value" id="calcCost">' + CREDITS_PER_STOCK + ' Credits</span>' +
+        '<span class="calc-sub" id="calcRemaining"></span></div>' +
+        '</div></div>' +
+        '<div class="modal-section"><h3>1. Select stocks</h3>' +
+        '<span class="pill-note" id="stockQuotePill"></span></div>' +
+        '<div class="stock-grid" id="stockGrid" role="group" aria-label="Select stocks to monitor"></div>' +
+        '<p class="fine" id="stockGridHint"></p>' +
+        '<div class="modal-section"><h3>2. Delivery details</h3>' +
+        '<span class="fine">Email only</span></div>' +
+        '<form id="configureForm" class="config-form stock-modal-form" novalidate>' +
+        '<div class="form-two">' +
+        '<div class="field"><label for="fullName">Full name <span class="req">*</span></label>' +
+        '<input type="text" id="fullName" name="fullName" placeholder="Alex Tan" autocomplete="name" required />' +
+        '<span class="field-error" id="nameError" role="alert"></span></div>' +
+        '<div class="field"><label for="email">Delivery email <span class="req">*</span></label>' +
+        '<input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" inputmode="email" required />' +
+        '<span class="field-error" id="emailError" role="alert"></span></div>' +
+        '</div>' +
+        '<div class="config-summary" id="configSummary"></div>' +
+        '<button type="submit" class="btn btn-activate" id="activateBtn">Confirm & Spend ' +
+        CREDITS_PER_STOCK + ' Credits (' + SUB_DAYS + ' Days)</button>' +
+        '<p class="fine">First brief arrives tomorrow at 07:00 MYT.</p>' +
+        '</form>' +
+        '</div>',
+      true
+    );
+
+    stockModalOpen = true;
+    lastStockCost = null;
+
+    buildStockGrid();
+
+    const form = $('#configureForm');
+    if (form) form.addEventListener('submit', handleActivate);
+    $$('#configureForm input').forEach(function (input) {
+      input.addEventListener('input', function () { clearFieldError(input); });
+    });
+
+    prepareStockConfig();
+  }
+
+  function prepareStockConfig() {
     const max = maxAffordableStocks();
 
     // Prune selections that the balance no longer supports.
@@ -739,6 +844,10 @@
     if (emailEl && !emailEl.value && state.email) emailEl.value = state.email;
 
     renderConfigure();
+  }
+
+  function enterConfigure() {
+    openStockModal();
   }
 
   function renderConfigure() {
@@ -767,8 +876,22 @@
     setText('#calcAvailable', state.credits + ' Credits');
     setText('#calcSelected', String(selectedStocks.length));
     setText('#calcDuration', SUB_DAYS + ' Days / 1 Week');
-    setText('#calcCost', cost + ' Credits');
     setText('#calcRemaining', 'Remaining after activation: ' + remaining + ' credits');
+
+    /* Pulse the total when the user adds/removes a ticker. */
+    const costEl = $('#calcCost');
+    if (costEl) {
+      if (lastStockCost !== null && lastStockCost !== cost) pulseCredit(costEl);
+      costEl.textContent = cost + ' Credits';
+    }
+    lastStockCost = cost;
+
+    const quotePill = $('#stockQuotePill');
+    if (quotePill) {
+      quotePill.textContent =
+        selectedStocks.length + ' stock' + (selectedStocks.length === 1 ? '' : 's') +
+        ' · ' + cost + ' credits';
+    }
 
     // Stock grid lock enforcement.
     if (grid) {
@@ -1154,6 +1277,7 @@
     const root = $('#modalRoot');
     if (!root || root.hidden) return;
 
+    stockModalOpen = false;
     root.hidden = true;
     const body = $('#modalBody');
     if (body) body.innerHTML = '';
@@ -1209,7 +1333,7 @@
     closeWallet();
     closeMobileNav();
     toast('Demo reset — balance restored to ' + DEFAULT_CREDITS + ' credits.', 'info');
-    if (currentRoute() === 'configure') enterConfigure();
+    if (currentRoute() === 'configure' && !stockModalOpen) enterConfigure();
   }
 
   function updateNextBrief() {
@@ -1359,7 +1483,7 @@
           toast('You need at least ' + CREDITS_PER_STOCK + ' credits to subscribe.', 'warn');
           return;
         }
-        window.location.hash = '#configure';
+        openStockModal();
       });
     }
 
@@ -1367,8 +1491,8 @@
     const scraperBtn = $('#scraperSubscribeBtn');
     if (scraperBtn) {
       scraperBtn.addEventListener('click', function () {
-        if (state.credits < LEAD_CREDITS) {
-          toast('Needs ' + LEAD_CREDITS + ' credits to start a 1,000-lead scrape.', 'warn');
+        if (state.credits < LEAD_MIN_CREDITS) {
+          toast('Needs at least ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM + ' leads).', 'warn');
           return;
         }
         openScraperModal();
@@ -1521,7 +1645,7 @@
     renderLeadsTable();
     updateScraperProgress();
 
-    if (job.status === 'completed' || Number(job.collected_count) >= LEAD_TARGET) {
+    if (job.status === 'completed' || Number(job.collected_count) >= scraperTarget(job)) {
       completeScraperJob(true);
       return;
     }
@@ -1548,18 +1672,26 @@
       summary.innerHTML =
         '<div class="summary-row"><dt>Country</dt><dd>' + escapeHtml(job.country) + '</dd></div>' +
         '<div class="summary-row"><dt>Search terms</dt><dd>' + (job.search_terms || []).length + '</dd></div>' +
+        '<div class="summary-row"><dt>Target leads</dt><dd><strong>' + scraperTarget(job) + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + (job.credits_spent || 0) + '</strong></dd></div>' +
         '<div class="summary-row"><dt>Columns</dt><dd>' + cols.length + '</dd></div>' +
         '<div class="summary-row"><dt>Started</dt><dd>' + escapeHtml(fmtMYT(job.started_at)) + '</dd></div>' +
         '<div class="summary-row"><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id) + '</code></dd></div>';
     }
   }
 
+  /* Every job carries its own target (terms × leads-per-term). */
+  function scraperTarget(job) {
+    return Math.max(1, Number(job && job.target_rows) || LEAD_MAX_TARGET);
+  }
+
   function updateScraperProgress() {
     const job = state.scraperJob;
     if (!job) return;
 
-    const count = clamp(Math.floor(Number(job.collected_count) || 0), 0, LEAD_TARGET);
-    const percent = Math.min(100, Math.floor((count / LEAD_TARGET) * 100));
+    const target = scraperTarget(job);
+    const count = clamp(Math.floor(Number(job.collected_count) || 0), 0, target);
+    const percent = Math.min(100, Math.floor((count / target) * 100));
     const fill = $('#ringFill');
 
     if (fill) {
@@ -1572,7 +1704,7 @@
     const countEl = $('#ringCount');
     if (countEl) {
       countEl.textContent =
-        count.toLocaleString('en-US') + ' / ' + LEAD_TARGET.toLocaleString('en-US') + ' leads';
+        count.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') + ' leads';
     }
 
     const card = $('#ringCard');
@@ -1584,24 +1716,36 @@
     const downloadTitle = $('#downloadTitle');
     if (downloadTitle) {
       downloadTitle.textContent =
-        percent >= 100 ? 'Excel (.xlsx) · ' + LEAD_TARGET.toLocaleString('en-US') + ' leads' : 'Excel (.xlsx)';
+        percent >= 100
+          ? 'Excel (.xlsx) · ' + target.toLocaleString('en-US') + ' leads'
+          : 'Excel (.xlsx)';
     }
 
     const downloadSub = $('#downloadSub');
     if (downloadSub) {
       if (percent >= 100) {
         downloadSub.textContent =
-          job.mode === 'demo' ? 'Demo file · 1,000 sample leads' : 'Ready to download';
+          job.mode === 'demo'
+            ? 'Demo file · ' + target.toLocaleString('en-US') + ' sample leads'
+            : 'Ready to download';
       } else {
-        downloadSub.textContent = 'Unlocks at 1,000 leads';
+        downloadSub.textContent = 'Unlocks at ' + target.toLocaleString('en-US') + ' leads';
       }
+    }
+
+    const terms = (job.search_terms || []).length;
+    const rule = $('#ringRule');
+    if (rule) {
+      rule.textContent =
+        target.toLocaleString('en-US') + ' leads target · ' +
+        terms + ' term' + (terms === 1 ? '' : 's');
     }
 
     const tableMeta = $('#tableMeta');
     if (tableMeta) {
       tableMeta.textContent =
         'First 25 rows · ' + count.toLocaleString('en-US') + ' of ' +
-        LEAD_TARGET.toLocaleString('en-US') + ' leads · ' + getSelectedColumns(job).length + ' columns';
+        target.toLocaleString('en-US') + ' leads · ' + getSelectedColumns(job).length + ' columns';
     }
   }
 
@@ -1665,7 +1809,7 @@
     if (!job) return;
 
     job.status = 'completed';
-    job.collected_count = LEAD_TARGET;
+    job.collected_count = scraperTarget(job);
     stopScraperTimers();
     saveState();
 
@@ -1732,8 +1876,8 @@
         country: job.country,
         search_terms: job.search_terms,
         selected_columns: job.selected_columns,
-        target_rows: LEAD_TARGET,
-        credits_spent: LEAD_CREDITS
+        target_rows: scraperTarget(job),
+        credits_spent: job.credits_spent
       }),
       signal: controller ? controller.signal : undefined
     })
@@ -1799,7 +1943,7 @@
             : data.count;
         const count = Number(raw);
         if (Number.isFinite(count)) {
-          job.collected_count = clamp(Math.floor(count), 0, LEAD_TARGET);
+          job.collected_count = clamp(Math.floor(count), 0, scraperTarget(job));
         }
 
         if (Array.isArray(data.preview_rows) && data.preview_rows.length) {
@@ -1809,8 +1953,15 @@
         const status = String(data.status || job.status || 'running').toLowerCase();
         job.status = status;
 
+        if (status === 'queued' || status === 'pending') {
+          setScraperBadge('pending', 'Queued — waiting for worker slot…');
+          saveState();
+          updateScraperProgress();
+          return;
+        }
+
         if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1 ||
-            Number(job.collected_count) >= LEAD_TARGET) {
+            Number(job.collected_count) >= scraperTarget(job)) {
           completeScraperJob(false);
           return;
         }
@@ -1865,7 +2016,7 @@
 
     renderLeadsTable();
 
-    if (Number(job.collected_count) >= LEAD_TARGET) {
+    if (Number(job.collected_count) >= scraperTarget(job)) {
       completeScraperJob(true);
       return;
     }
@@ -1879,12 +2030,14 @@
         return;
       }
 
-      current.collected_count = Math.min(LEAD_TARGET, (Number(current.collected_count) || 0) + 10);
+      const target = scraperTarget(current);
+      const step = Math.max(1, Math.ceil(target / 100)); // ~100 smooth ticks
+      current.collected_count = Math.min(target, (Number(current.collected_count) || 0) + step);
       updateScraperProgress();
 
-      if (current.collected_count % 100 === 0) saveState();
+      if (current.collected_count % step === 0) saveState();
 
-      if (current.collected_count >= LEAD_TARGET) {
+      if (current.collected_count >= target) {
         completeScraperJob(false);
       }
     }, 160);
@@ -1912,7 +2065,7 @@
     job.mode = 'live';
     job.status = 'running';
     job.posted = true;
-    if (Number(job.collected_count) >= LEAD_TARGET) job.collected_count = 0;
+    if (Number(job.collected_count) >= scraperTarget(job)) job.collected_count = 0;
     saveState();
 
     renderJobSummary();
@@ -1939,7 +2092,7 @@
       return;
     }
 
-    const rows = getDemoRows(job, LEAD_TARGET);
+    const rows = getDemoRows(job, scraperTarget(job));
     const blob = buildXlsx(job, rows);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -1954,9 +2107,67 @@
   }
 
   /* ----- configuration modal ----- */
+  let lastScraperRequired = null;
+
+  /* Live quote: filled terms × 3 credits = terms × 50 leads. */
+  function scraperQuote() {
+    const terms = $$('.term-field input')
+      .map(function (input) { return input.value.trim(); })
+      .filter(Boolean)
+      .slice(0, LEAD_MAX_TERMS);
+    const filled = terms.length;
+
+    return {
+      terms: terms,
+      filled: filled,
+      required: filled * LEAD_CREDITS_PER_TERM,
+      target: filled * LEAD_LEADS_PER_TERM
+    };
+  }
+
+  function updateScraperQuote() {
+    const quote = scraperQuote();
+
+    const pill = $('#scraperQuotePill');
+    if (pill) {
+      pill.textContent =
+        quote.filled === 0
+          ? 'Enter at least 1 search term (' + LEAD_LEADS_PER_TERM + ' leads · ' +
+            LEAD_CREDITS_PER_TERM + ' credits each)'
+          : 'Stops automatically at ' + quote.target + ' unique leads (' +
+            quote.filled + ' term' + (quote.filled === 1 ? '' : 's') + ')';
+    }
+
+    const total = $('#scraperCreditTotal');
+    if (total) {
+      if (lastScraperRequired !== null && lastScraperRequired !== quote.required) {
+        pulseCredit(total);
+      }
+      total.textContent = quote.required + ' credits';
+      total.classList.toggle('is-zero', quote.required === 0);
+    }
+    lastScraperRequired = quote.required;
+
+    const shortfall = Math.max(0, quote.required - state.credits);
+    const shortEl = $('#scraperShortfall');
+    if (shortEl) {
+      shortEl.hidden = shortfall === 0;
+      shortEl.textContent = shortfall > 0 ? 'Need ' + shortfall + ' more credits' : '';
+    }
+
+    const btn = $('#scraperStartBtn');
+    if (btn) {
+      btn.textContent =
+        'Confirm & Spend ' + quote.required + ' Credits · Scrape ' + quote.target + ' Leads';
+      btn.disabled = quote.filled === 0 || shortfall > 0;
+    }
+
+    return quote;
+  }
+
   function openScraperModal() {
-    if (state.credits < LEAD_CREDITS) {
-      toast('Needs ' + LEAD_CREDITS + ' credits (1,000 leads).', 'warn');
+    if (state.credits < LEAD_MIN_CREDITS) {
+      toast('Needs at least ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM + ' leads).', 'warn');
       return;
     }
 
@@ -1966,7 +2177,7 @@
     }).join('');
 
     const terms = [];
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < LEAD_MAX_TERMS; i += 1) {
       const placeholder = LEAD_SAMPLE_TERMS[i] || 'Search term ' + (i + 1);
       terms.push(
         '<label class="term-field"><span class="term-num">' + (i + 1) + '</span>' +
@@ -1992,7 +2203,8 @@
 
     openModal(
       '<h2 class="modal-title" id="modalTitle">B2B Lead Scraper</h2>' +
-        '<p class="modal-sub">1,000 leads · .xlsx · 10 search terms · ' + LEAD_CREDITS + ' credits</p>' +
+      '<p class="modal-sub">1 term = ' + LEAD_LEADS_PER_TERM + ' leads = ' +
+      LEAD_CREDITS_PER_TERM + ' credits · max ' + LEAD_MAX_TERMS + ' terms</p>' +
         '<form class="scraper-form" id="scraperForm" novalidate>' +
         '<div class="form-two">' +
         '<div class="field"><label for="scraperName">Full name <span class="req">*</span></label>' +
@@ -2010,7 +2222,11 @@
         '<div class="modal-section"><h3>10 search terms</h3>' +
         '<button type="button" class="btn btn-ghost btn-sm" id="fillTermsBtn">Fill Sample B2B Terms</button></div>' +
         '<div class="term-grid">' + terms.join('') + '</div>' +
-        '<p class="pill-note">Stops automatically at 1,000 unique leads</p>' +
+        '<div class="scraper-quote">' +
+        '<p class="pill-note" id="scraperQuotePill">Enter at least 1 search term (' +
+        LEAD_LEADS_PER_TERM + ' leads · ' + LEAD_CREDITS_PER_TERM + ' credits each)</p>' +
+        '<span class="modal-credit-total is-zero" id="scraperCreditTotal">0 credits</span>' +
+        '</div>' +
         '<div class="modal-section"><h3>Excel columns</h3>' +
         '<span class="fine">Company, email and phone always included</span></div>' +
         '<div class="column-group">' +
@@ -2020,8 +2236,8 @@
         '</div>' +
         '<div class="modal-actions">' +
         '<div class="scraper-modal-error" id="scraperFormError" role="alert"></div>' +
-        '<button type="submit" class="btn btn-activate" id="scraperStartBtn">Confirm & Spend ' +
-        LEAD_CREDITS + ' Credits · Start Scrape</button>' +
+        '<p class="scraper-shortfall" id="scraperShortfall" hidden></p>' +
+        '<button type="submit" class="btn btn-activate" id="scraperStartBtn" disabled>Confirm & Spend 0 Credits · Scrape 0 Leads</button>' +
         '<p class="fine">Credits are deducted immediately. Extraction runs in the cloud.</p>' +
         '</div>' +
         '</form>',
@@ -2044,9 +2260,14 @@
         $$('.term-field input').forEach(function (input, index) {
           input.value = LEAD_SAMPLE_TERMS[index] || '';
         });
+        updateScraperQuote();
         toast('Sample B2B terms filled.', 'info');
       });
     }
+
+    $$('.term-field input').forEach(function (input) {
+      input.addEventListener('input', updateScraperQuote);
+    });
 
     $$('input[name="scraperCol"]').forEach(function (box) {
       box.addEventListener('change', function () {
@@ -2057,6 +2278,9 @@
 
     const form = $('#scraperForm');
     if (form) form.addEventListener('submit', handleScraperStart);
+
+    lastScraperRequired = null;
+    updateScraperQuote();
 
     const nameEl = $('#scraperName');
     if (nameEl) nameEl.focus();
@@ -2078,10 +2302,8 @@
     const customCountry = customEl ? customEl.value.trim() : '';
     const country = countryValue === 'Other (Custom Country)' ? customCountry : countryValue;
 
-    const terms = $$('.term-field input')
-      .map(function (input) { return input.value.trim(); })
-      .filter(Boolean)
-      .slice(0, 10);
+    const quote = scraperQuote();
+    const terms = quote.terms;
 
     const optionalChosen = LEAD_OPTIONAL_COLUMNS.filter(function (col) {
       const box = $('input[name="scraperCol"][value="' + col.id + '"]');
@@ -2095,7 +2317,9 @@
     if (!isValidEmail(email)) problems.push('A valid delivery email is required.');
     if (!country) problems.push('Choose a target country.');
     if (!terms.length) problems.push('Add at least one search term.');
-    if (state.credits < LEAD_CREDITS) problems.push('You need ' + LEAD_CREDITS + ' credits.');
+    if (state.credits < quote.required) {
+      problems.push('Need ' + (quote.required - state.credits) + ' more credits.');
+    }
 
     if (problems.length) {
       if (errorEl) errorEl.textContent = problems.join(' ');
@@ -2110,8 +2334,8 @@
       country: country,
       search_terms: terms,
       selected_columns: columns,
-      target_rows: LEAD_TARGET,
-      credits_spent: LEAD_CREDITS,
+      target_rows: quote.target,
+      credits_spent: quote.required,
       started_at: new Date().toISOString(),
       status: 'running',
       mode: 'live',
@@ -2119,7 +2343,7 @@
       collected_count: 0
     };
 
-    state.credits -= LEAD_CREDITS;
+    state.credits -= quote.required;
     state.name = name;
     state.email = email;
     state.scraperJob = job;
@@ -2213,7 +2437,7 @@
 
   function getDemoRows(job, limit) {
     if (!job) return [];
-    const total = Math.min(limit || 25, LEAD_TARGET);
+    const total = Math.min(limit || 25, LEAD_MAX_TARGET);
     const key = job.job_id + '|' + total;
     if (demoRowsCache[key]) return demoRowsCache[key];
 

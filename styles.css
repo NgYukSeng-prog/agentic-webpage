@@ -4246,3 +4246,148 @@ table.leads-table {
     font-size: 0.67rem;
   }
 }
+
+/* ============ 20. MODAL CONFIG + CREDIT TRANSITIONS =================== */
+.modal-calc {
+  margin: 16px 0 20px;
+}
+
+.modal-calc .calc-cell {
+  padding: 14px 16px;
+}
+
+.modal-calc .calc-value {
+  font-size: 1.08rem;
+}
+
+.modal .form-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+
+.stock-modal-form .config-summary {
+  margin-top: 4px;
+}
+
+.scraper-quote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.modal-credit-total {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #b45309;
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.modal-credit-total.is-zero {
+  background: var(--slate-100);
+  border-color: var(--slate-200);
+  color: var(--slate-500);
+}
+
+.scraper-shortfall {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+@keyframes creditPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+  35% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.28);
+  }
+  70% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.credit-pulse {
+  animation: creditPulse 350ms ease-out;
+}
+
+.credit-pill {
+  position: relative;
+}
+
+.credit-delta {
+  position: absolute;
+  right: -2px;
+  top: -16px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: creditDelta 1.4s ease-out forwards;
+}
+
+.credit-delta.is-up {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.credit-delta.is-down {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
+@keyframes creditDelta {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.9);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-14px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+}
+
+@media (max-width: 700px) {
+  .modal .form-two {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit-pulse,
+  .credit-delta {
+    animation: none !important;
+  }
+}

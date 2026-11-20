@@ -4,12 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Agentic — Autonomous Pre-Market Intelligence</title>
-  <meta name="description" content="Agentic deploys autonomous AI agents: a 07:00 MYT stock brief and a 1,000-lead B2B Excel scraper. Pay as you go from $5 USD." />
+  <meta name="description" content="Agentic deploys autonomous AI agents: a 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go from $5 USD." />
   <meta name="theme-color" content="#0F172A" />
   <meta property="og:title" content="Agentic — Autonomous Pre-Market Intelligence" />
-  <meta property="og:description" content="Two live AI agents. A 07:00 MYT stock brief and a 1,000-lead B2B Excel scraper. Pay as you go." />
+  <meta property="og:description" content="Two live AI agents. A 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M8 22.5 L13.5 15.5 L18 19.5 L24 9.5' fill='none' stroke='%2322D3EE' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='9.5' r='2.4' fill='%236366F1'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -157,7 +157,7 @@
                   <div class="home-scrape-head">
                     <div class="home-scrape-title">
                       <strong>leads-malaysia.xlsx</strong>
-                      <span>1,000 leads · 8 columns · 4.2 MB</span>
+                      <span>500 leads · 8 columns · 2.1 MB</span>
                     </div>
                     <span class="mini-pill mini-pill-emerald">100% · ready</span>
                   </div>
@@ -433,20 +433,20 @@
 
             <span class="agent-status">
               <span class="status-dot" aria-hidden="true"></span>
-              Ready & Online · Up to 1,000 Leads (.xlsx)
+              Ready & Online · 50–500 Leads (.xlsx)
             </span>
           </div>
 
           <div class="agent-body">
             <div class="agent-title-row">
               <h2>B2B Lead Scraper Agent</h2>
-              <span class="price-tag price-tag-green">15 Credits / Run · 1,000 Leads</span>
+              <span class="price-tag price-tag-green">3 Credits / Term · 50 Leads</span>
             </div>
-            <p class="agent-desc">Extracts up to 1,000 verified B2B leads from 10 search terms into Excel.</p>
+            <p class="agent-desc">Extracts up to 500 verified B2B leads from up to 10 search terms into Excel.</p>
 
             <div class="pill-row">
-              <span class="mini-pill">1,000 Leads · .xlsx</span>
-              <span class="mini-pill">10 Search Terms</span>
+              <span class="mini-pill">50–500 Leads · .xlsx</span>
+              <span class="mini-pill">Up to 10 Terms</span>
               <span class="mini-pill">25-Row Preview</span>
               <span class="mini-pill">Live Progress</span>
             </div>
@@ -456,7 +456,7 @@
               <button type="button" class="btn btn-subscribe is-disabled" id="scraperSubscribeBtn" disabled aria-disabled="true">Subscribe</button>
             </div>
             <p class="subscribe-caption" id="scraperSubscribeCaption">
-              Needs 15 credits (1,000 leads). <a href="#plans">Top up in Manage My Plan</a>.
+              Needs at least 3 credits (1 term · 50 leads). <a href="#plans">Top up in Manage My Plan</a>.
             </p>
           </div>
         </article>
@@ -629,7 +629,7 @@
             <details class="faq-item">
               <summary>How do credits work?</summary>
               <div class="faq-body">
-                <p>One stock for seven days costs 5 credits. The Lead Scraper costs 15 credits per 1,000-lead run. Credits never expire and never auto-renew.</p>
+                <p>One stock for seven days costs 5 credits. The Lead Scraper costs 3 credits per 50-lead term (max 10 terms). Credits never expire and never auto-renew.</p>
               </div>
             </details>
             <details class="faq-item">
@@ -675,91 +675,10 @@
     </section>
 
     <!-- ====================================================================
-         VIEW · CONFIGURE (stock agent)
+         STOCK AGENT CONFIGURATION
+         Now rendered as a popup modal over #agents (see openStockModal in app.js).
+         The #configure hash still works and opens this modal directly.
          ==================================================================== -->
-    <section class="view" data-view="configure" id="view-configure">
-      <div class="container">
-        <a class="back-link" href="#agents">
-          <span aria-hidden="true">←</span> Back to Agentic Agent
-        </a>
-
-        <div class="page-head configure-head">
-          <span class="eyebrow">Step 2 of 3 · Configuration</span>
-          <h1>Build your 7-day watchlist</h1>
-          <p>07:00 MYT delivery · 5 credits per stock.</p>
-        </div>
-
-        <div class="notice notice-warn" id="configureLocked" hidden>
-          <strong>You need at least 5 credits to activate a 7-day subscription.</strong>
-          <p>Your balance is <span data-credit-count>4</span> credits. A $5 Starter Top-Up is exactly enough for one stock for a week.</p>
-          <a class="btn btn-primary" href="#plans">Top up in Manage My Plan</a>
-        </div>
-
-        <div id="configureBody">
-          <div class="calc-card">
-            <div class="calc-grid">
-              <div class="calc-cell">
-                <span class="calc-label">Available credits</span>
-                <span class="calc-value" id="calcAvailable">4 Credits</span>
-              </div>
-              <div class="calc-cell">
-                <span class="calc-label">Selected stocks</span>
-                <span class="calc-value" id="calcSelected">1</span>
-              </div>
-              <div class="calc-cell">
-                <span class="calc-label">Duration</span>
-                <span class="calc-value" id="calcDuration">7 Days / 1 Week</span>
-              </div>
-              <div class="calc-cell calc-cell-total">
-                <span class="calc-label">Total credit cost</span>
-                <span class="calc-value" id="calcCost">5 Credits</span>
-                <span class="calc-sub" id="calcRemaining">Remaining after activation: 0 credits</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>1. Select your stocks</h2>
-              <p id="stockGridHint">Choose up to 1 stock for this activation.</p>
-            </div>
-            <div class="stock-grid" id="stockGrid" role="group" aria-label="Select stocks to monitor"><!-- rendered by app.js --></div>
-            <p class="topup-link-row">
-              <span>Need more stocks?</span>
-              <a href="#plans">Top up in Manage My Plan <span aria-hidden="true">→</span></a>
-            </p>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>2. Subscriber details</h2>
-              <p>Delivery and receipts only.</p>
-            </div>
-
-            <form id="configureForm" class="config-form" novalidate>
-              <div class="field">
-                <label for="fullName">Full name <span class="req">*</span></label>
-                <input type="text" id="fullName" name="fullName" placeholder="Alex Tan" autocomplete="name" required />
-                <span class="field-error" id="nameError" role="alert"></span>
-              </div>
-
-              <div class="field">
-                <label for="email">Delivery email address <span class="req">*</span></label>
-                <input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" inputmode="email" required />
-                <span class="field-error" id="emailError" role="alert"></span>
-              </div>
-
-              <div class="config-summary" id="configSummary"><!-- filled by app.js --></div>
-
-              <div class="activate-row">
-                <button type="submit" class="btn btn-lg btn-activate" id="activateBtn">Confirm & Spend 5 Credits (7 Days)</button>
-                <p class="fine">First brief arrives tomorrow at 07:00 MYT.</p>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- ====================================================================
          VIEW · SCRAPER RESULTS
@@ -794,14 +713,14 @@
                 </svg>
                 <div class="ring-center">
                   <strong id="ringPercent">0%</strong>
-                  <span id="ringCount">0 / 1,000 leads</span>
+                  <span id="ringCount">0 / 50 leads</span>
                 </div>
               </div>
               <span class="webhook-badge" id="scraperStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
                 <span class="webhook-text">Starting…</span>
               </span>
-              <p class="ring-hint">10 leads = 1% · stops at 1,000</p>
+              <p class="ring-hint" id="ringRule">3 credits per term · 50 leads each</p>
             </div>
 
             <div class="panel job-card">
@@ -820,7 +739,7 @@
                 </div>
               </div>
 
-              <p class="fine">Cloud extraction takes ~20–45 mins for 1,000 leads. Safe to close this tab — return anytime with your Job ID.</p>
+              <p class="fine">Cloud extraction takes a few minutes for 50–500 leads. Safe to close this tab — return anytime with your Job ID.</p>
             </div>
           </div>
 
@@ -843,7 +762,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="downloadTitle">Excel (.xlsx)</strong>
-                <span id="downloadSub">Unlocks at 1,000 leads</span>
+                <span id="downloadSub">Unlocks when the target is reached</span>
               </div>
               <button type="button" class="btn btn-primary" id="downloadBtn" disabled>Download Full Excel (.xlsx)</button>
             </div>
@@ -953,7 +872,7 @@
         <strong data-credit-count>4</strong>
         <span>credits available</span>
       </div>
-      <p class="wallet-hint">1 stock for 7 days = 5 credits. A 1,000-lead scrape = 15 credits. No auto-renewal.</p>
+      <p class="wallet-hint">1 stock for 7 days = 5 credits. B2B scraping = 3 credits per term (50 leads). No auto-renewal.</p>
       <div class="wallet-actions">
         <a class="btn btn-primary btn-sm" href="#plans">Manage My Plan</a>
         <button type="button" class="btn btn-ghost btn-sm" id="demoResetPopover">Demo Reset: 4 Credits</button>
@@ -987,7 +906,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="config.js?v=4"></script>
+  <script src="app.js?v=4"></script>
 </body>
 </html>

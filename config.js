@@ -63,7 +63,13 @@ window.CONFIG = {
   /* --- B2B Lead Scraper agent -------------------------------------------
      Second live Agent-as-a-Service. 15 credits buys one 1,000-lead .xlsx
      extraction run (10 search terms). Endpoints are consumed by app.js.  */
-  LEAD_SCRAPER_CREDITS: 15,
+  /* Per-term pricing: 1 search term = 50 leads = 3 credits.
+     LEAD_SCRAPER_CREDITS stays as the minimum entry price (1 term). */
+  LEAD_SCRAPER_CREDITS: 3,
+  LEAD_SCRAPER_CREDITS_PER_TERM: 3,
+  LEAD_SCRAPER_LEADS_PER_TERM: 50,
+  LEAD_SCRAPER_MIN_CREDITS: 3,
+  LEAD_SCRAPER_MAX_TERMS: 10,
   LEAD_SCRAPER_AGENT_ID: 'b2b-lead-scraper',
   LEAD_SCRAPER_AGENT_NAME: 'B2B Lead Scraper Agent',
   LEAD_SCRAPER_TARGET_ROWS: 1000,
