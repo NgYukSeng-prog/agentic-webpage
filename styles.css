@@ -3458,8 +3458,13 @@ ol {
   background: radial-gradient(circle, rgba(16, 185, 129, 0.42), transparent 68%);
 }
 
-.agent-card-scraper {
-  margin-top: 22px;
+/* Breathing room between the two live agent cards and the Coming Soon grid */
+.agent-card-featured + .agent-card-featured {
+  margin-top: 24px;
+}
+
+.agent-layout .teaser-grid {
+  margin-top: 28px;
 }
 
 .agent-card-scraper .agent-visual {
@@ -3496,10 +3501,25 @@ ol {
   white-space: nowrap;
 }
 
+.agent-body .pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 2px 0 22px;
+}
+
 .agent-body .mini-pill {
-  background: var(--slate-50);
-  border-color: var(--slate-200);
-  color: var(--slate-600, #475569);
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .step-card .mini-pill {
@@ -4078,5 +4098,151 @@ table.leads-table {
   .mascot-xls,
   .mascot-scan {
     animation: none !important;
+  }
+}
+
+/* ============ 19. HOME · MULTI-AGENT OUTPUT PREVIEW ==================== */
+.home-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.home-tab {
+  flex: 1 1 0;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--slate-400);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.home-tab:hover {
+  color: #e2e8f0;
+}
+
+.home-tab.is-active {
+  background: rgba(34, 211, 238, 0.18);
+  color: #a5f3fc;
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.32);
+}
+
+.home-pane {
+  min-width: 0;
+}
+
+.preview-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px 10px;
+}
+
+.home-scrape {
+  background: #fff;
+  color: var(--slate-900);
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.07);
+  padding: 16px;
+  box-shadow: 0 24px 60px -34px rgba(2, 6, 23, 0.9);
+}
+
+.home-scrape-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-scrape-title strong {
+  display: block;
+  font-size: 0.9rem;
+  letter-spacing: -0.01em;
+}
+
+.home-scrape-title span {
+  display: block;
+  font-size: 0.71rem;
+  color: var(--slate-500);
+}
+
+.home-progress {
+  height: 6px;
+  margin: 12px 0;
+  border-radius: 999px;
+  background: var(--slate-200);
+  overflow: hidden;
+}
+
+.home-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cyan), #16a34a);
+}
+
+.home-leads {
+  min-width: 540px;
+  font-size: 0.72rem;
+}
+
+.home-leads th,
+.home-leads td {
+  padding: 8px 10px;
+}
+
+.home-leads thead th {
+  font-size: 0.6rem;
+}
+
+.preview-fine {
+  margin: 10px 0 0;
+  font-size: 0.7rem;
+  color: var(--slate-400);
+}
+
+.mini-pill-emerald {
+  background: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+
+.steps-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 1080px) {
+  .steps-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .steps-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-subhead {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 420px) {
+  .home-tab {
+    padding: 8px 6px;
+    font-size: 0.67rem;
   }
 }

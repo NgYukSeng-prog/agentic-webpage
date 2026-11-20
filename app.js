@@ -340,6 +340,10 @@
       else link.removeAttribute('aria-current');
     });
 
+    /* Re-assert BOTH agents' credit gates on every route render. */
+    updateSubscribeButton();
+    updateScraperButton();
+
     closeMobileNav();
     closeWallet();
     closeModal(false);
@@ -370,18 +374,26 @@
     const btn = $('#scraperSubscribeBtn');
     if (!btn) return;
     const caption = $('#scraperSubscribeCaption');
-    const enough = state.credits >= LEAD_CREDITS;
+    const enough = Number(state.credits) >= LEAD_CREDITS;
 
-    btn.disabled = !enough;
+    /* Belt and braces: clear BOTH the property and any stale HTML attribute. */
+    if (enough) {
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+    } else {
+      btn.disabled = true;
+      btn.setAttribute('disabled', 'disabled');
+    }
+
     btn.classList.toggle('is-disabled', !enough);
     btn.classList.toggle('is-ready', enough);
     btn.setAttribute('aria-disabled', enough ? 'false' : 'true');
     btn.textContent = 'Subscribe';
 
     if (caption) {
+      caption.hidden = enough;
       caption.innerHTML = enough
-        ? '<strong>' + state.credits + ' credits</strong> available · ' + LEAD_CREDITS +
-          ' credits per 1,000-lead run.'
+        ? ''
         : 'Needs ' + LEAD_CREDITS +
           ' credits (1,000 leads). <a href="#plans">Top up in Manage My Plan</a>.';
     }
@@ -391,23 +403,25 @@
     const btn = $('#subscribeBtn');
     if (!btn) return;
     const caption = $('#subscribeCaption');
-    const enough = state.credits >= CREDITS_PER_STOCK;
+    const enough = Number(state.credits) >= CREDITS_PER_STOCK;
 
-    btn.disabled = !enough;
+    if (enough) {
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
+    } else {
+      btn.disabled = true;
+      btn.setAttribute('disabled', 'disabled');
+    }
+
     btn.classList.toggle('is-disabled', !enough);
     btn.classList.toggle('is-ready', enough);
     btn.setAttribute('aria-disabled', enough ? 'false' : 'true');
     btn.textContent = 'Subscribe';
 
     if (caption) {
+      caption.hidden = enough;
       caption.innerHTML = enough
-        ? 'You have <strong>' +
-          state.credits +
-          ' credits</strong>. Activating deducts ' +
-          CREDITS_PER_STOCK +
-          ' credits for 1 stock / ' +
-          SUB_DAYS +
-          ' days.'
+        ? ''
         : 'Requires at least ' +
           CREDITS_PER_STOCK +
           ' credits for ' +
@@ -1297,6 +1311,21 @@
         if (event.target.closest('[data-modal-close]')) closeModal();
       });
     }
+
+    /* Home: switch between the two live-agent output previews */
+    $$('[data-home-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const name = btn.getAttribute('data-home-tab');
+        $$('[data-home-tab]').forEach(function (b) {
+          const on = b === btn;
+          b.classList.toggle('is-active', on);
+          b.setAttribute('aria-selected', String(on));
+        });
+        $$('[data-home-pane]').forEach(function (pane) {
+          pane.hidden = pane.getAttribute('data-home-pane') !== name;
+        });
+      });
+    });
 
     /* Home preview ticker tabs */
     $$('[data-preview-tab]').forEach(function (btn) {
