@@ -4391,3 +4391,37 @@ table.leads-table {
     animation: none !important;
   }
 }
+
+/* ============ 21. DELIVERY EMAIL PROMINENCE =========================== */
+.label-note {
+  font-weight: 500;
+  color: var(--slate-500);
+  font-size: 0.76rem;
+}
+
+.field-hint {
+  display: block;
+  margin-top: -2px;
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--slate-500);
+}
+
+.ring-email {
+  max-width: 280px;
+  margin: 2px 0 0;
+  font-size: 0.71rem;
+  line-height: 1.5;
+  color: var(--slate-400);
+}
+
+.ring-email.is-sent {
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.38);
+  color: #a7f3d0;
+  font-weight: 650;
+  font-size: 0.73rem;
+}

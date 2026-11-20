@@ -1741,6 +1741,17 @@
         terms + ' term' + (terms === 1 ? '' : 's');
     }
 
+    const emailNote = $('#scraperEmailNote');
+    if (emailNote) {
+      const email = job.email || 'your delivery email';
+      const sent = job.status === 'completed' && job.email_sent === true;
+      emailNote.textContent = sent
+        ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
+        : 'Excel (.xlsx) will also be emailed to ' + email +
+          ' when complete — safe to close this tab.';
+      emailNote.classList.toggle('is-sent', sent);
+    }
+
     const tableMeta = $('#tableMeta');
     if (tableMeta) {
       tableMeta.textContent =
@@ -1950,6 +1961,10 @@
           job.preview_rows = data.preview_rows.slice(0, 25);
         }
 
+        if (data.email_sent != null) {
+          job.email_sent = data.email_sent === true || data.email_sent === 'true';
+        }
+
         const status = String(data.status || job.status || 'running').toLowerCase();
         job.status = status;
 
@@ -2108,6 +2123,7 @@
 
   /* ----- configuration modal ----- */
   let lastScraperRequired = null;
+  let scraperEmailTouched = false;
 
   /* Live quote: filled terms × 3 credits = terms × 50 leads. */
   function scraperQuote() {
@@ -2155,11 +2171,28 @@
       shortEl.textContent = shortfall > 0 ? 'Need ' + shortfall + ' more credits' : '';
     }
 
+    /* Delivery email gate: valid address required before Confirm enables. */
+    const emailInput = $('#scraperEmail');
+    const emailValue = emailInput ? emailInput.value.trim() : '';
+    const emailValid = isValidEmail(emailValue);
+    const emailErr = $('#scraperEmailError');
+    if (emailErr) {
+      if (!emailValue) {
+        emailErr.textContent = scraperEmailTouched ? 'Delivery email is required.' : '';
+      } else if (!emailValid) {
+        emailErr.textContent = 'Enter a valid email (e.g. you@company.com).';
+      } else {
+        emailErr.textContent = '';
+      }
+      const emailField = emailInput ? emailInput.closest('.field') : null;
+      if (emailField) emailField.classList.toggle('has-error', !!emailErr.textContent);
+    }
+
     const btn = $('#scraperStartBtn');
     if (btn) {
       btn.textContent =
         'Confirm & Spend ' + quote.required + ' Credits · Scrape ' + quote.target + ' Leads';
-      btn.disabled = quote.filled === 0 || shortfall > 0;
+      btn.disabled = quote.filled === 0 || shortfall > 0 || !emailValid;
     }
 
     return quote;
@@ -2210,9 +2243,12 @@
         '<div class="field"><label for="scraperName">Full name <span class="req">*</span></label>' +
         '<input type="text" id="scraperName" autocomplete="name" placeholder="Alex Tan" value="' +
         escapeHtml(state.name || '') + '" /></div>' +
-        '<div class="field"><label for="scraperEmail">Delivery email <span class="req">*</span></label>' +
-        '<input type="email" id="scraperEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" value="' +
-        escapeHtml(state.email || '') + '" /></div>' +
+        '<div class="field"><label for="scraperEmail">Delivery Email ' +
+        '<span class="label-note">(Excel .xlsx sent here)</span> <span class="req">*</span></label>' +
+        '<input type="email" id="scraperEmail" autocomplete="email" inputmode="email" placeholder="you@company.com" value="' +
+        escapeHtml(state.email || '') + '" />' +
+        '<span class="field-hint">Your finished .xlsx file will be emailed here automatically when ready.</span>' +
+        '<span class="field-error" id="scraperEmailError" role="alert"></span></div>' +
         '</div>' +
         '<div class="field"><label for="scraperCountry">Target country</label>' +
         '<select id="scraperCountry">' + countryOptions + '</select></div>' +
@@ -2269,6 +2305,14 @@
       input.addEventListener('input', updateScraperQuote);
     });
 
+    const scraperEmailEl = $('#scraperEmail');
+    if (scraperEmailEl) {
+      scraperEmailEl.addEventListener('input', function () {
+        scraperEmailTouched = true;
+        updateScraperQuote();
+      });
+    }
+
     $$('input[name="scraperCol"]').forEach(function (box) {
       box.addEventListener('change', function () {
         const option = box.closest('.column-option');
@@ -2280,6 +2324,7 @@
     if (form) form.addEventListener('submit', handleScraperStart);
 
     lastScraperRequired = null;
+    scraperEmailTouched = false;
     updateScraperQuote();
 
     const nameEl = $('#scraperName');
@@ -2312,9 +2357,16 @@
 
     const columns = LEAD_REQUIRED_COLUMNS.map(function (col) { return col.id; }).concat(optionalChosen);
 
+    scraperEmailTouched = true;
+
     const problems = [];
     if (name.length < 2) problems.push('Full name is required.');
-    if (!isValidEmail(email)) problems.push('A valid delivery email is required.');
+    if (!isValidEmail(email)) {
+      setFieldError(emailEl, 'Enter a valid delivery email (e.g. you@company.com).');
+      problems.push('A valid delivery email is required.');
+    } else {
+      clearFieldError(emailEl);
+    }
     if (!country) problems.push('Choose a target country.');
     if (!terms.length) problems.push('Add at least one search term.');
     if (state.credits < quote.required) {
@@ -2340,7 +2392,8 @@
       status: 'running',
       mode: 'live',
       posted: false,
-      collected_count: 0
+      collected_count: 0,
+      email_sent: false
     };
 
     state.credits -= quote.required;
