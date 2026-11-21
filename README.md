@@ -171,13 +171,15 @@ only the columns the user selected.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `WEBHOOK_URL` | n8n endpoint | Where `subscriber.activated` is POSTed |
+| `API_BASE` | `https://n8n.20.205.96.122.sslip.io/webhook` | Neon auth/account API root |
+| `AUTH_TOKEN_KEY` | `aaas_token` | localStorage key for the session token |
+| `FREE_SIGNUP_CREDITS` | `5` | Credits granted by a new account |
 | `CREDITS_PER_STOCK_WEEK` | `5` | Credits for 1 stock × 7 days |
 | `SUBSCRIPTION_DAYS` | `7` | Length of an activation window |
-| `DEFAULT_CREDITS` | `4` | New-visitor balance (one short of a subscription) |
 | `TIMEZONE` | `Asia/Kuala_Lumpur` | Payload timezone + delivery timezone |
 | `TIMEZONE_OFFSET_HOURS` | `8` | Used for the live 07:00 MYT countdown |
 | `DELIVERY_HOUR_MYT` | `7` | Delivery hour for the countdown |
-| `STORAGE_KEY` | `agentic.state.v1` | localStorage key |
+| `STORAGE_KEY` | `agentic.state.v1` | Local job/subscription cache key |
 | `AGENT_ID` / `AGENT_NAME` | stock agent | Identity in the webhook payload |
 | `SUPPORTED_STOCKS` | 12 tickers | Drives the configuration grid |
 | `LEAD_SCRAPER_CREDITS_PER_TERM` | `3` | Credits per search term |
@@ -204,49 +206,57 @@ regenerates automatically. Keep the list short and liquid — it is designed to 
 
 - **Stock brief:** 5 credits = 1 stock for 7 days. **Lead Scraper:** 3 credits per term
   (1 term = 50 leads), with a 3-credit minimum.
-- **New visitors start with 4 credits**, so both locked states are easy to demo.
+- **Credits are server-authoritative (Neon).** The browser persists only
+  `aaas_token` and refreshes the live profile + balance from `GET /auth/me`.
+- **New accounts get 5 free credits** on sign up. Logged-out visitors can click Subscribe or
+  Purchase; the Login / Sign Up modal opens and resumes the flow after authentication.
 - `maxAffordableStocks = Math.floor(credits / 5)`.
 - On `#agents`, both **Subscribe** buttons share the same gate:
-  - **grey** (`#94A3B8` / text `#F8FAFC`), `disabled`, `cursor: not-allowed` below the price
-    (5 or 3 credits) with a one-line top-up caption;
-  - **vibrant red** (`#DC2626`, hover `#B91C1C`) and enabled at or above the price.
+  - logged out → enabled, opens the auth gate;
+  - logged in but below the price (5 or 3 credits) → grey (`#94A3B8`), `disabled`, with a
+    one-line top-up caption;
+  - logged in at or above the price → vibrant red (`#DC2626`, hover `#B91C1C`), enabled.
 - Stock Subscribe and `#configure` both open the stock configuration modal over `#agents`;
-  Lead Scraper Subscribe opens its own matching modal.
+  Lead Scraper Subscribe opens its own matching modal. Both require a live session.
 - In the stock modal the grid locks every unselected ticker (`opacity: 0.45`, `disabled`,
   tooltip *"Insufficient credits for +1 stock (needs +5 credits)"*) once
   `selectedStocks.length >= maxAffordableStocks`. Deselecting unlocks immediately.
 - The scraper modal quotes live: `terms × 3` credits / `terms × 50` leads, disables Confirm at
   0 terms or when the balance is short, and shows *"Need N more credits"*.
-- Credits are deducted immediately and mirrored in the fixed bottom-left pill, which flashes a
-  floating `+N` / `-N` delta. Required-credit totals pulse (`creditPulse`, 350 ms) whenever a
-  ticker or term changes.
+- After an agent call, the wallet is refreshed from the response's `remaining_credits` (when
+  supplied). `401` clears the session and reopens the Login modal; `402` shows an insufficient
+  credits message without spending. The fixed bottom-left pill flashes a floating `+N` / `-N`
+  delta, and the navbar credit badge pulses on change.
 
 ### Quick test script
 
 | Step | Expected |
 | --- | --- |
-| Load the site (fresh visitor) | Pill reads **Credits: 4**; both Subscribe buttons grey + disabled |
-| `#plans` → *Starter Top-Up* → **Pay $5.00 (Demo)** | Pill reads **9**; stock Subscribe turns red |
-| `#configure` or stock **Subscribe** | Stock modal over `#agents` · 1 stock · `5 Credits` · other tickers locked at cap |
-| Select a second ticker | Modal total pulses from `5` to `10 Credits` |
-| Fill name + email → **Confirm & Spend 5 Credits (7 Days)** | Success page + pill shows **4** (−5 delta) |
-| Top up $10 + $5 again → 19 credits | Scraper Subscribe turns red |
-| Scraper **Subscribe** → 1 term | Pill: `50 leads (1 term)` · total `3 credits` · **Scrape 50 Leads** |
-| Type a 2nd term | Pill: `100 leads (2 terms)` · total `6 credits` · **Scrape 100 Leads** |
-| Confirm with enough credits | `#scraper-results`; ring is `0 / 100` and fills to 100%; `.xlsx` has 100 rows |
-| Footer → **Demo Reset: 4 Credits** | Balance back to 4, subscriptions + scraper job cleared |
+| Load the site (fresh visitor) | Navbar shows **Log In** + **Sign Up (5 Free Credits)**; pill reads **Credits: 0** |
+| Click a stock or scraper **Subscribe** | Auth modal opens with *"Log in or sign up to get 5 free credits and continue."* |
+| Sign up with email + password (6+ chars) | Token saved to `aaas_token`; navbar avatar + name + **Credits 5**; gated modal resumes |
+| Click the navbar avatar | Account Settings shows email, credits and all 5 animated avatars |
+| Pick an avatar → **Save avatar** | `POST /account/avatar` with `{ avatar_id }`; navbar avatar updates |
+| Reload the page | `GET /auth/me` restores profile, credits and the saved avatar |
+| Stock **Subscribe** → confirm | `POST` carries `Authorization: Bearer …`; success page; credits follow `remaining_credits` |
+| Expired token (401) | Session cleared, Login modal opens with a re-login prompt |
+| Server says 402 | Insufficient-credits toast, no spend, config modal stays open |
 
 ---
 
 ## 7. Persistence
 
-State is stored in `localStorage` under `agentic.state.v1`:
+Authentication persists **only** the session token:
+
+```
+localStorage["aaas_token"] = "<session token>"
+```
+
+Live identity and credits are never cached — they always come from `GET /auth/me` on load.
+`agentic.state.v1` keeps only local job/bookkeeping history:
 
 ```json
 {
-  "credits": 4,
-  "email": "you@example.com",
-  "name": "Alex Tan",
   "subscriptions": [ { "id": "sub_…", "watchlist": ["NVDA"], "startedAt": "…", "expiresAt": "…" } ],
   "lastSubscription": { },
   "scraperJob": {
@@ -261,8 +271,8 @@ State is stored in `localStorage` under `agentic.state.v1`:
 }
 ```
 
-A **"Demo Reset: 4 Credits"** button lives in both the wallet popover and the footer, so both
-credit states (locked and unlocked) are easy to test.
+Logging out clears the token plus the local subscription/job history. There is no demo credit
+reset anymore: the server owns the wallet.
 
 ---
 

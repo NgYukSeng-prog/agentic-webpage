@@ -6,7 +6,7 @@
    Sections
    A. Helpers
    B. Static content (credit packs, sample briefs)
-   C. Persistent state (localStorage): credits, subscriptions, email
+   C. Session state: Neon-backed auth token + live profile, local job history
    D. Hash router
    E. Credit UI (bottom-left pill, subscribe button states)
    F. Home / sample output rendering
@@ -14,6 +14,8 @@
    H. Configure page (calculator, stock grid lock, activation form)
    I. Success page + webhook sync
    J. Wallet popover, modal, toast, init
+   K. Auth modal, account settings, animated avatars
+   L. B2B Lead Scraper engine
    ========================================================================== */
 
 (function () {
@@ -28,14 +30,22 @@
 
   const CREDITS_PER_STOCK = toPositiveInt(CFG.CREDITS_PER_STOCK_WEEK, 5);
   const SUB_DAYS = toPositiveInt(CFG.SUBSCRIPTION_DAYS, 7);
-  const DEFAULT_CREDITS = Number.isFinite(Number(CFG.DEFAULT_CREDITS))
-    ? Math.max(0, Math.floor(Number(CFG.DEFAULT_CREDITS)))
-    : 4;
   const TIMEZONE = CFG.TIMEZONE || 'Asia/Kuala_Lumpur';
   const STORAGE_KEY = CFG.STORAGE_KEY || 'agentic.state.v1';
   const AGENT_ID = CFG.AGENT_ID || 'stock-market-news-agent';
   const AGENT_NAME = CFG.AGENT_NAME || 'Stock Market News Agent';
   const STOCKS = Array.isArray(CFG.SUPPORTED_STOCKS) ? CFG.SUPPORTED_STOCKS : [];
+
+  /* --- Neon-backed auth API ------------------------------------------------ */
+  const API_BASE = String(
+    CFG.API_BASE || 'https://n8n.20.205.96.122.sslip.io/webhook'
+  ).replace(/\/+$/, '');
+  const TOKEN_KEY = CFG.AUTH_TOKEN_KEY || 'aaas_token';
+  const AUTH_ME_URL = API_BASE + '/auth/me';
+  const AUTH_REGISTER_URL = API_BASE + '/auth/register';
+  const AUTH_LOGIN_URL = API_BASE + '/auth/login';
+  const ACCOUNT_AVATAR_URL = API_BASE + '/account/avatar';
+  const FREE_SIGNUP_CREDITS = toPositiveInt(CFG.FREE_SIGNUP_CREDITS, 5);
 
   /* B2B Lead Scraper: 1 search term = 50 leads = 3 credits (max 10 terms). */
   const LEAD_CREDITS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_CREDITS_PER_TERM, 3);
@@ -259,7 +269,8 @@
   /* ============================ C. STATE ================================== */
   function defaultState() {
     return {
-      credits: DEFAULT_CREDITS,
+      /* Credits/identity are server-authoritative. Never seeded from demo data. */
+      credits: 0,
       email: '',
       name: '',
       subscriptions: [],
@@ -268,6 +279,8 @@
     };
   }
 
+  /* Only local job/subscription history is cached. Legacy demo credits in
+     agentic.state.v1 are intentionally ignored. */
   function loadState() {
     const base = defaultState();
     try {
@@ -276,11 +289,10 @@
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return base;
 
-      const credits = Number(parsed.credits);
       return {
-        credits: Number.isFinite(credits) && credits >= 0 ? Math.floor(credits) : base.credits,
-        email: typeof parsed.email === 'string' ? parsed.email : '',
-        name: typeof parsed.name === 'string' ? parsed.name : '',
+        credits: 0,
+        email: '',
+        name: '',
         subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
         lastSubscription:
           parsed.lastSubscription && typeof parsed.lastSubscription === 'object'
@@ -296,7 +308,14 @@
 
   function saveState() {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          subscriptions: state.subscriptions || [],
+          lastSubscription: state.lastSubscription || null,
+          scraperJob: state.scraperJob || null
+        })
+      );
     } catch (err) {
       // Private mode / storage disabled — the session still works in memory.
       console.warn('[Agentic] Could not persist state to localStorage.', err);
@@ -308,6 +327,42 @@
   let lastWebhookResult = null;
   let pendingWebhook = false;
 
+  /* Session token is the ONLY auth artefact persisted on the client. */
+  const auth = {
+    token: readToken(),
+    user: null,
+    loading: false
+  };
+  let pendingGate = null;
+
+  function readToken() {
+    try {
+      return window.localStorage.getItem(TOKEN_KEY) || '';
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function writeToken(token) {
+    try {
+      window.localStorage.setItem(TOKEN_KEY, String(token));
+    } catch (err) {
+      console.warn('[Agentic] Could not persist the session token.', err);
+    }
+  }
+
+  function clearToken() {
+    try {
+      window.localStorage.removeItem(TOKEN_KEY);
+    } catch (err) {
+      /* storage disabled — nothing to remove */
+    }
+  }
+
+  function isLoggedIn() {
+    return !!(auth && auth.user);
+  }
+
   function maxAffordableStocks() {
     return Math.floor(Math.max(0, state.credits) / CREDITS_PER_STOCK);
   }
@@ -316,6 +371,762 @@
     return (state.subscriptions || []).filter(function (sub) {
       return sub && sub.expiresAt && new Date(sub.expiresAt).getTime() > Date.now();
     });
+  }
+
+  /* ==================== K. AUTH, ACCOUNT & AVATARS ======================= */
+  const AVATARS = [
+    { id: 'mochi-circle', label: 'Mochi' },
+    { id: 'boba-squircle', label: 'Boba' },
+    { id: 'star-puff', label: 'Star Puff' },
+    { id: 'hex-bot', label: 'Hex Bot' },
+    { id: 'cloud-cat', label: 'Cloud Cat' }
+  ];
+  const AVATAR_IDS = AVATARS.map(function (a) { return a.id; });
+  let authModalMode = 'login';
+  let authSubmitBusy = false;
+
+  function readJson(response) {
+    return response.json().catch(function () {
+      return null;
+    });
+  }
+
+  function authHeaders(extra) {
+    const headers = Object.assign({}, extra || {});
+    if (auth.token) headers.Authorization = 'Bearer ' + auth.token;
+    return headers;
+  }
+
+  function apiFetch(url, options, timeoutMs) {
+    const opts = options || {};
+    const headers = Object.assign({ Accept: 'application/json' }, opts.headers || {});
+    if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    if (auth.token) headers.Authorization = 'Bearer ' + auth.token;
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller
+      ? window.setTimeout(function () { controller.abort(); }, timeoutMs || 15000)
+      : null;
+
+    return fetch(
+      url,
+      Object.assign({}, opts, {
+        headers: headers,
+        signal: controller ? controller.signal : undefined
+      })
+    ).then(
+      function (response) {
+        if (timer) window.clearTimeout(timer);
+        return response;
+      },
+      function (err) {
+        if (timer) window.clearTimeout(timer);
+        throw err;
+      }
+    );
+  }
+
+  /* Server may return remaining_credits at the top level or inside user/data. */
+  function extractRemaining(body) {
+    if (!body || typeof body !== 'object') return null;
+    const data = body.data && typeof body.data === 'object' ? body.data : null;
+    const user = body.user && typeof body.user === 'object' ? body.user : null;
+    const candidates = [
+      body.remaining_credits,
+      body.credits,
+      body.balance,
+      body.credit_balance,
+      user ? user.remaining_credits : null,
+      user ? user.credits : null,
+      data ? data.remaining_credits : null,
+      data ? data.credits : null,
+      data && data.user ? data.user.credits : null
+    ];
+    for (let i = 0; i < candidates.length; i += 1) {
+      const raw = candidates[i];
+      /* Number(null) is 0 — never let an absent field zero the wallet. */
+      if (raw === null || raw === undefined || raw === '') continue;
+      const n = Number(raw);
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+    }
+    return null;
+  }
+
+  function normalizeAuthPayload(body) {
+    const b = body && typeof body === 'object' ? body : {};
+    const data = b.data && typeof b.data === 'object' ? b.data : {};
+    const user = b.user && typeof b.user === 'object' ? b.user : null;
+    const src = user || (data.user && typeof data.user === 'object' ? data.user : null) || data || b;
+
+    const token =
+      b.token ||
+      b.access_token ||
+      b.session_token ||
+      b.jwt ||
+      (b.session && b.session.token) ||
+      data.token ||
+      (data.session && data.session.token) ||
+      '';
+
+    let credits = extractRemaining(b);
+    if (credits === null) credits = extractRemaining(data);
+    if (credits === null) credits = extractRemaining(src);
+
+    return {
+      token: String(token || ''),
+      user: {
+        id: src.id || src.user_id || b.id || data.id || '',
+        email: src.email || b.email || data.email || '',
+        name:
+          src.name ||
+          src.display_name ||
+          src.full_name ||
+          b.name ||
+          data.name ||
+          '',
+        avatar_id:
+          src.avatar_id ||
+          src.avatar ||
+          b.avatar_id ||
+          data.avatar_id ||
+          'mochi-circle',
+        credits: credits
+      }
+    };
+  }
+
+  function applyAuthSession(token, body, isNewAccount) {
+    if (token) {
+      auth.token = String(token);
+      writeToken(auth.token);
+    }
+
+    const norm = normalizeAuthPayload(body);
+    let credits = norm.user.credits;
+    if (credits === null || !Number.isFinite(Number(credits))) {
+      credits = isNewAccount ? FREE_SIGNUP_CREDITS : state.credits;
+    }
+    credits = Math.max(0, Math.floor(Number(credits) || 0));
+
+    if (norm.user.email) state.email = norm.user.email;
+    if (norm.user.name) state.name = norm.user.name;
+    state.credits = credits;
+
+    const avatarId =
+      AVATAR_IDS.indexOf(String(norm.user.avatar_id || '')) !== -1
+        ? String(norm.user.avatar_id)
+        : 'mochi-circle';
+
+    auth.user = {
+      id: norm.user.id,
+      email: norm.user.email,
+      name: norm.user.name,
+      avatar_id: avatarId,
+      credits: credits
+    };
+    auth.loading = false;
+
+    renderAuthUI();
+    syncCreditUI();
+  }
+
+  function clearAuthSession() {
+    clearToken();
+    auth.token = '';
+    auth.user = null;
+    auth.loading = false;
+    state.credits = 0;
+    state.email = '';
+    state.name = '';
+    renderAuthUI();
+    syncCreditUI();
+  }
+
+  function displayUserName(user) {
+    if (!user) return 'Account';
+    if (user.name) return user.name;
+    const email = String(user.email || '');
+    return email ? email.split('@')[0] : 'Account';
+  }
+
+  function renderAuthUI() {
+    const guest = $('#authGuest');
+    const userEl = $('#authUser');
+    if (!guest || !userEl) return;
+
+    const signedIn = !!auth.user;
+    guest.hidden = signedIn;
+    userEl.hidden = !signedIn;
+    document.body.classList.toggle('is-authed', signedIn);
+
+    if (signedIn) {
+      const nameEl = $('#navUserName');
+      const emailEl = $('#navUserEmail');
+      const avatarEl = $('#navAvatar');
+      if (nameEl) nameEl.textContent = displayUserName(auth.user);
+      if (emailEl) emailEl.textContent = auth.user.email || 'Signed in';
+      if (avatarEl) avatarEl.innerHTML = avatarMarkup(auth.user.avatar_id, 'avatar--nav');
+    }
+
+    updateSubscribeButton();
+    updateScraperButton();
+  }
+
+  function refreshSession() {
+    if (!auth.token) {
+      auth.loading = false;
+      renderAuthUI();
+      return Promise.resolve(false);
+    }
+
+    auth.loading = true;
+    renderAuthUI();
+
+    return apiFetch(AUTH_ME_URL, { method: 'GET' })
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (response.status === 401) {
+            clearToken();
+            auth.token = '';
+            auth.user = null;
+            auth.loading = false;
+            state.credits = 0;
+            renderAuthUI();
+            syncCreditUI();
+            return false;
+          }
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          applyAuthSession('', body, false);
+          return true;
+        });
+      })
+      .catch(function (err) {
+        auth.loading = false;
+        renderAuthUI();
+        console.warn('[Agentic] Could not refresh the live session.', err);
+        return false;
+      });
+  }
+
+  function handleAuthExpired(message, gate) {
+    clearToken();
+    auth.token = '';
+    auth.user = null;
+    auth.loading = false;
+    state.credits = 0;
+    state.email = '';
+    state.name = '';
+    stopScraperTimers();
+    renderAuthUI();
+    syncCreditUI();
+    pendingGate = gate || null;
+    openAuthModal('login', message || 'Your session expired. Log in again to continue.');
+  }
+
+  function requireAuth(gate, message) {
+    if (isLoggedIn()) return true;
+    pendingGate = gate || null;
+    openAuthModal(
+      'register',
+      message || 'Log in or sign up to get 5 free credits and continue.'
+    );
+    return false;
+  }
+
+  function resumePendingGate() {
+    const gate = pendingGate;
+    pendingGate = null;
+    if (!gate) return;
+
+    window.setTimeout(function () {
+      if (gate.action === 'stock') openStockModal();
+      else if (gate.action === 'scraper') openScraperModal();
+      else if (gate.action === 'checkout') openCheckout(gate.packId);
+      else if (gate.action === 'account') openAccountModal();
+    }, 180);
+  }
+
+  function setAuthError(message) {
+    const el = $('#authError');
+    if (el) el.textContent = message || '';
+  }
+
+  function setAuthBusy(busy) {
+    authSubmitBusy = !!busy;
+    const btn = $('#authSubmit');
+    if (!btn) return;
+    btn.disabled = !!busy;
+    btn.classList.toggle('is-busy', !!busy);
+    btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+
+  function friendlyAuthError(err) {
+    if (err && err.status) {
+      const body = err.body || {};
+      const serverMessage =
+        typeof body.error === 'string'
+          ? body.error
+          : typeof body.message === 'string'
+          ? body.message
+          : '';
+      if (err.status === 400 || err.status === 422) {
+        return serverMessage || 'Please check your details and try again.';
+      }
+      if (err.status === 401) return 'Email or password is incorrect.';
+      if (err.status === 403) return 'This session is not permitted. Please log in again.';
+      if (err.status === 409) return 'That email is already registered. Try logging in instead.';
+      if (err.status === 429) return 'Too many attempts. Please wait a moment and try again.';
+      if (err.status >= 500) {
+        return 'Our auth service is busy right now. Please try again in a moment.';
+      }
+      return serverMessage || 'Something went wrong (HTTP ' + err.status + ').';
+    }
+    if (err && err.name === 'AbortError') {
+      return 'The request timed out. Check your connection and try again.';
+    }
+    return 'Cannot reach the auth service. Check your connection and try again.';
+  }
+
+  function setAuthTab(mode) {
+    authModalMode = mode === 'login' ? 'login' : 'register';
+    const isLogin = authModalMode === 'login';
+
+    $$('[data-auth-tab]').forEach(function (btn) {
+      const on = btn.getAttribute('data-auth-tab') === authModalMode;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', String(on));
+    });
+
+    const nameField = $('#authNameField');
+    if (nameField) nameField.hidden = isLogin;
+    const badge = $('#authCreditsBadge');
+    if (badge) badge.hidden = isLogin;
+    const title = $('#authTitle');
+    if (title) title.textContent = isLogin ? 'Log in to Agentic' : 'Create your free account';
+    const sub = $('#authSub');
+    if (sub) {
+      sub.textContent = isLogin
+        ? 'Welcome back — your live credit balance is waiting.'
+        : 'New accounts start with ' + FREE_SIGNUP_CREDITS + ' free credits. No card required.';
+    }
+    const label = $('#authSubmitLabel');
+    if (label) label.textContent = isLogin ? 'Log In' : 'Create Account';
+    const fine = $('#authFine');
+    if (fine) {
+      fine.textContent = isLogin
+        ? 'Your session stays on this device until you log out.'
+        : 'By signing up you agree to fair use of agent credits.';
+    }
+    setAuthError('');
+  }
+
+  function openAuthModal(mode, prompt) {
+    authSubmitBusy = false;
+    openModal(
+      '<div class="auth-modal">' +
+        '<div class="auth-brand-row">' +
+        '  <span class="auth-orb" aria-hidden="true">5</span>' +
+        '  <span class="auth-brand-copy"><strong>Agentic account</strong><span>Neon-backed credits, one wallet for every agent.</span></span>' +
+        '</div>' +
+        '<h2 class="modal-title" id="modalTitle"><span id="authTitle">Log in to Agentic</span></h2>' +
+        '<p class="modal-sub" id="authSub"></p>' +
+        '<div class="auth-prompt" id="authPrompt" hidden>' +
+        '  <span class="auth-prompt-dot" aria-hidden="true"></span>' +
+        '  <span id="authPromptText"></span>' +
+        '</div>' +
+        '<div class="tab-row auth-tabs" role="tablist" aria-label="Log in or sign up">' +
+        '  <button type="button" role="tab" data-auth-tab="login" aria-selected="true">Log In</button>' +
+        '  <button type="button" role="tab" data-auth-tab="register" aria-selected="false">Sign Up</button>' +
+        '</div>' +
+        '<form class="auth-form" id="authForm" novalidate>' +
+        '  <label class="field auth-name-field" id="authNameField" hidden><span>Name <em>(optional)</em></span>' +
+        '    <input type="text" id="authName" autocomplete="name" placeholder="Alex Tan" />' +
+        '  </label>' +
+        '  <label class="field"><span>Email</span>' +
+        '    <input type="email" id="authEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" required />' +
+        '  </label>' +
+        '  <label class="field"><span>Password</span>' +
+        '    <input type="password" id="authPassword" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" required />' +
+        '  </label>' +
+        '  <div class="auth-signup-badge" id="authCreditsBadge">' +
+        '    <span class="auth-gift" aria-hidden="true">+5</span>' +
+        '    <span>Get <strong>' + FREE_SIGNUP_CREDITS + ' free credits</strong> on sign up</span>' +
+        '  </div>' +
+        '  <p class="auth-error" id="authError" role="alert"></p>' +
+        '  <button type="submit" class="btn btn-primary btn-lg btn-block auth-submit" id="authSubmit">' +
+        '    <span class="auth-submit-label" id="authSubmitLabel">Log In</span>' +
+        '    <span class="auth-spinner" aria-hidden="true"></span>' +
+        '  </button>' +
+        '  <p class="fine center auth-fine" id="authFine"></p>' +
+        '</form>' +
+        '</div>',
+      false
+    );
+
+    const promptEl = $('#authPrompt');
+    if (promptEl) {
+      promptEl.hidden = !prompt;
+      const promptText = $('#authPromptText');
+      if (promptText) promptText.textContent = prompt || '';
+    }
+
+    setAuthTab(mode);
+    setAuthError('');
+
+    $$('[data-auth-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setAuthTab(btn.getAttribute('data-auth-tab'));
+      });
+    });
+
+    const form = $('#authForm');
+    if (form) form.addEventListener('submit', handleAuthSubmit);
+    $$('#authForm input').forEach(function (input) {
+      input.addEventListener('input', function () {
+        setAuthError('');
+      });
+    });
+
+    const email = $('#authEmail');
+    if (email) window.setTimeout(function () { email.focus(); }, 80);
+  }
+
+  function handleAuthSubmit(event) {
+    event.preventDefault();
+    if (authSubmitBusy) return;
+
+    const isLogin = authModalMode === 'login';
+    const nameEl = $('#authName');
+    const emailEl = $('#authEmail');
+    const passEl = $('#authPassword');
+
+    const name = nameEl ? nameEl.value.trim() : '';
+    const email = emailEl ? emailEl.value.trim() : '';
+    const password = passEl ? passEl.value : '';
+
+    if (!isValidEmail(email)) {
+      setAuthError('Enter a valid email address (e.g. you@example.com).');
+      if (emailEl) emailEl.focus();
+      return;
+    }
+    if (password.length < 6) {
+      setAuthError('Password must be at least 6 characters.');
+      if (passEl) passEl.focus();
+      return;
+    }
+
+    setAuthError('');
+    setAuthBusy(true);
+
+    const payload = { email: email, password: password };
+    if (!isLogin && name) payload.name = name;
+
+    apiFetch(isLogin ? AUTH_LOGIN_URL : AUTH_REGISTER_URL, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    })
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (response.status === 401) {
+            const err = new Error('Unauthorized');
+            err.status = 401;
+            err.body = body;
+            throw err;
+          }
+          if (!response.ok || (body && body.ok === false)) {
+            const err = new Error('Auth failed');
+            err.status = response.status;
+            err.body = body;
+            throw err;
+          }
+
+          const norm = normalizeAuthPayload(body);
+          if (!norm.token) {
+            const err = new Error('Missing token');
+            err.status = response.status;
+            err.body = {
+              error:
+                'The account was accepted but no session token was returned. Please try logging in.'
+            };
+            throw err;
+          }
+
+          applyAuthSession(norm.token, body, !isLogin);
+          closeModal();
+          toast(
+            isLogin
+              ? 'Welcome back, ' + (displayUserName(auth.user) || 'trader') + '.'
+              : 'Account created — ' + FREE_SIGNUP_CREDITS + ' free credits added.',
+            'success'
+          );
+          resumePendingGate();
+        });
+      })
+      .catch(function (err) {
+        setAuthBusy(false);
+        setAuthError(friendlyAuthError(err));
+      });
+  }
+
+  function openAccountModal() {
+    if (!auth.user) {
+      pendingGate = { action: 'account' };
+      openAuthModal('login', 'Log in to manage your account and avatar.');
+      return;
+    }
+
+    const currentId =
+      AVATAR_IDS.indexOf(String(auth.user.avatar_id || '')) !== -1
+        ? String(auth.user.avatar_id)
+        : 'mochi-circle';
+    let selectedId = currentId;
+
+    const choices = AVATARS.map(function (avatar) {
+      return (
+        '<button type="button" class="avatar-choice' +
+        (avatar.id === currentId ? ' is-selected' : '') +
+        '" data-avatar-choice="' + avatar.id + '" aria-pressed="' +
+        (avatar.id === currentId ? 'true' : 'false') + '">' +
+        avatarMarkup(avatar.id, 'avatar--picker') +
+        '<span class="avatar-choice-label">' + escapeHtml(avatar.label) + '</span>' +
+        '<span class="avatar-choice-id">' + escapeHtml(avatar.id) + '</span>' +
+        '</button>'
+      );
+    }).join('');
+
+    openModal(
+      '<div class="account-modal">' +
+        '<h2 class="modal-title" id="modalTitle">Account Settings</h2>' +
+        '<p class="modal-sub">Your identity, live credit balance and animated profile picture.</p>' +
+        '<div class="account-card">' +
+        '  <div class="account-card-main">' +
+        '    <span class="account-card-label">Signed in as</span>' +
+        '    <strong id="accountEmail">' + escapeHtml(auth.user.email || '—') + '</strong>' +
+        '    <span class="account-card-name">' + escapeHtml(displayUserName(auth.user)) + '</span>' +
+        '  </div>' +
+        '  <div class="account-card-credits">' +
+        '    <span class="account-card-label">Credits</span>' +
+        '    <strong><span data-credit-count>' + state.credits + '</span></strong>' +
+        '  </div>' +
+        '</div>' +
+        '<div class="avatar-section-head">' +
+        '  <h3>Choose your avatar</h3>' +
+        '  <span>5 shapes · subtle looping animation</span>' +
+        '</div>' +
+        '<div class="avatar-picker" id="avatarPicker" role="group" aria-label="Profile avatar">' +
+        choices +
+        '</div>' +
+        '<div class="avatar-preview" id="avatarPreviewRow">' +
+        '  <span class="avatar-preview-art" id="avatarPreview">' +
+        avatarMarkup(currentId, 'avatar--preview') +
+        '  </span>' +
+        '  <span class="avatar-preview-copy">' +
+        '    <strong id="avatarPreviewName">' +
+        escapeHtml(
+          (AVATARS.filter(function (a) { return a.id === currentId; })[0] || {}).label || 'Mochi'
+        ) +
+        '</strong>' +
+        '    <span>Preview updates instantly. Save to sync with Neon.</span>' +
+        '  </span>' +
+        '</div>' +
+        '<p class="avatar-error" id="avatarError" role="alert"></p>' +
+        '<div class="modal-actions account-actions">' +
+        '  <button type="button" class="btn btn-ghost" data-modal-close>Cancel</button>' +
+        '  <button type="button" class="btn btn-primary" id="avatarSaveBtn">Save avatar</button>' +
+        '</div>' +
+        '</div>',
+      true
+    );
+
+    const applyChoice = function (id) {
+      selectedId = id;
+      const avatar = AVATARS.filter(function (a) { return a.id === id; })[0] || AVATARS[0];
+      $$('#avatarPicker [data-avatar-choice]').forEach(function (btn) {
+        const on = btn.getAttribute('data-avatar-choice') === id;
+        btn.classList.toggle('is-selected', on);
+        btn.setAttribute('aria-pressed', String(on));
+      });
+      const preview = $('#avatarPreview');
+      if (preview) preview.innerHTML = avatarMarkup(id, 'avatar--preview');
+      const name = $('#avatarPreviewName');
+      if (name) name.textContent = avatar.label;
+      const err = $('#avatarError');
+      if (err) err.textContent = '';
+    };
+
+    $$('#avatarPicker [data-avatar-choice]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        applyChoice(btn.getAttribute('data-avatar-choice'));
+      });
+    });
+
+    const saveBtn = $('#avatarSaveBtn');
+    if (!saveBtn) return;
+
+    saveBtn.addEventListener('click', function () {
+      const errEl = $('#avatarError');
+      if (errEl) errEl.textContent = '';
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving…';
+
+      apiFetch(ACCOUNT_AVATAR_URL, {
+        method: 'POST',
+        body: JSON.stringify({ avatar_id: selectedId })
+      })
+        .then(function (response) {
+          return readJson(response).then(function (body) {
+            if (response.status === 401) {
+              closeModal(false);
+              handleAuthExpired(
+                'Your session expired. Log in again to save your avatar.',
+                { action: 'account' }
+              );
+              return;
+            }
+            if (!response.ok || (body && body.ok === false)) {
+              const message =
+                body && typeof body.error === 'string'
+                  ? body.error
+                  : body && typeof body.message === 'string'
+                  ? body.message
+                  : 'Could not save your avatar. Please try again.';
+              throw new Error(message);
+            }
+
+            auth.user.avatar_id =
+              (body && (body.avatar_id || (body.user && body.user.avatar_id))) || selectedId;
+            renderAuthUI();
+            closeModal();
+            toast('Avatar updated — it will follow you across devices.', 'success');
+          });
+        })
+        .catch(function (error) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save avatar';
+          if (errEl) {
+            errEl.textContent =
+              error && error.name === 'AbortError'
+                ? 'The save timed out. Check your connection and try again.'
+                : error && error.message
+                ? error.message
+                : 'Could not save your avatar. Please try again.';
+          }
+        });
+    });
+  }
+
+  /* ---- Five pure CSS + inline SVG avatars (no images, no libraries) ------ */
+  function avatarMarkup(id, sizeClass) {
+    const safeId = AVATAR_IDS.indexOf(String(id || '')) !== -1 ? String(id) : 'mochi-circle';
+    return (
+      '<span class="avatar avatar--' + safeId + (sizeClass ? ' ' + sizeClass : '') +
+      '" data-avatar="' + safeId + '" aria-hidden="true">' +
+      avatarSvg(safeId) +
+      '</span>'
+    );
+  }
+
+  function avatarSvg(id) {
+    if (id === 'boba-squircle') {
+      return (
+        '<svg viewBox="0 0 64 64" role="img" aria-hidden="true">' +
+        '<g class="av-bob">' +
+        '<rect x="26" y="9" width="9" height="15" rx="4.5" fill="#F9A8D4" transform="rotate(12 30.5 16)"/>' +
+        '<rect x="14" y="20" width="36" height="37" rx="14" fill="#FDE68A" stroke="#F59E0B" stroke-width="1.8"/>' +
+        '<rect x="18" y="24" width="28" height="9" rx="4.5" fill="#FEF3C7" opacity=".75"/>' +
+        '<g class="av-pearls" fill="#7C3AED">' +
+        '<circle cx="23" cy="49" r="3.1"/><circle cx="31" cy="51.5" r="3.4"/><circle cx="40" cy="49" r="3.1"/>' +
+        '</g>' +
+        '<g class="av-blink">' +
+        '<circle cx="25" cy="36" r="2.1" fill="#3B1F2B"/><circle cx="39" cy="36" r="2.1" fill="#3B1F2B"/>' +
+        '<circle cx="24.2" cy="35.2" r=".7" fill="#fff"/><circle cx="38.2" cy="35.2" r=".7" fill="#fff"/>' +
+        '</g>' +
+        '<ellipse cx="20.5" cy="41" rx="2.5" ry="1.8" fill="#F472B6" opacity=".5"/>' +
+        '<ellipse cx="43.5" cy="41" rx="2.5" ry="1.8" fill="#F472B6" opacity=".5"/>' +
+        '<path d="M29 41q3 2.8 6 0" fill="none" stroke="#3B1F2B" stroke-width="1.8" stroke-linecap="round"/>' +
+        '</g></svg>'
+      );
+    }
+
+    if (id === 'star-puff') {
+      return (
+        '<svg viewBox="0 0 64 64" role="img" aria-hidden="true">' +
+        '<g class="av-bob">' +
+        '<polygon points="32,4 39.8,23.2 60,25.1 44.6,38.4 49.2,58 32,47.8 14.8,58 19.4,38.4 4,25.1 24.2,23.2" ' +
+        'fill="#FDE68A" stroke="#F59E0B" stroke-width="2.4" stroke-linejoin="round"/>' +
+        '<ellipse cx="25" cy="31" rx="2.5" ry="3.3" fill="#3B1F2B"/>' +
+        '<ellipse cx="39" cy="31" rx="2.5" ry="3.3" fill="#3B1F2B"/>' +
+        '<circle cx="23.9" cy="30" r=".8" fill="#fff"/><circle cx="37.9" cy="30" r=".8" fill="#fff"/>' +
+        '<circle cx="19.5" cy="35.5" r="2" fill="#FB7185" opacity=".55"/>' +
+        '<circle cx="44.5" cy="35.5" r="2" fill="#FB7185" opacity=".55"/>' +
+        '<path d="M28 37q4 3.2 8 0" fill="none" stroke="#3B1F2B" stroke-width="1.9" stroke-linecap="round"/>' +
+        '<g class="av-twinkle" fill="#FFF7ED">' +
+        '<circle cx="53" cy="11" r="1.6"/><circle cx="9" cy="17" r="1.2"/><circle cx="55" cy="47" r="1.1"/>' +
+        '</g></g></svg>'
+      );
+    }
+
+    if (id === 'hex-bot') {
+      return (
+        '<svg viewBox="0 0 64 64" role="img" aria-hidden="true">' +
+        '<g class="av-bob">' +
+        '<path d="M32 9V3" stroke="#6366F1" stroke-width="2.2" stroke-linecap="round"/>' +
+        '<circle cx="32" cy="2.5" r="2.2" fill="#34D399"/>' +
+        '<polygon points="32,7 54,19 54,46 32,58 10,46 10,19" fill="#C7D2FE" stroke="#6366F1" stroke-width="2.4" stroke-linejoin="round"/>' +
+        '<rect x="14" y="15" width="6" height="10" rx="3" fill="#818CF8"/>' +
+        '<rect x="44" y="15" width="6" height="10" rx="3" fill="#818CF8"/>' +
+        '<rect class="av-visor" x="17" y="22" width="30" height="12" rx="6" fill="#0F172A"/>' +
+        '<g class="av-blink">' +
+        '<circle cx="26" cy="28" r="2.2" fill="#22D3EE"/><circle cx="38" cy="28" r="2.2" fill="#22D3EE"/>' +
+        '</g>' +
+        '<path d="M28 42q4 2.4 8 0" fill="none" stroke="#4338CA" stroke-width="1.9" stroke-linecap="round"/>' +
+        '<circle cx="21" cy="40" r="1.7" fill="#F472B6" opacity=".45"/>' +
+        '<circle cx="43" cy="40" r="1.7" fill="#F472B6" opacity=".45"/>' +
+        '</g></svg>'
+      );
+    }
+
+    if (id === 'cloud-cat') {
+      return (
+        '<svg viewBox="0 0 64 64" role="img" aria-hidden="true">' +
+        '<g class="av-bob">' +
+        '<g class="av-ears">' +
+        '<path d="M17 25 L13 8 L27 17 Z" fill="#E0E7FF" stroke="#818CF8" stroke-width="1.6" stroke-linejoin="round"/>' +
+        '<path d="M47 25 L51 8 L37 17 Z" fill="#E0E7FF" stroke="#818CF8" stroke-width="1.6" stroke-linejoin="round"/>' +
+        '</g>' +
+        '<g fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.5">' +
+        '<circle cx="18" cy="39" r="9"/><circle cx="32" cy="32" r="12"/><circle cx="46" cy="39" r="9"/>' +
+        '<circle cx="25" cy="44" r="9"/><circle cx="39" cy="44" r="9"/>' +
+        '</g>' +
+        '<g class="av-blink">' +
+        '<ellipse cx="26" cy="36" rx="2.2" ry="3" fill="#312E81"/>' +
+        '<ellipse cx="38" cy="36" rx="2.2" ry="3" fill="#312E81"/>' +
+        '<circle cx="25.1" cy="35" r=".7" fill="#fff"/><circle cx="37.1" cy="35" r=".7" fill="#fff"/>' +
+        '</g>' +
+        '<path d="M20 39h-6M20 42l-6 2M44 39h6M44 42l6 2" fill="none" stroke="#A5B4FC" stroke-width="1.2" stroke-linecap="round"/>' +
+        '<circle cx="22" cy="40.5" r="1.6" fill="#F9A8D4" opacity=".6"/>' +
+        '<circle cx="42" cy="40.5" r="1.6" fill="#F9A8D4" opacity=".6"/>' +
+        '<path d="M29 41q3 2.2 6 0" fill="none" stroke="#312E81" stroke-width="1.8" stroke-linecap="round"/>' +
+        '</g></svg>'
+      );
+    }
+
+    /* mochi-circle (default) */
+    return (
+      '<svg viewBox="0 0 64 64" role="img" aria-hidden="true">' +
+      '<g class="av-bob">' +
+      '<circle cx="32" cy="36" r="24" fill="#FFE1E8"/>' +
+      '<circle cx="32" cy="32" r="20" fill="#FFF1F4"/>' +
+      '<ellipse cx="18" cy="40" rx="4.4" ry="3" fill="#FDBA74" opacity=".5"/>' +
+      '<ellipse cx="46" cy="40" rx="4.4" ry="3" fill="#FDBA74" opacity=".5"/>' +
+      '<g class="av-blink">' +
+      '<ellipse cx="24.5" cy="33" rx="2.6" ry="3.6" fill="#3B1F2B"/>' +
+      '<ellipse cx="39.5" cy="33" rx="2.6" ry="3.6" fill="#3B1F2B"/>' +
+      '<circle cx="23.5" cy="31.8" r=".9" fill="#fff"/><circle cx="38.5" cy="31.8" r=".9" fill="#fff"/>' +
+      '</g>' +
+      '<path d="M28 42q4 3.6 8 0" fill="none" stroke="#3B1F2B" stroke-width="2" stroke-linecap="round"/>' +
+      '</g></svg>'
+    );
   }
 
   /* ============================ D. ROUTER ================================= */
@@ -410,8 +1221,11 @@
     updateScraperButton();
     renderWalletSubs();
 
-    if (lastRenderedCredits !== null && lastRenderedCredits !== state.credits) {
-      showCreditDelta(state.credits - lastRenderedCredits);
+    const delta = lastRenderedCredits !== null ? state.credits - lastRenderedCredits : 0;
+    if (delta) {
+      showCreditDelta(delta);
+      const navBadge = $('#navCreditBadge');
+      if (navBadge) pulseCredit(navBadge);
     }
     lastRenderedCredits = state.credits;
 
@@ -420,34 +1234,42 @@
     renderScraperCardStatus();
   }
 
-  /* Second live agent — same grey/red gate, 3-credit minimum. */
+  /* Second live agent — logged-out visitors can click, then sign up for credits. */
   function updateScraperButton() {
     const btn = $('#scraperSubscribeBtn');
     if (!btn) return;
     const caption = $('#scraperSubscribeCaption');
-    const enough = Number(state.credits) >= LEAD_MIN_CREDITS;
+    const signedIn = isLoggedIn();
+    const enough = signedIn && Number(state.credits) >= LEAD_MIN_CREDITS;
+    const locked = signedIn && !enough;
 
-    /* Belt and braces: clear BOTH the property and any stale HTML attribute. */
-    if (enough) {
-      btn.disabled = false;
-      btn.removeAttribute('disabled');
-    } else {
+    if (locked) {
       btn.disabled = true;
       btn.setAttribute('disabled', 'disabled');
+    } else {
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
     }
 
-    btn.classList.toggle('is-disabled', !enough);
-    btn.classList.toggle('is-ready', enough);
-    btn.setAttribute('aria-disabled', enough ? 'false' : 'true');
+    btn.classList.toggle('is-disabled', locked);
+    btn.classList.toggle('is-ready', enough || !signedIn);
+    btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
     btn.textContent = 'Subscribe';
 
     if (caption) {
       caption.hidden = enough;
-      caption.innerHTML = enough
-        ? ''
-        : 'Needs at least ' + LEAD_MIN_CREDITS +
+      if (!signedIn) {
+        caption.innerHTML =
+          'Log in or sign up to get <strong>' + FREE_SIGNUP_CREDITS +
+          ' free credits</strong> and launch this agent.';
+      } else if (!enough) {
+        caption.innerHTML =
+          'Needs at least ' + LEAD_MIN_CREDITS +
           ' credits (1 term · ' + LEAD_LEADS_PER_TERM +
           ' leads). <a href="#plans">Top up in Manage My Plan</a>.';
+      } else {
+        caption.innerHTML = '';
+      }
     }
   }
 
@@ -455,30 +1277,36 @@
     const btn = $('#subscribeBtn');
     if (!btn) return;
     const caption = $('#subscribeCaption');
-    const enough = Number(state.credits) >= CREDITS_PER_STOCK;
+    const signedIn = isLoggedIn();
+    const enough = signedIn && Number(state.credits) >= CREDITS_PER_STOCK;
+    const locked = signedIn && !enough;
 
-    if (enough) {
-      btn.disabled = false;
-      btn.removeAttribute('disabled');
-    } else {
+    if (locked) {
       btn.disabled = true;
       btn.setAttribute('disabled', 'disabled');
+    } else {
+      btn.disabled = false;
+      btn.removeAttribute('disabled');
     }
 
-    btn.classList.toggle('is-disabled', !enough);
-    btn.classList.toggle('is-ready', enough);
-    btn.setAttribute('aria-disabled', enough ? 'false' : 'true');
+    btn.classList.toggle('is-disabled', locked);
+    btn.classList.toggle('is-ready', enough || !signedIn);
+    btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
     btn.textContent = 'Subscribe';
 
     if (caption) {
       caption.hidden = enough;
-      caption.innerHTML = enough
-        ? ''
-        : 'Requires at least ' +
-          CREDITS_PER_STOCK +
-          ' credits for ' +
-          SUB_DAYS +
-          ' days (1 stock). <a href="#plans">Top up in Manage My Plan</a>.';
+      if (!signedIn) {
+        caption.innerHTML =
+          'Log in or sign up to get <strong>' + FREE_SIGNUP_CREDITS +
+          ' free credits</strong> and subscribe.';
+      } else if (!enough) {
+        caption.innerHTML =
+          'Requires at least ' + CREDITS_PER_STOCK + ' credits for ' +
+          SUB_DAYS + ' days (1 stock). <a href="#plans">Top up in Manage My Plan</a>.';
+      } else {
+        caption.innerHTML = '';
+      }
     }
   }
 
@@ -668,6 +1496,8 @@
     const pack = PACKS.filter(function (p) { return p.id === packId; })[0];
     if (!pack) return;
 
+    if (!requireAuth({ action: 'checkout', packId: packId })) return;
+
     const newBalance = state.credits + pack.credits;
 
     openModal(
@@ -697,7 +1527,7 @@
         '      <label class="field"><span>CVC</span>' +
         '        <input type="text" class="is-readonly" value="•••" readonly aria-readonly="true"></label>' +
         '    </div>' +
-        '    <p class="demo-note">Demo checkout — no payment is processed. Credits are added instantly so you can test the full flow.</p>' +
+        '    <p class="demo-note">Demo checkout — no payment is processed. Credits are added to this session only until billing is connected.</p>' +
         '    <button type="submit" class="btn btn-primary btn-lg btn-block">Pay ' + money(pack.price) + ' (Demo)</button>' +
         '  </form>' +
         '</div>'
@@ -778,6 +1608,8 @@
 
   /* Stock configuration is a modal with the same shell as the scraper modal. */
   function openStockModal() {
+    if (!requireAuth({ action: 'stock' })) return;
+
     openModal(
       '<h2 class="modal-title" id="modalTitle">Stock Market News Agent</h2>' +
         '<p class="modal-sub">07:00 MYT delivery · ' + CREDITS_PER_STOCK + ' credits per stock · ' +
@@ -859,6 +1691,17 @@
   }
 
   function enterConfigure() {
+    if (!isLoggedIn()) {
+      if (auth.token) {
+        refreshSession().then(function (ok) {
+          if (ok) openStockModal();
+          else requireAuth({ action: 'stock' });
+        });
+        return;
+      }
+      requireAuth({ action: 'stock' });
+      return;
+    }
     openStockModal();
   }
 
@@ -991,6 +1834,11 @@
   function handleActivate(event) {
     event.preventDefault();
 
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'stock' });
+      return;
+    }
+
     const nameEl = $('#fullName');
     const emailEl = $('#email');
     if (!nameEl || !emailEl) return;
@@ -1021,6 +1869,12 @@
     }
     if (!valid) return;
 
+    const activateBtn = $('#activateBtn');
+    if (activateBtn) {
+      activateBtn.disabled = true;
+      activateBtn.classList.add('is-busy');
+    }
+
     const now = new Date();
     const expires = new Date(now.getTime() + SUB_DAYS * 86400000);
 
@@ -1037,19 +1891,6 @@
       expiresAt: expires.toISOString()
     };
 
-    // 1. Deduct credits + persist subscription immediately.
-    state.credits -= cost;
-    state.name = name;
-    state.email = email;
-    state.subscriptions = [subscription].concat(state.subscriptions || []);
-    state.lastSubscription = subscription;
-    saveState();
-
-    // 2. Reflect the new balance everywhere (pill, subscribe button, etc.).
-    syncCreditUI();
-    pulsePill();
-
-    // 3. Build + fire the n8n webhook payload (non-blocking).
     const payload = {
       event: 'subscriber.activated',
       agent_id: AGENT_ID,
@@ -1058,7 +1899,7 @@
       watchlist: subscription.watchlist,
       duration_days: SUB_DAYS,
       credits_spent: cost,
-      remaining_credits: state.credits,
+      remaining_credits: Math.max(0, state.credits - cost),
       timezone: TIMEZONE,
       subscribed_at: subscription.startedAt,
       expires_at: subscription.expiresAt
@@ -1067,15 +1908,69 @@
     console.log('[Agentic] subscriber.activated → ' + (CFG.WEBHOOK_URL || '(no webhook configured)'));
     console.log('[Agentic] webhook payload:', JSON.stringify(payload, null, 2));
 
-    sendWebhook(payload);
+    postAgentWebhook(payload).then(function (result) {
+      pendingWebhook = false;
 
-    // 4. Show the success page.
-    const activateBtn = $('#activateBtn');
-    if (activateBtn) {
-      activateBtn.disabled = true;
-      activateBtn.classList.add('is-busy');
-    }
-    window.location.hash = '#success';
+      if (result.kind === 'unauthorized') {
+        lastWebhookResult = { status: 'fail', code: 401 };
+        handleAuthExpired(
+          'Your session expired. Log in again to finish this subscription.',
+          { action: 'stock' }
+        );
+        return;
+      }
+
+      if (result.kind === 'insufficient') {
+        if (result.remaining !== null && Number.isFinite(result.remaining)) {
+          state.credits = result.remaining;
+        }
+        syncCreditUI();
+        toast(
+          'Insufficient credits — you need ' + cost + ' credits for this activation.',
+          'warn'
+        );
+        if (activateBtn) {
+          activateBtn.disabled = false;
+          activateBtn.classList.remove('is-busy');
+        }
+        renderConfigure();
+        return;
+      }
+
+      /* Server is authoritative when it returns a live balance. */
+      state.credits =
+        result.remaining !== null && Number.isFinite(result.remaining)
+          ? Math.max(0, Math.floor(result.remaining))
+          : Math.max(0, state.credits - cost);
+      state.name = name;
+      state.email = email;
+      state.subscriptions = [subscription].concat(state.subscriptions || []);
+      state.lastSubscription = subscription;
+      saveState();
+
+      lastWebhookResult =
+        result.kind === 'ok'
+          ? { status: 'ok', code: result.status, body: result.body }
+          : {
+              status: 'fail',
+              code: result.status || 0,
+              reason: result.reason || 'http-error',
+              body: result.body
+            };
+
+      if (result.kind === 'ok') {
+        setWebhookBadge('ok', 'Synced with 07:00 MYT Agent');
+      } else {
+        setWebhookBadge(
+          'fail',
+          'Webhook not reachable — activation saved locally, payload logged.'
+        );
+      }
+
+      syncCreditUI();
+      pulsePill();
+      window.location.hash = '#success';
+    });
   }
 
   /* ====================== I. SUCCESS + WEBHOOK SYNC ====================== */
@@ -1088,81 +1983,55 @@
     if (label) label.textContent = text;
   }
 
-  function sendWebhook(payload) {
+  /* Authenticated agent webhook call. Returns a structured outcome so the UI
+     can distinguish expired sessions (401) from insufficient credits (402). */
+  function postAgentWebhook(payload) {
+    const url = CFG.WEBHOOK_URL;
+
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return Promise.resolve({ kind: 'offline', reason: 'not-configured', remaining: null });
+    }
+
     pendingWebhook = true;
     lastWebhookResult = { status: 'pending' };
     setWebhookBadge('pending', 'Syncing subscriber to the n8n webhook…');
 
-    const url = CFG.WEBHOOK_URL;
-
-    if (!url || !/^https?:\/\//i.test(url)) {
-      pendingWebhook = false;
-      lastWebhookResult = { status: 'fail', reason: 'not-configured' };
-      setWebhookBadge('fail', 'Demo mode · webhook URL not configured — payload logged to console.');
-      return Promise.resolve(lastWebhookResult);
-    }
-
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = controller
-      ? setTimeout(function () { controller.abort(); }, 10000)
-      : null;
+    const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
 
     return fetch(url, {
       method: 'POST',
       mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
       body: JSON.stringify(payload),
       signal: controller ? controller.signal : undefined
     })
       .then(function (response) {
-        if (timer) clearTimeout(timer);
-        pendingWebhook = false;
-
-        // n8n's "Respond 200 Subscribed" node returns JSON: { ok, email, … }.
-        return response
-          .json()
-          .catch(function () {
-            return null;
-          })
-          .then(function (body) {
-            if (!response.ok) {
-              lastWebhookResult = { status: 'fail', code: response.status, body: body };
-              setWebhookBadge(
-                'fail',
-                'Webhook responded HTTP ' + response.status +
-                  ' — activation saved locally, payload logged.'
-              );
-              return lastWebhookResult;
-            }
-
-            if (body && body.ok === false) {
-              lastWebhookResult = { status: 'fail', code: response.status, body: body };
-              setWebhookBadge(
-                'fail',
-                'n8n rejected the subscriber — check the Upsert Active Subscriber code node.'
-              );
-              return lastWebhookResult;
-            }
-
-            lastWebhookResult = { status: 'ok', code: response.status, body: body };
-            setWebhookBadge('ok', 'Synced with 07:00 MYT Agent');
-            return lastWebhookResult;
-          });
+        if (timer) window.clearTimeout(timer);
+        return readJson(response).then(function (body) {
+          const remaining = extractRemaining(body);
+          if (response.status === 401) {
+            return { kind: 'unauthorized', status: 401, body: body, remaining: remaining };
+          }
+          if (response.status === 402) {
+            return { kind: 'insufficient', status: 402, body: body, remaining: remaining };
+          }
+          if (!response.ok) {
+            return { kind: 'error', status: response.status, body: body, remaining: remaining };
+          }
+          if (body && body.ok === false) {
+            return { kind: 'error', status: response.status, body: body, remaining: remaining };
+          }
+          return { kind: 'ok', status: response.status, body: body, remaining: remaining };
+        });
       })
       .catch(function (err) {
-        if (timer) clearTimeout(timer);
-        pendingWebhook = false;
-        lastWebhookResult = { status: 'fail', reason: 'network' };
-        // CORS / offline / not-yet-deployed endpoint — the UI flow still completes.
+        if (timer) window.clearTimeout(timer);
         console.warn(
-          '[Agentic] Webhook not reachable yet (the UI flow still completed). Reason:',
+          '[Agentic] Agent webhook unreachable — keeping the local activation.',
           err && err.message ? err.message : err
         );
-        setWebhookBadge(
-          'fail',
-          'Webhook not reachable yet — payload logged to console, activation saved locally.'
-        );
-        return lastWebhookResult;
+        return { kind: 'offline', reason: 'network', error: err, remaining: null };
       });
   }
 
@@ -1329,24 +2198,27 @@
     if (toggle) toggle.setAttribute('aria-expanded', 'false');
   }
 
-  function resetDemo() {
+  function logoutUser() {
     stopScraperTimers();
     stopEmailTrail();
-    state = defaultState();
+    pendingGate = null;
     selectedStocks = [];
     lastWebhookResult = null;
     pendingWebhook = false;
+
+    /* Local job/subscription history belongs to the signed-in account. */
+    state.subscriptions = [];
+    state.lastSubscription = null;
+    state.scraperJob = null;
     saveState();
 
-    syncCreditUI();
+    clearAuthSession();
     renderPlans();
     renderSuccess();
     renderScraperResults();
-    pulsePill();
     closeWallet();
     closeMobileNav();
-    toast('Demo reset — balance restored to ' + DEFAULT_CREDITS + ' credits.', 'info');
-    if (currentRoute() === 'configure' && !stockModalOpen) enterConfigure();
+    toast('Logged out. Your credits stay safe on the server.', 'info');
   }
 
   function updateNextBrief() {
@@ -1427,10 +2299,34 @@
       link.addEventListener('click', closeWallet);
     });
 
-    ['#demoResetPopover', '#demoResetFooter'].forEach(function (selector) {
-      const btn = $(selector);
-      if (btn) btn.addEventListener('click', resetDemo);
+    /* Auth: login/signup triggers, account settings and logout */
+    $$('[data-auth-open]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openAuthModal(btn.getAttribute('data-auth-open'));
+      });
     });
+
+    $$('[data-open-account]').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.preventDefault();
+        openAccountModal();
+      });
+    });
+
+    const accountPill = $('#accountPill');
+    if (accountPill) {
+      accountPill.addEventListener('click', function (event) {
+        event.stopPropagation();
+        openAccountModal();
+      });
+    }
+
+    const logoutBtn = $('#logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function () {
+        logoutUser();
+      });
+    }
 
     /* Escape closes overlays */
     document.addEventListener('keydown', function (event) {
@@ -1488,10 +2384,14 @@
       });
     });
 
-    /* Subscribe → configuration (only reachable when enough credits) */
+    /* Subscribe → auth gate → configuration modal */
     const subscribeBtn = $('#subscribeBtn');
     if (subscribeBtn) {
       subscribeBtn.addEventListener('click', function () {
+        if (!isLoggedIn()) {
+          requireAuth({ action: 'stock' });
+          return;
+        }
         if (state.credits < CREDITS_PER_STOCK) {
           toast('You need at least ' + CREDITS_PER_STOCK + ' credits to subscribe.', 'warn');
           return;
@@ -1500,10 +2400,14 @@
       });
     }
 
-    /* Lead Scraper: subscribe (15 credits) → configuration modal */
+    /* Lead Scraper: auth gate → configuration modal */
     const scraperBtn = $('#scraperSubscribeBtn');
     if (scraperBtn) {
       scraperBtn.addEventListener('click', function () {
+        if (!isLoggedIn()) {
+          requireAuth({ action: 'scraper' });
+          return;
+        }
         if (state.credits < LEAD_MIN_CREDITS) {
           toast('Needs at least ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM + ' leads).', 'warn');
           return;
@@ -1955,6 +2859,7 @@
   function ensureScraperRunning() {
     const job = state.scraperJob;
     if (!job || job.status === 'completed' || job.status === 'failed') return;
+    if (!isLoggedIn()) return;
 
     if (job.mode === 'demo') {
       startDemoScrape();
@@ -1977,6 +2882,11 @@
       return;
     }
 
+    if (!isLoggedIn()) {
+      revertScraperStart(job, true);
+      return;
+    }
+
     setScraperBadge('pending', 'Starting cloud scrape…');
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1985,7 +2895,7 @@
     fetch(LEAD_START_URL, {
       method: 'POST',
       mode: 'cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
       body: JSON.stringify({
         job_id: job.job_id,
         agent_id: LEAD_AGENT_ID,
@@ -1995,22 +2905,45 @@
         search_terms: job.search_terms,
         selected_columns: job.selected_columns,
         target_rows: scraperTarget(job),
-        credits_spent: job.credits_spent
+        credits_spent: job.credits_spent,
+        remaining_credits: Math.max(0, state.credits)
       }),
       signal: controller ? controller.signal : undefined
     })
       .then(function (response) {
         if (timer) window.clearTimeout(timer);
+
+        if (response.status === 401) {
+          revertScraperStart(job, true);
+          handleAuthExpired(
+            'Your session expired. Log in again to launch the Lead Scraper.',
+            { action: 'scraper' }
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          revertScraperStart(job, true);
+          toast('Insufficient credits for this scrape. Top up and try again.', 'warn');
+          return null;
+        }
         if (!response.ok) throw new Error('HTTP ' + response.status);
         return response.json().catch(function () { return null; });
       })
       .then(function (body) {
-        if (body && body.ok === false) throw new Error(body.error || 'rejected');
-        if (body && body.job_id && String(body.job_id) !== String(job.job_id)) {
+        if (!body) return;
+        if (body.ok === false) throw new Error(body.error || 'rejected');
+
+        const remaining = extractRemaining(body);
+        if (remaining !== null) {
+          state.credits = remaining;
+          syncCreditUI();
+        }
+
+        if (body.job_id && String(body.job_id) !== String(job.job_id)) {
           job.job_id = String(body.job_id);
           saveState();
         }
-        if (body && (body.mode === 'demo' || body.status === 'demo')) {
+        if (body.mode === 'demo' || body.status === 'demo') {
           switchToDemo(job, 'Backend demo mode');
           return;
         }
@@ -2024,6 +2957,19 @@
         );
         switchToDemo(job, 'Backend unreachable');
       });
+  }
+
+  /* Undo an optimistic credit deduction when the server refuses a start. */
+  function revertScraperStart(job, clearJob) {
+    stopScraperTimers();
+    stopEmailTrail();
+    if (job && Number(job.credits_spent)) {
+      state.credits += Number(job.credits_spent);
+    }
+    if (clearJob) state.scraperJob = null;
+    saveState();
+    syncCreditUI();
+    renderScraperResults();
   }
 
   function startLivePolling(job) {
@@ -2044,15 +2990,35 @@
 
     fetch(LEAD_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
       mode: 'cors',
+      headers: authHeaders(),
       signal: controller ? controller.signal : undefined
     })
       .then(function (response) {
         if (timer) window.clearTimeout(timer);
+        if (response.status === 401) {
+          stopScraperTimers();
+          handleAuthExpired(
+            'Your session expired. Log in again to check this scrape.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          failScraperJob('Insufficient credits');
+          return null;
+        }
         if (!response.ok) throw new Error('HTTP ' + response.status);
         return response.json();
       })
       .then(function (data) {
-        if (!data || typeof data !== 'object') throw new Error('Empty status response');
+        if (!data) return;
+        if (typeof data !== 'object') throw new Error('Empty status response');
+
+        const remaining = extractRemaining(data);
+        if (remaining !== null && remaining !== state.credits) {
+          state.credits = remaining;
+          syncCreditUI();
+        }
 
         const raw =
           data.collected_count != null
@@ -2207,14 +3173,41 @@
 
     if (job.mode === 'live' && LEAD_DOWNLOAD_URL) {
       const url = LEAD_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(job.job_id);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener';
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
       toast('Requesting your .xlsx from the cloud…', 'info');
+
+      fetch(url, { mode: 'cors', headers: authHeaders() })
+        .then(function (response) {
+          if (response.status === 401) {
+            handleAuthExpired(
+              'Your session expired. Log in again to download your leads.',
+              null
+            );
+            return null;
+          }
+          if (response.status === 402) {
+            toast('Insufficient credits for this download.', 'warn');
+            return null;
+          }
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return response.blob();
+        })
+        .then(function (blob) {
+          if (!blob) return;
+          const objectUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = objectUrl;
+          anchor.download =
+            'agentic-leads-' + slug(job.country || 'global') + '-' + job.job_id + '.xlsx';
+          document.body.appendChild(anchor);
+          anchor.click();
+          document.body.removeChild(anchor);
+          window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
+          toast('Excel download ready.', 'success');
+        })
+        .catch(function (err) {
+          console.warn('[Agentic] Authenticated download failed.', err);
+          toast('Could not download the Excel file. Please try again.', 'warn');
+        });
       return;
     }
 
@@ -2310,6 +3303,7 @@
   }
 
   function openScraperModal() {
+    if (!requireAuth({ action: 'scraper' })) return;
     if (state.credits < LEAD_MIN_CREDITS) {
       toast('Needs at least ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM + ' leads).', 'warn');
       return;
@@ -2444,6 +3438,11 @@
 
   function handleScraperStart(event) {
     event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'scraper' });
+      return;
+    }
 
     const nameEl = $('#scraperName');
     const emailEl = $('#scraperEmail');
@@ -2829,6 +3828,10 @@
     syncCreditUI();
     updateNextBrief();
     bindEvents();
+    renderAuthUI();
+
+    /* Live profile + credits from GET /auth/me when a token exists. */
+    refreshSession();
 
     window.addEventListener('hashchange', onRouteChange);
     onRouteChange();

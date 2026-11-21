@@ -17,19 +17,24 @@
    3. SUBSCRIPTION_DAYS
       Length of an activation window.
 
-   4. DEFAULT_CREDITS
-      New visitors start with 4 credits (one short of the 5 needed), which
-      makes the "grey / disabled" subscribe state easy to demo.
+   4. API_BASE
+      Neon-backed authentication + account service. The browser stores only
+      the session token (AUTH_TOKEN_KEY) and fetches live profile/credits from
+      GET /auth/me on every page load.
    ========================================================================== */
 
 window.CONFIG = {
   /* --- Backend ---------------------------------------------------------- */
   WEBHOOK_URL: 'https://claw.20.205.96.122.sslip.io/webhook/subscribe-stock-brief',
 
+  /* --- Neon auth / account API ------------------------------------------ */
+  API_BASE: 'https://n8n.20.205.96.122.sslip.io/webhook',
+  AUTH_TOKEN_KEY: 'aaas_token',
+  FREE_SIGNUP_CREDITS: 5,
+
   /* --- Pricing / credit rules ------------------------------------------- */
   CREDITS_PER_STOCK_WEEK: 5,
   SUBSCRIPTION_DAYS: 7,
-  DEFAULT_CREDITS: 4,
 
   /* --- Delivery ---------------------------------------------------------- */
   TIMEZONE: 'Asia/Kuala_Lumpur',
