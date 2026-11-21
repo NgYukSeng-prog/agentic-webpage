@@ -498,18 +498,25 @@ ol {
   background: #fef2f2;
 }
 
-.field input.is-locked {
-  background: var(--slate-100);
-  border-color: var(--slate-200);
-  color: var(--slate-600, #475569);
+.field input.is-locked,
+.field input.is-locked:disabled {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+  -webkit-text-fill-color: #64748b;
   cursor: not-allowed;
-  -webkit-text-fill-color: var(--slate-600, #475569);
+  caret-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 1;
 }
 
-.field input.is-locked:focus {
-  background: var(--slate-100);
-  border-color: var(--slate-200);
+.field input.is-locked:focus,
+.field input.is-locked:disabled:focus {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
   box-shadow: none;
+  outline: none;
 }
 
 .field-error {

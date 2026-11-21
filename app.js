@@ -2198,10 +2198,9 @@
         '<div class="field"><label for="fullName">Full name <span class="req">*</span></label>' +
         '<input type="text" id="fullName" name="fullName" placeholder="Alex Tan" autocomplete="name" required />' +
         '<span class="field-error" id="nameError" role="alert"></span></div>' +
-        '<div class="field"><label for="email">Delivery email <span class="label-note">🔒 Locked</span> <span class="req">*</span></label>' +
+        '<div class="field"><label for="email">Delivery email</label>' +
         '<input type="email" id="email" name="email" class="is-locked" value="' +
-        escapeHtml(accountEmail()) + '" readonly aria-readonly="true" required />' +
-        '<span class="field-hint">Locked to your account email.</span>' +
+        escapeHtml(accountEmail()) + '" disabled tabindex="-1" />' +
         '<span class="field-error" id="emailError" role="alert"></span></div>' +
         '</div>' +
         '<div class="config-summary" id="configSummary"></div>' +
@@ -2244,8 +2243,8 @@
     if (nameEl && !nameEl.value && state.name) nameEl.value = state.name;
     if (emailEl) {
       emailEl.value = accountEmail();
-      emailEl.setAttribute('readonly', 'readonly');
-      emailEl.setAttribute('aria-readonly', 'true');
+      emailEl.disabled = true;
+      emailEl.setAttribute('tabindex', '-1');
     }
 
     renderConfigure();
@@ -3989,11 +3988,9 @@
         '<div class="field"><label for="scraperName">Full name <span class="req">*</span></label>' +
         '<input type="text" id="scraperName" autocomplete="name" placeholder="Alex Tan" value="' +
         escapeHtml(state.name || '') + '" /></div>' +
-        '<div class="field"><label for="scraperEmail">Delivery Email ' +
-        '<span class="label-note">🔒 Locked · Excel sent here</span> <span class="req">*</span></label>' +
+        '<div class="field"><label for="scraperEmail">Delivery email</label>' +
         '<input type="email" id="scraperEmail" class="is-locked" value="' +
-        escapeHtml(accountEmail()) + '" readonly aria-readonly="true" />' +
-        '<span class="field-hint">Locked to your account email — the finished .xlsx will be sent here.</span>' +
+        escapeHtml(accountEmail()) + '" disabled tabindex="-1" />' +
         '<span class="field-error" id="scraperEmailError" role="alert"></span></div>' +
         '</div>' +
         '<div class="field"><label for="scraperCountry">Target country</label>' +
