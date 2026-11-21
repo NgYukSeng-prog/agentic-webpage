@@ -461,6 +461,16 @@
     return null;
   }
 
+  /* The ONLY path that writes a credit balance after auth. */
+  function setLiveCredits(value) {
+    if (value === null || value === undefined || value === '') return false;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return false;
+    state.credits = Math.floor(n);
+    if (auth.user) auth.user.credits = state.credits;
+    return true;
+  }
+
   function normalizeAuthPayload(body) {
     const b = body && typeof body === 'object' ? body : {};
     const data = b.data && typeof b.data === 'object' ? b.data : {};
@@ -511,11 +521,10 @@
     }
 
     const norm = normalizeAuthPayload(body);
-    let credits = norm.user.credits;
-    if (credits === null || !Number.isFinite(Number(credits))) {
-      credits = isNewAccount ? FREE_SIGNUP_CREDITS : state.credits;
+    let credits = 0;
+    if (norm.user.credits !== null && Number.isFinite(Number(norm.user.credits))) {
+      credits = Math.max(0, Math.floor(Number(norm.user.credits)));
     }
-    credits = Math.max(0, Math.floor(Number(credits) || 0));
 
     if (norm.user.email) state.email = norm.user.email;
     if (norm.user.name) state.name = norm.user.name;
@@ -2041,11 +2050,11 @@
 
     if (!requireAuth({ action: 'checkout', packId: packId })) return;
 
-    const newBalance = state.credits + pack.credits;
+    const currentBalance = state.credits;
 
     openModal(
       '<h2 class="modal-title" id="modalTitle">Purchase Credits (USD)</h2>' +
-        '<p class="modal-sub">Top up once, spend whenever. Credits sit in your wallet until you activate a subscription.</p>' +
+        '<p class="modal-sub">Billing is not connected yet. This preview does not change your live credit balance.</p>' +
         '<div class="checkout">' +
         '  <div class="checkout-summary">' +
         '    <div class="checkout-pack">' +
@@ -2056,7 +2065,7 @@
         '    <div class="checkout-line"><span>Subtotal</span><span>' + money(pack.price) + '</span></div>' +
         '    <div class="checkout-line"><span>Processing fee</span><span>$0.00</span></div>' +
         '    <div class="checkout-line total"><span>Total due today</span><span>' + money(pack.price) + ' USD</span></div>' +
-        '    <div class="checkout-line"><span>New balance</span><span>' + newBalance + ' credits</span></div>' +
+        '    <div class="checkout-line"><span>Current live balance</span><span>' + currentBalance + ' credits</span></div>' +
         '  </div>' +
         '  <form class="checkout-form" id="checkoutForm" novalidate>' +
         '    <label class="field"><span>Email for receipt (optional)</span>' +
@@ -2070,8 +2079,8 @@
         '      <label class="field"><span>CVC</span>' +
         '        <input type="text" class="is-readonly" value="•••" readonly aria-readonly="true"></label>' +
         '    </div>' +
-        '    <p class="demo-note">Demo checkout — no payment is processed. Credits are added to this session only until billing is connected.</p>' +
-        '    <button type="submit" class="btn btn-primary btn-lg btn-block">Pay ' + money(pack.price) + ' (Demo)</button>' +
+        '    <p class="demo-note">Demo checkout — no payment is processed and no credits are added. Live credits are managed by your account.</p>' +
+        '    <button type="submit" class="btn btn-primary btn-lg btn-block">Continue (Demo)</button>' +
         '  </form>' +
         '</div>'
     );
@@ -2091,14 +2100,13 @@
       }
 
       if (email) state.email = email;
-      state.credits += pack.credits;
-      saveState();
 
-      syncCreditUI();
-      renderPlans();
       closeModal();
-      pulsePill();
-      toast('+' + pack.credits + ' credits added · new balance ' + state.credits + ' credits', 'success');
+      toast(
+        'Billing is not connected yet — no credits were added. Your live balance is unchanged.',
+        'info'
+      );
+      refreshSession();
     });
   }
 
@@ -2464,9 +2472,7 @@
       }
 
       if (result.kind === 'insufficient') {
-        if (result.remaining !== null && Number.isFinite(result.remaining)) {
-          state.credits = result.remaining;
-        }
+        setLiveCredits(result.remaining);
         syncCreditUI();
         toast(
           'Insufficient credits — you need ' + cost + ' credits for this activation.',
@@ -2480,11 +2486,10 @@
         return;
       }
 
-      /* Server is authoritative when it returns a live balance. */
-      state.credits =
-        result.remaining !== null && Number.isFinite(result.remaining)
-          ? Math.max(0, Math.floor(result.remaining))
-          : Math.max(0, state.credits - cost);
+      /* Never mutate credits locally — only trust remaining_credits. */
+      if (!setLiveCredits(result.remaining) && auth.token) {
+        refreshSession();
+      }
       state.name = name;
       state.email = email;
       state.subscriptions = [subscription].concat(state.subscriptions || []);
@@ -3201,7 +3206,12 @@
       return;
     }
     if (job.status === 'failed') {
-      setScraperBadge('fail', 'Job failed · start a new scrape');
+      const message = job.error || 'start a new scrape';
+      setScraperBadge('fail', 'Job failed · ' + message);
+      const rule = $('#ringRule');
+      if (rule) rule.textContent = 'Failed · ' + message;
+      const sub = $('#downloadSub');
+      if (sub) sub.textContent = 'Failed · ' + message;
       return;
     }
     ensureScraperRunning();
@@ -3425,19 +3435,28 @@
   function failScraperJob(reason) {
     const job = state.scraperJob;
     if (!job) return;
+    const message = reason ? String(reason) : 'The scraper stopped unexpectedly.';
     job.status = 'failed';
+    job.error = message;
     stopScraperTimers();
     stopEmailTrail();
     saveState();
+
     renderScraperCardStatus();
-    setScraperBadge('fail', reason ? 'Job failed · ' + reason : 'Job failed');
-    toast('The scrape could not finish. Start a new run.', 'warn');
+    setScraperBadge('fail', 'Job failed · ' + message);
+
+    const rule = $('#ringRule');
+    if (rule) rule.textContent = 'Failed · ' + message;
+    const sub = $('#downloadSub');
+    if (sub) sub.textContent = 'Failed · ' + message;
+
+    toast('Scrape failed — ' + message, 'warn');
   }
 
   /* ----- live backend: POST start, then poll every 2.5s ----- */
   function ensureScraperRunning() {
     const job = state.scraperJob;
-    if (!job || job.status === 'failed' || scraperIsComplete(job)) return;
+    if (!job || job.status === 'failed' || scraperIsComplete(job) || job.starting) return;
     if (!isLoggedIn()) return;
 
     if (!job.posted) {
@@ -3450,15 +3469,27 @@
     startLivePolling(job);
   }
 
-  function postScraperStart(job) {
-    if (!LEAD_START_URL) {
+  function postScraperStart(job, options) {
+    const opts = options || {};
+
+    const failStart = function (message) {
+      const text = message || 'The scraper could not start. Please try again.';
       revertScraperStart(job, true);
-      toast('Lead Scraper backend is not configured. No credits were spent.', 'warn');
+      if (typeof opts.onError === 'function') opts.onError(text);
+      else toast(text, 'warn');
+    };
+
+    if (!LEAD_START_URL) {
+      failStart('Lead Scraper backend is not configured. Please try again later.');
       return;
     }
 
     if (!isLoggedIn()) {
       revertScraperStart(job, true);
+      handleAuthExpired(
+        'Your session expired. Log in again to launch the Lead Scraper.',
+        { action: 'scraper' }
+      );
       return;
     }
 
@@ -3489,64 +3520,93 @@
         if (timer) window.clearTimeout(timer);
 
         if (response.status === 401) {
+          return readJson(response).then(function () {
+            return { kind: 'unauthorized' };
+          });
+        }
+        if (response.status === 402) {
+          return readJson(response).then(function (body) {
+            return { kind: 'insufficient', body: body || {} };
+          });
+        }
+        return readJson(response).then(function (body) {
+          if (!response.ok) {
+            return { kind: 'error', status: response.status, body: body || {} };
+          }
+          return { kind: 'ok', body: body || {} };
+        });
+      })
+      .then(function (result) {
+        if (!result) return;
+
+        if (result.kind === 'unauthorized') {
           revertScraperStart(job, true);
           handleAuthExpired(
             'Your session expired. Log in again to launch the Lead Scraper.',
             { action: 'scraper' }
           );
-          return null;
+          return;
         }
-        if (response.status === 402) {
-          revertScraperStart(job, true);
-          toast('Insufficient credits for this scrape. Top up and try again.', 'warn');
-          return null;
-        }
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        return response.json().catch(function () { return null; });
-      })
-      .then(function (body) {
-        if (!body) return;
-        if (body.ok === false) throw new Error(body.error || 'rejected');
 
-        const remaining = extractRemaining(body);
-        if (remaining !== null) {
-          state.credits = remaining;
-          syncCreditUI();
+        const body = result.body || {};
+
+        /* Any live balance returned by the backend wins. */
+        const liveCreditsApplied = setLiveCredits(extractRemaining(body));
+        if (liveCreditsApplied) syncCreditUI();
+
+        if (result.kind === 'insufficient') {
+          failStart(
+            body.error || 'Insufficient credits for this scrape. Top up and try again.'
+          );
+          return;
+        }
+
+        if (result.kind === 'error') {
+          failStart(
+            body.error || 'The scraper could not start (HTTP ' + result.status + ').'
+          );
+          return;
+        }
+
+        const status = String(body.status || '').toLowerCase();
+        if (body.ok === false || status === 'failed' || status === 'error' ||
+            status === 'cancelled' || status === 'canceled') {
+          failStart(body.error || 'The scraper could not start this run.');
+          return;
+        }
+
+        if (body.mode === 'demo' || status === 'demo') {
+          failStart('The scraper backend is not returning live progress. Please try again later.');
+          return;
         }
 
         if (body.job_id && String(body.job_id) !== String(job.job_id)) {
           job.job_id = String(body.job_id);
-          saveState();
         }
-        if (body.mode === 'demo' || body.status === 'demo') {
-          revertScraperStart(job, true);
-          toast('The scraper backend is not returning live progress. No credits were spent.', 'warn');
-          return;
-        }
-        startLivePolling(job);
+        job.starting = false;
+        job.posted = true;
+        job.status = status || 'running';
+        saveState();
+
+        if (!liveCreditsApplied && auth.token) refreshSession();
+
+        if (typeof opts.onStarted === 'function') opts.onStarted(body);
+        else startLivePolling(job);
       })
       .catch(function (err) {
         if (timer) window.clearTimeout(timer);
         console.warn(
-          '[Agentic] Lead scraper start response unavailable — waiting for live status.',
+          '[Agentic] Lead scraper start response unavailable.',
           err && err.message ? err.message : err
         );
-        if (!job.start_warned) {
-          job.start_warned = true;
-          saveState();
-          toast('Scraper backend unreachable — waiting for live status.', 'warn');
-        }
-        startLivePolling(job);
+        failStart('Could not reach the Lead Scraper backend. Please try again.');
       });
   }
 
-  /* Undo an optimistic credit deduction when the server refuses a start. */
+  /* Stop a start attempt. Credits are never adjusted client-side. */
   function revertScraperStart(job, clearJob) {
     stopScraperTimers();
     stopEmailTrail();
-    if (job && Number(job.credits_spent)) {
-      state.credits += Number(job.credits_spent);
-    }
     if (clearJob) state.scraperJob = null;
     saveState();
     syncCreditUI();
@@ -3596,9 +3656,7 @@
         if (!data) return;
         if (typeof data !== 'object') throw new Error('Empty status response');
 
-        const remaining = extractRemaining(data);
-        if (remaining !== null && remaining !== state.credits) {
-          state.credits = remaining;
+        if (setLiveCredits(extractRemaining(data))) {
           syncCreditUI();
         }
 
@@ -3729,6 +3787,7 @@
     job.job_id = value;
     job.mode = 'live';
     job.status = 'running';
+    job.starting = false;
     job.posted = true;
     job.scraped_rows = 0;
     job.filled_rows = 0;
@@ -4082,21 +4141,35 @@
       email_sent: false
     };
 
-    state.credits -= quote.required;
     state.name = name;
     state.email = email;
     state.scraperJob = job;
+    job.starting = true;
+    job.posted = true;
     saveState();
 
-    syncCreditUI();
-    pulsePill();
-    closeModal();
-
-    if (currentRoute() === 'scraper-results') {
-      renderScraperResults();
-    } else {
-      window.location.hash = '#scraper-results';
+    if (errorEl) errorEl.textContent = '';
+    const startBtn = $('#scraperStartBtn');
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.textContent = 'Starting scrape…';
     }
+
+    postScraperStart(job, {
+      onError: function (message) {
+        if (errorEl) errorEl.textContent = message;
+        updateScraperQuote();
+      },
+      onStarted: function () {
+        closeModal();
+        if (currentRoute() === 'scraper-results') {
+          renderScraperResults();
+        } else {
+          window.location.hash = '#scraper-results';
+        }
+        startLivePolling(job);
+      }
+    });
   }
 
   function openColumnsModal() {
