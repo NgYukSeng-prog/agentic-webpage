@@ -670,6 +670,11 @@
   let authResetEmail = '';
   let authFlashMessage = '';
   let googleScriptPromise = null;
+  let googleGsiInitialized = false;
+  let googleRenderRetryTimer = null;
+
+  const GOOGLE_GSI_SELECTOR =
+    'script[data-google-gsi], script[src*="accounts.google.com/gsi/client"]';
 
   function passwordIsStrong(value) {
     return PASSWORD_RULES.every(function (rule) { return rule.test(value); });
@@ -741,6 +746,30 @@
     );
   }
 
+  function stopGoogleRenderRetry() {
+    if (googleRenderRetryTimer) {
+      window.clearTimeout(googleRenderRetryTimer);
+      googleRenderRetryTimer = null;
+    }
+  }
+
+  /* GSI must be initialised exactly once per page load. */
+  function ensureGoogleGsiInitialized() {
+    if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+      return false;
+    }
+    if (!googleGsiInitialized) {
+      googleGsiInitialized = true;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true
+      });
+    }
+    return true;
+  }
+
   function loadGoogleIdentity() {
     if (window.google && window.google.accounts && window.google.accounts.id) {
       return Promise.resolve();
@@ -748,11 +777,28 @@
     if (googleScriptPromise) return googleScriptPromise;
 
     googleScriptPromise = new Promise(function (resolve, reject) {
-      const existing = document.querySelector('script[data-google-gsi]');
+      let settled = false;
+      const finish = function (err) {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        if (err) reject(err);
+        else resolve();
+      };
+      const timeout = window.setTimeout(function () {
+        finish(new Error('Google script load timed out'));
+      }, 8000);
+
+      /* One script tag only, whether it was injected here or in the HTML. */
+      const existing = document.querySelector(GOOGLE_GSI_SELECTOR);
       if (existing) {
-        existing.addEventListener('load', resolve);
+        if (window.google && window.google.accounts && window.google.accounts.id) {
+          finish();
+          return;
+        }
+        existing.addEventListener('load', function () { finish(); });
         existing.addEventListener('error', function () {
-          reject(new Error('Google script failed to load'));
+          finish(new Error('Google script failed to load'));
         });
         return;
       }
@@ -761,12 +807,78 @@
       script.async = true;
       script.defer = true;
       script.setAttribute('data-google-gsi', '1');
-      script.onload = function () { resolve(); };
-      script.onerror = function () { reject(new Error('Google script failed to load')); };
+      script.onload = function () { finish(); };
+      script.onerror = function () { finish(new Error('Google script failed to load')); };
       document.head.appendChild(script);
+    }).catch(function (err) {
+      googleScriptPromise = null;
+      throw err;
     });
 
     return googleScriptPromise;
+  }
+
+  function showGoogleUnavailable(slot, note) {
+    if (!slot || !slot.isConnected) return;
+    stopGoogleRenderRetry();
+    slot.classList.remove('is-loading', 'is-rendered');
+    slot.innerHTML = googleDisabledMarkup(note || 'Google Sign-In is unavailable right now.');
+  }
+
+  function renderGoogleButton(slot, attempt) {
+    if (!slot || !slot.isConnected) return;
+
+    const container = slot.querySelector('#googleButton');
+    if (!container) {
+      stopGoogleRenderRetry();
+      return;
+    }
+
+    /* The modal animation can briefly report a 0px width. Wait for layout. */
+    if (!container.clientWidth) {
+      if (attempt >= 15) {
+        showGoogleUnavailable(slot, 'Google Sign-In is unavailable right now.');
+        return;
+      }
+      stopGoogleRenderRetry();
+      googleRenderRetryTimer = window.setTimeout(function () {
+        renderGoogleButton(slot, attempt + 1);
+      }, 60);
+      return;
+    }
+
+    stopGoogleRenderRetry();
+
+    if (!ensureGoogleGsiInitialized()) {
+      showGoogleUnavailable(slot, 'Google Sign-In is unavailable right now.');
+      return;
+    }
+
+    const btnWidth = Math.max(
+      240,
+      Math.min(380, Math.floor(container.clientWidth || 320))
+    );
+
+    /* Clear placeholders before GSI paints the official button. */
+    const loading = slot.querySelector('#googleLoading');
+    if (loading && loading.parentNode) loading.parentNode.removeChild(loading);
+    container.innerHTML = '';
+    slot.classList.remove('is-loading');
+    slot.classList.add('is-rendered');
+
+    try {
+      window.google.accounts.id.renderButton(container, {
+        theme: 'outline',
+        size: 'large',
+        shape: 'rectangular',
+        text: 'continue_with',
+        logo_alignment: 'left',
+        width: btnWidth
+      });
+    } catch (err) {
+      console.warn('[Agentic] Google Sign-In renderButton failed.', err);
+      showGoogleUnavailable(slot, 'Google Sign-In is unavailable right now.');
+    }
   }
 
   function googleDisabledMarkup(note) {
@@ -781,47 +893,52 @@
   }
 
   function mountGoogleSignIn() {
+    stopGoogleRenderRetry();
+
     const slot = $('#googleSlot');
     if (!slot) return;
+
+    slot.classList.remove('is-loading', 'is-rendered');
 
     if (!GOOGLE_CLIENT_ID) {
       slot.innerHTML = googleDisabledMarkup('Not configured — add GOOGLE_CLIENT_ID to config.js.');
       return;
     }
 
+    slot.classList.add('is-loading');
     slot.innerHTML =
-      '<button type="button" class="google-btn is-loading" disabled>' +
-      '<span class="google-loading-dot" aria-hidden="true"></span>' +
-      '<span class="google-btn-label">Loading Google Sign-In…</span>' +
-      '</button>';
+      '<div class="google-loading" id="googleLoading">' +
+      '  <button type="button" class="google-btn is-loading" disabled>' +
+      '    <span class="google-loading-dot" aria-hidden="true"></span>' +
+      '    <span class="google-btn-label">Loading Google Sign-In…</span>' +
+      '  </button>' +
+      '</div>' +
+      '<div class="google-button-target" id="googleButton"></div>';
 
     loadGoogleIdentity()
       .then(function () {
+        if (!slot.isConnected) return;
         if (!window.google || !window.google.accounts || !window.google.accounts.id) {
           throw new Error('Google Identity Services unavailable');
         }
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: handleGoogleCredential,
-          auto_select: false,
-          cancel_on_tap_outside: true
+        /* Initialize exactly once, then wait for the modal to settle. */
+        ensureGoogleGsiInitialized();
+        window.requestAnimationFrame(function () {
+          window.requestAnimationFrame(function () {
+            renderGoogleButton(slot, 0);
+          });
         });
-        const target = $('#googleButton');
-        if (!target) return;
-        const buttonWidth = Math.max(200, Math.min(320, (slot.clientWidth || 320) - 4));
-        window.google.accounts.id.renderButton(target, {
-          theme: 'outline',
-          size: 'large',
-          shape: 'rectangular',
-          text: 'continue_with',
-          logo_alignment: 'left',
-          width: buttonWidth
-        });
-        slot.classList.add('is-rendered');
       })
       .catch(function (err) {
         console.warn('[Agentic] Google Sign-In could not load.', err);
-        slot.innerHTML = googleDisabledMarkup('Google Sign-In is unavailable right now.');
+        const failedScript = document.querySelector(GOOGLE_GSI_SELECTOR);
+        if (
+          failedScript &&
+          !(window.google && window.google.accounts && window.google.accounts.id)
+        ) {
+          failedScript.remove();
+        }
+        showGoogleUnavailable(slot, 'Google Sign-In is unavailable right now.');
       });
   }
 

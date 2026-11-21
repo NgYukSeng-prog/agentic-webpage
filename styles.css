@@ -5325,6 +5325,23 @@ table.leads-table {
   animation: authSpin 0.7s linear infinite;
 }
 
+.google-loading {
+  width: 100%;
+}
+
+.google-button-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+}
+
+.google-button-target > div,
+.google-button-target iframe {
+  max-width: 100%;
+}
+
 .auth-divider {
   display: flex;
   align-items: center;
