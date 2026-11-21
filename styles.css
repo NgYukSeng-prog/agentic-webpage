@@ -4676,10 +4676,12 @@ table.leads-table {
 
 .auth-prompt {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 9px;
+  width: 100%;
   padding: 11px 13px;
-  margin-bottom: 14px;
+  margin: 0 auto 14px;
   border-radius: 12px;
   background: #fffbeb;
   border: 1px solid #fde68a;
@@ -4687,12 +4689,13 @@ table.leads-table {
   font-size: 0.82rem;
   font-weight: 600;
   line-height: 1.45;
+  text-align: center;
 }
 
 .auth-prompt-dot {
   width: 8px;
   height: 8px;
-  margin-top: 5px;
+  margin-top: 0;
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--amber);
@@ -4750,16 +4753,29 @@ table.leads-table {
 }
 
 .auth-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
   min-height: 18px;
-  margin: 2px 0 6px;
+  margin: 2px auto 6px;
   font-size: 0.82rem;
   font-weight: 600;
   line-height: 1.4;
+  text-align: center;
   color: var(--red);
+}
+
+.auth-error:not(:empty) {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
 }
 
 .auth-submit {
   position: relative;
+  border-radius: 999px;
 }
 
 .auth-submit-label {
@@ -5266,7 +5282,7 @@ table.leads-table {
   width: 100%;
   padding: 11px 14px;
   border: 1px solid var(--slate-200);
-  border-radius: 12px;
+  border-radius: 999px;
   background: #fff;
   color: var(--slate-700);
   font-family: inherit;
@@ -5440,7 +5456,11 @@ table.leads-table {
 }
 
 .auth-success {
-  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0 auto 14px;
   padding: 10px 12px;
   border-radius: 12px;
   background: #ecfdf5;
@@ -5448,19 +5468,24 @@ table.leads-table {
   color: #047857;
   font-size: 0.82rem;
   font-weight: 650;
+  text-align: center;
 }
 
 .auth-reset-note {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 2px;
-  margin-bottom: 14px;
+  width: 100%;
+  margin: 0 auto 14px;
   padding: 11px 13px;
   border-radius: 12px;
   background: #eef2ff;
   border: 1px solid #e0e7ff;
   color: #4338ca;
   font-size: 0.8rem;
+  text-align: center;
 }
 
 .auth-reset-note strong {

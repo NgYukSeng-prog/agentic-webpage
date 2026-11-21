@@ -870,7 +870,7 @@
       window.google.accounts.id.renderButton(container, {
         theme: 'outline',
         size: 'large',
-        shape: 'rectangular',
+        shape: 'pill',
         text: 'continue_with',
         logo_alignment: 'left',
         width: btnWidth
@@ -1034,11 +1034,11 @@
     });
 
     const title = $('#authTitle');
-    if (title) title.textContent = isLogin ? 'Log in to Agentic' : 'Create your free account';
+    if (title) title.textContent = isLogin ? 'Welcome back' : 'Create your free account';
     const sub = $('#authSub');
     if (sub) {
       sub.textContent = isLogin
-        ? 'Welcome back — your live credit balance is waiting.'
+        ? 'Log in to access your credits and live agents.'
         : 'New accounts start with ' + FREE_SIGNUP_CREDITS + ' free credits. No card required.';
     }
     setAuthError('');
@@ -1305,11 +1305,7 @@
 
     openModal(
       '<div class="auth-modal">' +
-        '<div class="auth-brand-row">' +
-        '  <span class="auth-orb" aria-hidden="true">5</span>' +
-        '  <span class="auth-brand-copy"><strong>Agentic account</strong><span>Neon-backed credits, one wallet for every agent.</span></span>' +
-        '</div>' +
-        '<h2 class="modal-title" id="modalTitle"><span id="authTitle">Log in to Agentic</span></h2>' +
+        '<h2 class="modal-title" id="modalTitle"><span id="authTitle">Welcome back</span></h2>' +
         '<p class="modal-sub" id="authSub"></p>' +
         '<div class="auth-prompt" id="authPrompt" hidden>' +
         '  <span class="auth-prompt-dot" aria-hidden="true"></span>' +
