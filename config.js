@@ -32,6 +32,10 @@ window.CONFIG = {
   AUTH_TOKEN_KEY: 'aaas_token',
   FREE_SIGNUP_CREDITS: 5,
 
+  /* Google Identity Services client ID. Paste your OAuth Web client ID here.
+     Leave blank to show a disabled "Continue with Google" control. */
+  GOOGLE_CLIENT_ID: '87470842640-0bvtq39i9h3pg5om9ephb6sumnob6mlk.apps.googleusercontent.com',
+
   /* --- Pricing / credit rules ------------------------------------------- */
   CREDITS_PER_STOCK_WEEK: 5,
   SUBSCRIPTION_DAYS: 7,
@@ -78,7 +82,7 @@ window.CONFIG = {
   LEAD_SCRAPER_AGENT_ID: 'b2b-lead-scraper',
   LEAD_SCRAPER_AGENT_NAME: 'B2B Lead Scraper Agent',
   LEAD_SCRAPER_TARGET_ROWS: 1000,
-  LEAD_SCRAPER_POLL_MS: 5000,
+  LEAD_SCRAPER_POLL_MS: 2500,
   LEAD_SCRAPER_START_URL:
     'https://claw.20.205.96.122.sslip.io/webhook/subscribe-lead-scraper',
   LEAD_SCRAPER_STATUS_URL:

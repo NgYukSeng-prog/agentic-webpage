@@ -44,8 +44,13 @@
   const AUTH_ME_URL = API_BASE + '/auth/me';
   const AUTH_REGISTER_URL = API_BASE + '/auth/register';
   const AUTH_LOGIN_URL = API_BASE + '/auth/login';
+  const AUTH_GOOGLE_URL = API_BASE + '/auth/google';
+  const FORGOT_PASSWORD_URL = API_BASE + '/auth/forgot-password';
+  const RESET_PASSWORD_URL = API_BASE + '/auth/reset-password';
   const ACCOUNT_AVATAR_URL = API_BASE + '/account/avatar';
   const FREE_SIGNUP_CREDITS = toPositiveInt(CFG.FREE_SIGNUP_CREDITS, 5);
+  const GOOGLE_CLIENT_ID = String(CFG.GOOGLE_CLIENT_ID || '').trim();
+  const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
 
   /* B2B Lead Scraper: 1 search term = 50 leads = 3 credits (max 10 terms). */
   const LEAD_CREDITS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_CREDITS_PER_TERM, 3);
@@ -55,7 +60,7 @@
   const LEAD_MAX_TARGET = LEAD_LEADS_PER_TERM * LEAD_MAX_TERMS;
   const LEAD_AGENT_ID = CFG.LEAD_SCRAPER_AGENT_ID || 'b2b-lead-scraper';
   const LEAD_AGENT_NAME = CFG.LEAD_SCRAPER_AGENT_NAME || 'B2B Lead Scraper Agent';
-  const LEAD_POLL_MS = toPositiveInt(CFG.LEAD_SCRAPER_POLL_MS, 5000);
+  const LEAD_POLL_MS = toPositiveInt(CFG.LEAD_SCRAPER_POLL_MS, 2500);
   const LEAD_START_URL = CFG.LEAD_SCRAPER_START_URL || '';
   const LEAD_STATUS_URL = CFG.LEAD_SCRAPER_STATUS_URL || '';
   const LEAD_DOWNLOAD_URL = CFG.LEAD_SCRAPER_DOWNLOAD_URL || '';
@@ -299,7 +304,11 @@
             ? parsed.lastSubscription
             : null,
         scraperJob:
-          parsed.scraperJob && typeof parsed.scraperJob === 'object' ? parsed.scraperJob : null
+          parsed.scraperJob &&
+          typeof parsed.scraperJob === 'object' &&
+          parsed.scraperJob.mode !== 'demo'
+            ? parsed.scraperJob
+            : null
       };
     } catch (err) {
       return base;
@@ -651,13 +660,223 @@
     if (el) el.textContent = message || '';
   }
 
+  const PASSWORD_RULES = [
+    { id: 'length', label: 'At least 8 characters', test: function (v) { return String(v).length >= 8; } },
+    { id: 'upper', label: 'At least 1 uppercase letter (A-Z)', test: function (v) { return /[A-Z]/.test(String(v)); } },
+    { id: 'lower', label: 'At least 1 lowercase letter (a-z)', test: function (v) { return /[a-z]/.test(String(v)); } },
+    { id: 'number', label: 'At least 1 number (0-9)', test: function (v) { return /[0-9]/.test(String(v)); } }
+  ];
+  let authResetStage = 'request';
+  let authResetEmail = '';
+  let authFlashMessage = '';
+  let googleScriptPromise = null;
+
+  function passwordIsStrong(value) {
+    return PASSWORD_RULES.every(function (rule) { return rule.test(value); });
+  }
+
+  function passwordChecklistMarkup(id) {
+    return (
+      '<ul class="pw-checklist" id="' + id + '" aria-live="polite">' +
+      PASSWORD_RULES.map(function (rule) {
+        return (
+          '<li class="is-bad" data-pw-rule="' + rule.id + '">' +
+          '<span class="pw-mark" aria-hidden="true">✗</span>' +
+          '<span>' + escapeHtml(rule.label) + '</span>' +
+          '</li>'
+        );
+      }).join('') +
+      '</ul>'
+    );
+  }
+
+  function updatePasswordChecklist(input) {
+    if (!input) return true;
+    const selector = input.getAttribute('data-pw-check');
+    const list = selector ? $(selector) : null;
+    if (!list) return true;
+
+    let allGood = true;
+    PASSWORD_RULES.forEach(function (rule) {
+      const ok = rule.test(input.value);
+      if (!ok) allGood = false;
+      const item = list.querySelector('[data-pw-rule="' + rule.id + '"]');
+      if (!item) return;
+      item.classList.toggle('is-good', ok);
+      item.classList.toggle('is-bad', !ok);
+      const mark = item.querySelector('.pw-mark');
+      if (mark) mark.textContent = ok ? '✓' : '✗';
+    });
+
+    syncAuthSubmitState();
+    return allGood;
+  }
+
+  function syncAuthSubmitState() {
+    const btn = $('#authSubmit');
+    if (!btn) return;
+    const pwInput = $('input[data-pw-check]');
+    const strong = !pwInput || passwordIsStrong(pwInput.value);
+    btn.disabled = authSubmitBusy || !strong;
+  }
+
   function setAuthBusy(busy) {
     authSubmitBusy = !!busy;
     const btn = $('#authSubmit');
-    if (!btn) return;
-    btn.disabled = !!busy;
-    btn.classList.toggle('is-busy', !!busy);
-    btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+    if (btn) {
+      btn.classList.toggle('is-busy', !!busy);
+      btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+    }
+    syncAuthSubmitState();
+  }
+
+  function googleMarkSvg() {
+    return (
+      '<svg class="google-mark" viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">' +
+      '<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.17-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>' +
+      '<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>' +
+      '<path fill="#FBBC05" d="M3.97 10.72A5.41 5.41 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.95H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.05l3.01-2.33z"/>' +
+      '<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A8.65 8.65 0 0 0 9 0 9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>' +
+      '</svg>'
+    );
+  }
+
+  function loadGoogleIdentity() {
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      return Promise.resolve();
+    }
+    if (googleScriptPromise) return googleScriptPromise;
+
+    googleScriptPromise = new Promise(function (resolve, reject) {
+      const existing = document.querySelector('script[data-google-gsi]');
+      if (existing) {
+        existing.addEventListener('load', resolve);
+        existing.addEventListener('error', function () {
+          reject(new Error('Google script failed to load'));
+        });
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = GOOGLE_GSI_SRC;
+      script.async = true;
+      script.defer = true;
+      script.setAttribute('data-google-gsi', '1');
+      script.onload = function () { resolve(); };
+      script.onerror = function () { reject(new Error('Google script failed to load')); };
+      document.head.appendChild(script);
+    });
+
+    return googleScriptPromise;
+  }
+
+  function googleDisabledMarkup(note) {
+    return (
+      '<button type="button" class="google-btn is-disabled" disabled title="' +
+      escapeHtml(note || 'Google Sign-In is unavailable.') + '">' +
+      googleMarkSvg() +
+      '<span class="google-btn-label">Continue with Google</span>' +
+      '<span class="google-btn-note">' + escapeHtml(note || 'Unavailable') + '</span>' +
+      '</button>'
+    );
+  }
+
+  function mountGoogleSignIn() {
+    const slot = $('#googleSlot');
+    if (!slot) return;
+
+    if (!GOOGLE_CLIENT_ID) {
+      slot.innerHTML = googleDisabledMarkup('Not configured — add GOOGLE_CLIENT_ID to config.js.');
+      return;
+    }
+
+    slot.innerHTML =
+      '<button type="button" class="google-btn is-loading" disabled>' +
+      '<span class="google-loading-dot" aria-hidden="true"></span>' +
+      '<span class="google-btn-label">Loading Google Sign-In…</span>' +
+      '</button>';
+
+    loadGoogleIdentity()
+      .then(function () {
+        if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+          throw new Error('Google Identity Services unavailable');
+        }
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleGoogleCredential,
+          auto_select: false,
+          cancel_on_tap_outside: true
+        });
+        const target = $('#googleButton');
+        if (!target) return;
+        const buttonWidth = Math.max(200, Math.min(320, (slot.clientWidth || 320) - 4));
+        window.google.accounts.id.renderButton(target, {
+          theme: 'outline',
+          size: 'large',
+          shape: 'rectangular',
+          text: 'continue_with',
+          logo_alignment: 'left',
+          width: buttonWidth
+        });
+        slot.classList.add('is-rendered');
+      })
+      .catch(function (err) {
+        console.warn('[Agentic] Google Sign-In could not load.', err);
+        slot.innerHTML = googleDisabledMarkup('Google Sign-In is unavailable right now.');
+      });
+  }
+
+  function completeAuthSuccess(body, isNewAccount, message) {
+    const norm = normalizeAuthPayload(body);
+    if (!norm.token) {
+      const err = new Error('Missing token');
+      err.status = 200;
+      err.body = {
+        error: 'Signed in, but no session token was returned. Please try logging in again.'
+      };
+      throw err;
+    }
+
+    applyAuthSession(norm.token, body, isNewAccount);
+    closeModal();
+    toast(
+      message ||
+        (isNewAccount
+          ? 'Account created — ' + FREE_SIGNUP_CREDITS + ' free credits added.'
+          : 'Welcome back, ' + (displayUserName(auth.user) || 'trader') + '.'),
+      'success'
+    );
+    resumePendingGate();
+  }
+
+  function handleGoogleCredential(googleResponse) {
+    if (authSubmitBusy) return;
+    if (!googleResponse || !googleResponse.credential) {
+      setAuthError('Google did not return a credential. Please try again.');
+      return;
+    }
+
+    setAuthError('');
+    setAuthBusy(true);
+
+    apiFetch(AUTH_GOOGLE_URL, {
+      method: 'POST',
+      body: JSON.stringify({ id_token: googleResponse.credential })
+    })
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (!response.ok || (body && body.ok === false)) {
+            const err = new Error('Google auth failed');
+            err.status = response.status;
+            err.body = body;
+            throw err;
+          }
+          completeAuthSuccess(body, false, 'Signed in with Google.');
+        });
+      })
+      .catch(function (err) {
+        setAuthBusy(false);
+        setAuthError(friendlyAuthError(err));
+      });
   }
 
   function friendlyAuthError(err) {
@@ -697,10 +916,6 @@
       btn.setAttribute('aria-selected', String(on));
     });
 
-    const nameField = $('#authNameField');
-    if (nameField) nameField.hidden = isLogin;
-    const badge = $('#authCreditsBadge');
-    if (badge) badge.hidden = isLogin;
     const title = $('#authTitle');
     if (title) title.textContent = isLogin ? 'Log in to Agentic' : 'Create your free account';
     const sub = $('#authSub');
@@ -709,19 +924,268 @@
         ? 'Welcome back — your live credit balance is waiting.'
         : 'New accounts start with ' + FREE_SIGNUP_CREDITS + ' free credits. No card required.';
     }
-    const label = $('#authSubmitLabel');
-    if (label) label.textContent = isLogin ? 'Log In' : 'Create Account';
-    const fine = $('#authFine');
-    if (fine) {
-      fine.textContent = isLogin
-        ? 'Your session stays on this device until you log out.'
-        : 'By signing up you agree to fair use of agent credits.';
+    setAuthError('');
+    renderAuthPanel(authModalMode);
+  }
+
+  function openForgotStep(stage) {
+    authModalMode = 'forgot';
+    authResetStage = stage === 'verify' ? 'verify' : 'request';
+    const isRequest = authResetStage === 'request';
+
+    $$('[data-auth-tab]').forEach(function (btn) {
+      const on = btn.getAttribute('data-auth-tab') === 'login';
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', String(on));
+    });
+
+    const title = $('#authTitle');
+    if (title) title.textContent = isRequest ? 'Reset your password' : 'Enter verification code';
+    const sub = $('#authSub');
+    if (sub) {
+      sub.textContent = isRequest
+        ? 'We will email you a 6-digit verification code.'
+        : 'Enter the code and choose a new password.';
     }
     setAuthError('');
+    renderAuthPanel('forgot');
+  }
+
+  function renderAuthPanel(mode) {
+    const panel = $('#authPanel');
+    if (!panel) return;
+
+    const isLogin = mode === 'login';
+    const isRegister = mode === 'register';
+    const isForgot = mode === 'forgot';
+    const flash = isForgot ? '' : authFlashMessage;
+    authFlashMessage = '';
+
+    let html = '';
+
+    if (isForgot) {
+      if (authResetStage === 'request') {
+        html =
+          '<form class="auth-form" id="forgotForm" novalidate>' +
+          '  <div class="auth-reset-note"><strong>Email verification</strong>' +
+          '    <span>Enter the email on your account and we will send a 6-digit code.</span></div>' +
+          '  <label class="field"><span>Account email</span>' +
+          '    <input type="email" id="forgotEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" value="' +
+          escapeHtml(authResetEmail || state.email || '') + '" required />' +
+          '  </label>' +
+          '  <p class="auth-error" id="authError" role="alert"></p>' +
+          '  <button type="submit" class="btn btn-primary btn-lg btn-block auth-submit" id="authSubmit">' +
+          '    <span class="auth-submit-label" id="authSubmitLabel">Send Verification Code</span>' +
+          '    <span class="auth-spinner" aria-hidden="true"></span>' +
+          '  </button>' +
+          '  <div class="auth-links"><button type="button" class="auth-link" data-auth-back>← Back to log in</button></div>' +
+          '</form>';
+      } else {
+        html =
+          '<form class="auth-form" id="resetForm" novalidate>' +
+          '  <div class="auth-reset-note"><strong>Check your email</strong>' +
+          '    <span>Enter the 6-digit code sent to ' + escapeHtml(authResetEmail || 'your email') + '.</span></div>' +
+          '  <label class="field"><span>6-digit verification code</span>' +
+          '    <input type="text" id="resetOtp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="123456" required />' +
+          '  </label>' +
+          '  <label class="field"><span>New password</span>' +
+          '    <input type="password" id="resetPassword" data-pw-check="#resetPwChecklist" autocomplete="new-password" minlength="8" placeholder="At least 8 characters" required />' +
+          '  </label>' +
+          passwordChecklistMarkup('resetPwChecklist') +
+          '  <p class="auth-error" id="authError" role="alert"></p>' +
+          '  <button type="submit" class="btn btn-primary btn-lg btn-block auth-submit" id="authSubmit">' +
+          '    <span class="auth-submit-label" id="authSubmitLabel">Reset Password</span>' +
+          '    <span class="auth-spinner" aria-hidden="true"></span>' +
+          '  </button>' +
+          '  <div class="auth-links">' +
+          '    <button type="button" class="auth-link" data-auth-resend>Resend code</button>' +
+          '    <button type="button" class="auth-link" data-auth-back>Back to log in</button>' +
+          '  </div>' +
+          '</form>';
+      }
+    } else {
+      html =
+        '<form class="auth-form" id="authForm" novalidate>' +
+        (flash ? '<div class="auth-success">' + escapeHtml(flash) + '</div>' : '') +
+        '  <div class="google-slot" id="googleSlot"></div>' +
+        '  <div class="auth-divider"><span>or use email</span></div>' +
+        (isRegister
+          ? '  <label class="field"><span>Name <em>(optional)</em></span>' +
+            '    <input type="text" id="authName" autocomplete="name" placeholder="Alex Tan" />' +
+            '  </label>'
+          : '') +
+        '  <label class="field"><span>Email</span>' +
+        '    <input type="email" id="authEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" value="' +
+        escapeHtml(state.email || authResetEmail || '') + '" required />' +
+        '  </label>' +
+        '  <label class="field"><span>Password</span>' +
+        '    <input type="password" id="authPassword"' +
+        (isRegister
+          ? ' data-pw-check="#authPwChecklist" autocomplete="new-password" minlength="8"'
+          : ' autocomplete="current-password"') +
+        ' placeholder="' + (isRegister ? 'At least 8 characters' : 'Your password') + '" required />' +
+        '  </label>' +
+        (isRegister ? passwordChecklistMarkup('authPwChecklist') : '') +
+        (isRegister
+          ? '  <div class="auth-signup-badge" id="authCreditsBadge">' +
+            '    <span class="auth-gift" aria-hidden="true">+5</span>' +
+            '    <span>Get <strong>' + FREE_SIGNUP_CREDITS + ' free credits</strong> on sign up</span>' +
+            '  </div>'
+          : '  <div class="auth-inline-row"><button type="button" class="auth-link" data-auth-forgot>Forgot password?</button></div>') +
+        '  <p class="auth-error" id="authError" role="alert"></p>' +
+        '  <button type="submit" class="btn btn-primary btn-lg btn-block auth-submit" id="authSubmit">' +
+        '    <span class="auth-submit-label" id="authSubmitLabel">' + (isLogin ? 'Log In' : 'Create Account') + '</span>' +
+        '    <span class="auth-spinner" aria-hidden="true"></span>' +
+        '  </button>' +
+        '  <p class="fine center auth-fine" id="authFine">' +
+        (isLogin
+          ? 'Your session stays on this device until you log out.'
+          : 'By signing up you agree to fair use of agent credits.') +
+        '  </p>' +
+        '</form>';
+    }
+
+    panel.innerHTML = html;
+
+    if (isForgot) {
+      const form = $(authResetStage === 'request' ? '#forgotForm' : '#resetForm');
+      if (form) {
+        form.addEventListener(
+          'submit',
+          authResetStage === 'request' ? handleForgotRequest : handleResetSubmit
+        );
+      }
+    } else {
+      const form = $('#authForm');
+      if (form) form.addEventListener('submit', handleAuthSubmit);
+      mountGoogleSignIn();
+      const forgot = $('[data-auth-forgot]');
+      if (forgot) forgot.addEventListener('click', function () { openForgotStep('request'); });
+    }
+
+    $$('#authPanel input').forEach(function (input) {
+      input.addEventListener('input', function () {
+        setAuthError('');
+        if (input.hasAttribute('data-pw-check')) updatePasswordChecklist(input);
+      });
+    });
+
+    $$('[data-auth-back]').forEach(function (btn) {
+      btn.addEventListener('click', function () { setAuthTab('login'); });
+    });
+
+    $$('[data-auth-resend]').forEach(function (btn) {
+      btn.addEventListener('click', function () { openForgotStep('request'); });
+    });
+
+    const pwInput = $('#authPanel input[data-pw-check]');
+    if (pwInput) updatePasswordChecklist(pwInput);
+    else syncAuthSubmitState();
+
+    const firstInput = $('#authPanel input');
+    if (firstInput) {
+      window.setTimeout(function () { firstInput.focus(); }, 70);
+    }
+  }
+
+  function handleForgotRequest(event) {
+    event.preventDefault();
+    if (authSubmitBusy) return;
+
+    const emailEl = $('#forgotEmail');
+    const email = emailEl ? emailEl.value.trim() : '';
+    if (!isValidEmail(email)) {
+      setAuthError('Enter the email address on your account.');
+      if (emailEl) emailEl.focus();
+      return;
+    }
+
+    setAuthError('');
+    setAuthBusy(true);
+
+    apiFetch(FORGOT_PASSWORD_URL, {
+      method: 'POST',
+      body: JSON.stringify({ email: email })
+    })
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (!response.ok || (body && body.ok === false)) {
+            const err = new Error('Forgot password failed');
+            err.status = response.status;
+            err.body = body;
+            throw err;
+          }
+          authResetEmail = email;
+          setAuthBusy(false);
+          openForgotStep('verify');
+          toast('Check your email for a 6-digit verification code.', 'info');
+        });
+      })
+      .catch(function (err) {
+        setAuthBusy(false);
+        setAuthError(friendlyAuthError(err));
+      });
+  }
+
+  function handleResetSubmit(event) {
+    event.preventDefault();
+    if (authSubmitBusy) return;
+
+    const otpEl = $('#resetOtp');
+    const passEl = $('#resetPassword');
+    const otp = otpEl ? otpEl.value.trim() : '';
+    const password = passEl ? passEl.value : '';
+
+    if (!/^\d{6}$/.test(otp)) {
+      setAuthError('Enter the 6-digit verification code from your email.');
+      if (otpEl) otpEl.focus();
+      return;
+    }
+    if (!passwordIsStrong(password)) {
+      setAuthError('Choose a password that meets all 4 requirements.');
+      if (passEl) passEl.focus();
+      return;
+    }
+
+    setAuthError('');
+    setAuthBusy(true);
+
+    apiFetch(RESET_PASSWORD_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        email: authResetEmail,
+        otp: otp,
+        code: otp,
+        new_password: password,
+        password: password
+      })
+    })
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (!response.ok || (body && body.ok === false)) {
+            const err = new Error('Password reset failed');
+            err.status = response.status;
+            err.body = body;
+            throw err;
+          }
+          setAuthBusy(false);
+          authFlashMessage = 'Password reset successfully. Log in with your new password.';
+          setAuthTab('login');
+          toast('Password updated. Please log in.', 'success');
+        });
+      })
+      .catch(function (err) {
+        setAuthBusy(false);
+        setAuthError(friendlyAuthError(err));
+      });
   }
 
   function openAuthModal(mode, prompt) {
     authSubmitBusy = false;
+    authResetStage = 'request';
+    authResetEmail = '';
+    authFlashMessage = '';
+
     openModal(
       '<div class="auth-modal">' +
         '<div class="auth-brand-row">' +
@@ -738,27 +1202,7 @@
         '  <button type="button" role="tab" data-auth-tab="login" aria-selected="true">Log In</button>' +
         '  <button type="button" role="tab" data-auth-tab="register" aria-selected="false">Sign Up</button>' +
         '</div>' +
-        '<form class="auth-form" id="authForm" novalidate>' +
-        '  <label class="field auth-name-field" id="authNameField" hidden><span>Name <em>(optional)</em></span>' +
-        '    <input type="text" id="authName" autocomplete="name" placeholder="Alex Tan" />' +
-        '  </label>' +
-        '  <label class="field"><span>Email</span>' +
-        '    <input type="email" id="authEmail" autocomplete="email" inputmode="email" placeholder="you@example.com" required />' +
-        '  </label>' +
-        '  <label class="field"><span>Password</span>' +
-        '    <input type="password" id="authPassword" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" required />' +
-        '  </label>' +
-        '  <div class="auth-signup-badge" id="authCreditsBadge">' +
-        '    <span class="auth-gift" aria-hidden="true">+5</span>' +
-        '    <span>Get <strong>' + FREE_SIGNUP_CREDITS + ' free credits</strong> on sign up</span>' +
-        '  </div>' +
-        '  <p class="auth-error" id="authError" role="alert"></p>' +
-        '  <button type="submit" class="btn btn-primary btn-lg btn-block auth-submit" id="authSubmit">' +
-        '    <span class="auth-submit-label" id="authSubmitLabel">Log In</span>' +
-        '    <span class="auth-spinner" aria-hidden="true"></span>' +
-        '  </button>' +
-        '  <p class="fine center auth-fine" id="authFine"></p>' +
-        '</form>' +
+        '<div class="auth-panel" id="authPanel"></div>' +
         '</div>',
       false
     );
@@ -770,25 +1214,13 @@
       if (promptText) promptText.textContent = prompt || '';
     }
 
-    setAuthTab(mode);
-    setAuthError('');
-
     $$('[data-auth-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         setAuthTab(btn.getAttribute('data-auth-tab'));
       });
     });
 
-    const form = $('#authForm');
-    if (form) form.addEventListener('submit', handleAuthSubmit);
-    $$('#authForm input').forEach(function (input) {
-      input.addEventListener('input', function () {
-        setAuthError('');
-      });
-    });
-
-    const email = $('#authEmail');
-    if (email) window.setTimeout(function () { email.focus(); }, 80);
+    setAuthTab(mode);
   }
 
   function handleAuthSubmit(event) {
@@ -809,8 +1241,13 @@
       if (emailEl) emailEl.focus();
       return;
     }
-    if (password.length < 6) {
-      setAuthError('Password must be at least 6 characters.');
+    if (!isLogin && !passwordIsStrong(password)) {
+      setAuthError('Choose a password that meets all 4 requirements.');
+      if (passEl) passEl.focus();
+      return;
+    }
+    if (isLogin && !password) {
+      setAuthError('Enter your password.');
       if (passEl) passEl.focus();
       return;
     }
@@ -827,39 +1264,17 @@
     })
       .then(function (response) {
         return readJson(response).then(function (body) {
-          if (response.status === 401) {
-            const err = new Error('Unauthorized');
-            err.status = 401;
-            err.body = body;
-            throw err;
-          }
           if (!response.ok || (body && body.ok === false)) {
             const err = new Error('Auth failed');
             err.status = response.status;
             err.body = body;
             throw err;
           }
-
-          const norm = normalizeAuthPayload(body);
-          if (!norm.token) {
-            const err = new Error('Missing token');
-            err.status = response.status;
-            err.body = {
-              error:
-                'The account was accepted but no session token was returned. Please try logging in.'
-            };
-            throw err;
-          }
-
-          applyAuthSession(norm.token, body, !isLogin);
-          closeModal();
-          toast(
-            isLogin
-              ? 'Welcome back, ' + (displayUserName(auth.user) || 'trader') + '.'
-              : 'Account created — ' + FREE_SIGNUP_CREDITS + ' free credits added.',
-            'success'
+          completeAuthSuccess(
+            body,
+            !isLogin,
+            isLogin ? '' : 'Account created — ' + FREE_SIGNUP_CREDITS + ' free credits added.'
           );
-          resumePendingGate();
         });
       })
       .catch(function (err) {
@@ -930,6 +1345,13 @@
         '  </span>' +
         '</div>' +
         '<p class="avatar-error" id="avatarError" role="alert"></p>' +
+        '<div class="account-session">' +
+        '  <div class="account-session-copy">' +
+        '    <strong>Session</strong>' +
+        '    <span>Signed in on this device. Logging out clears your token and local job history.</span>' +
+        '  </div>' +
+        '  <button type="button" class="btn btn-danger-ghost" id="accountLogoutBtn">Log Out</button>' +
+        '</div>' +
         '<div class="modal-actions account-actions">' +
         '  <button type="button" class="btn btn-ghost" data-modal-close>Cancel</button>' +
         '  <button type="button" class="btn btn-primary" id="avatarSaveBtn">Save avatar</button>' +
@@ -959,6 +1381,14 @@
         applyChoice(btn.getAttribute('data-avatar-choice'));
       });
     });
+
+    const logoutBtn = $('#accountLogoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function () {
+        closeModal(false);
+        logoutUser();
+      });
+    }
 
     const saveBtn = $('#avatarSaveBtn');
     if (!saveBtn) return;
@@ -2507,8 +2937,6 @@
   ];
 
   let scraperPollTimer = null;
-  let scraperDemoTimer = null;
-  const demoRowsCache = Object.create(null);
 
   /* ----- state helpers ----- */
   function getSelectedColumns(job) {
@@ -2526,10 +2954,6 @@
     if (scraperPollTimer) {
       window.clearInterval(scraperPollTimer);
       scraperPollTimer = null;
-    }
-    if (scraperDemoTimer) {
-      window.clearInterval(scraperDemoTimer);
-      scraperDemoTimer = null;
     }
   }
 
@@ -2577,15 +3001,27 @@
     }
 
     const target = scraperTarget(job);
-    const count = clamp(Math.floor(Number(job.collected_count) || 0), 0, target);
-    const percent = Math.min(100, Math.floor((count / target) * 100));
+    const scraped = clamp(Math.floor(Number(job.scraped_rows) || 0), 0, target);
+    const percent = scraperIsComplete(job)
+      ? 100
+      : Math.min(99, Math.floor(scraperPercent(job)));
     const status = String(job.status || '').toLowerCase();
 
-    if (status === 'completed') {
+    if (scraperIsComplete(job)) {
       wrap.hidden = false;
       wrap.innerHTML =
         '<div class="card-job-done"><a class="card-job-ready" href="#scraper-results">' +
         '✓ Latest Run Ready (' + target.toLocaleString('en-US') + ' leads)</a></div>';
+      return;
+    }
+
+    if (status === 'completed') {
+      wrap.hidden = false;
+      wrap.innerHTML =
+        '<div class="card-job-live">' +
+        '<span class="card-job-pill"><span class="job-live-dot"></span>Finalizing Excel…</span>' +
+        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
+        '</div>';
       return;
     }
 
@@ -2604,7 +3040,7 @@
       wrap.innerHTML =
         '<div class="card-job-live">' +
         '<span class="card-job-pill"><span class="job-live-dot"></span>Running · ' +
-        count.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') +
+        scraped.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') +
         ' leads (' + percent + '%)</span>' +
         '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
         '</div>';
@@ -2647,7 +3083,7 @@
     renderLeadsTable();
     updateScraperProgress();
 
-    if (job.status === 'completed' || Number(job.collected_count) >= scraperTarget(job)) {
+    if (scraperIsComplete(job)) {
       completeScraperJob(true);
       return;
     }
@@ -2682,9 +3118,30 @@
     }
   }
 
-  /* Every job carries its own target (terms × leads-per-term). */
+  /* Every job carries its own target; the backend can override it live. */
   function scraperTarget(job) {
-    return Math.max(1, Number(job && job.target_rows) || LEAD_MAX_TARGET);
+    return Math.max(
+      1,
+      Number(job && job.target_count) || Number(job && job.target_rows) || LEAD_MAX_TARGET
+    );
+  }
+
+  function scraperPercent(job) {
+    const target = scraperTarget(job);
+    let percent = Number(job && job.percent);
+    if (!Number.isFinite(percent)) {
+      const scraped = Number(job && job.scraped_rows) || 0;
+      percent = target ? (scraped / target) * 100 : 0;
+    }
+    return clamp(percent, 0, 100);
+  }
+
+  function scraperIsComplete(job) {
+    return (
+      !!job &&
+      String(job.status || '').toLowerCase() === 'completed' &&
+      job.download_ready === true
+    );
   }
 
   function updateScraperProgress() {
@@ -2692,8 +3149,12 @@
     if (!job) return;
 
     const target = scraperTarget(job);
-    const count = clamp(Math.floor(Number(job.collected_count) || 0), 0, target);
-    const percent = Math.min(100, Math.floor((count / target) * 100));
+    const scraped = clamp(Math.floor(Number(job.scraped_rows) || 0), 0, target);
+    const filled = clamp(Math.floor(Number(job.filled_rows) || 0), 0, target);
+    const complete = scraperIsComplete(job);
+
+    /* Never show 100% until the backend confirms completed + download_ready. */
+    const percent = complete ? 100 : Math.min(99, Math.floor(scraperPercent(job)));
     const fill = $('#ringFill');
 
     if (fill) {
@@ -2706,32 +3167,31 @@
     const countEl = $('#ringCount');
     if (countEl) {
       countEl.textContent =
-        count.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') + ' leads';
+        scraped.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') +
+        ' leads scraped · ' + filled.toLocaleString('en-US') + ' / ' +
+        target.toLocaleString('en-US') + ' filled';
     }
 
     const card = $('#ringCard');
-    if (card) card.classList.toggle('is-complete', percent >= 100);
+    if (card) card.classList.toggle('is-complete', complete);
 
     const downloadBtn = $('#downloadBtn');
-    if (downloadBtn) downloadBtn.disabled = percent < 100;
+    if (downloadBtn) downloadBtn.disabled = !complete;
 
     const downloadTitle = $('#downloadTitle');
     if (downloadTitle) {
-      downloadTitle.textContent =
-        percent >= 100
-          ? 'Excel (.xlsx) · ' + target.toLocaleString('en-US') + ' leads'
-          : 'Excel (.xlsx)';
+      downloadTitle.textContent = complete
+        ? 'Excel (.xlsx) · ' + target.toLocaleString('en-US') + ' leads'
+        : 'Excel (.xlsx)';
     }
 
     const downloadSub = $('#downloadSub');
     if (downloadSub) {
-      if (percent >= 100) {
-        downloadSub.textContent =
-          job.mode === 'demo'
-            ? 'Demo file · ' + target.toLocaleString('en-US') + ' sample leads'
-            : 'Ready to download';
+      if (complete) downloadSub.textContent = 'Ready to download';
+      else if (String(job.status || '').toLowerCase() === 'completed') {
+        downloadSub.textContent = 'Finalizing Excel…';
       } else {
-        downloadSub.textContent = 'Unlocks at ' + target.toLocaleString('en-US') + ' leads';
+        downloadSub.textContent = 'Live progress from the scraper backend';
       }
     }
 
@@ -2746,19 +3206,20 @@
     const emailNote = $('#scraperEmailNote');
     if (emailNote) {
       const email = job.email || 'your delivery email';
-      const sent = job.status === 'completed' && job.email_sent === true;
+      const sent = complete && job.email_sent === true;
       emailNote.textContent = sent
         ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
         : 'Excel (.xlsx) will also be emailed to ' + email +
-          ' when complete — safe to close this tab.';
+          ' when the backend marks it ready — safe to close this tab.';
       emailNote.classList.toggle('is-sent', sent);
     }
 
     const tableMeta = $('#tableMeta');
     if (tableMeta) {
       tableMeta.textContent =
-        'First 25 rows · ' + count.toLocaleString('en-US') + ' of ' +
-        target.toLocaleString('en-US') + ' leads · ' + getSelectedColumns(job).length + ' columns';
+        'First 25 rows · ' + scraped.toLocaleString('en-US') + ' of ' +
+        target.toLocaleString('en-US') + ' scraped · ' + filled.toLocaleString('en-US') +
+        ' filled · ' + getSelectedColumns(job).length + ' columns';
     }
 
     /* Keep the #agents card badge in sync with every tick. */
@@ -2769,7 +3230,6 @@
     if (job && Array.isArray(job.preview_rows) && job.preview_rows.length) {
       return job.preview_rows.slice(0, 25);
     }
-    if (job && job.mode === 'demo') return getDemoRows(job, 25);
     return [];
   }
 
@@ -2793,9 +3253,9 @@
     if (tbody) {
       if (!rows.length) {
         const message =
-          job.mode === 'demo' || job.status === 'completed'
+          job.status === 'completed'
             ? 'Preview unavailable — download the .xlsx for every lead.'
-            : 'Waiting for the first rows…';
+            : 'Waiting for the first rows from the scraper backend…';
         tbody.innerHTML =
           '<tr><td colspan="' + cols.length + '" class="table-empty">' + message + '</td></tr>';
       } else {
@@ -2824,8 +3284,14 @@
     const job = state.scraperJob;
     if (!job) return;
 
+    const target = scraperTarget(job);
     job.status = 'completed';
-    job.collected_count = scraperTarget(job);
+    job.download_ready = true;
+    job.target_count = target;
+    job.scraped_rows = Math.max(0, Math.floor(Number(job.scraped_rows) || 0));
+    job.filled_rows = Math.max(0, Math.floor(Number(job.filled_rows) || 0));
+    job.collected_count = job.scraped_rows;
+    job.percent = 100;
     stopScraperTimers();
     saveState();
 
@@ -2855,16 +3321,11 @@
     toast('The scrape could not finish. Start a new run.', 'warn');
   }
 
-  /* ----- live backend: POST start, then poll every 5s ----- */
+  /* ----- live backend: POST start, then poll every 2.5s ----- */
   function ensureScraperRunning() {
     const job = state.scraperJob;
-    if (!job || job.status === 'completed' || job.status === 'failed') return;
+    if (!job || job.status === 'failed' || scraperIsComplete(job)) return;
     if (!isLoggedIn()) return;
-
-    if (job.mode === 'demo') {
-      startDemoScrape();
-      return;
-    }
 
     if (!job.posted) {
       job.posted = true;
@@ -2878,7 +3339,8 @@
 
   function postScraperStart(job) {
     if (!LEAD_START_URL) {
-      switchToDemo(job, 'No start endpoint configured');
+      revertScraperStart(job, true);
+      toast('Lead Scraper backend is not configured. No credits were spent.', 'warn');
       return;
     }
 
@@ -2944,7 +3406,8 @@
           saveState();
         }
         if (body.mode === 'demo' || body.status === 'demo') {
-          switchToDemo(job, 'Backend demo mode');
+          revertScraperStart(job, true);
+          toast('The scraper backend is not returning live progress. No credits were spent.', 'warn');
           return;
         }
         startLivePolling(job);
@@ -2952,10 +3415,15 @@
       .catch(function (err) {
         if (timer) window.clearTimeout(timer);
         console.warn(
-          '[Agentic] Lead scraper backend unreachable — using local demo mode.',
+          '[Agentic] Lead scraper start response unavailable — waiting for live status.',
           err && err.message ? err.message : err
         );
-        switchToDemo(job, 'Backend unreachable');
+        if (!job.start_warned) {
+          job.start_warned = true;
+          saveState();
+          toast('Scraper backend unreachable — waiting for live status.', 'warn');
+        }
+        startLivePolling(job);
       });
   }
 
@@ -2973,17 +3441,18 @@
   }
 
   function startLivePolling(job) {
-    if (scraperPollTimer || scraperDemoTimer) return;
+    if (scraperPollTimer) return;
     if (!scraperPageActive()) return;
-    setScraperBadge('pending', 'Cloud extraction running…');
+    setScraperBadge('pending', 'Live extraction in progress…');
     pollScraperStatus();
     scraperPollTimer = window.setInterval(pollScraperStatus, LEAD_POLL_MS);
   }
 
   function pollScraperStatus(force) {
     const job = state.scraperJob;
-    if (!job || !LEAD_STATUS_URL || job.mode === 'demo') return;
-    if (!force && job.status === 'completed') return;
+    if (!job || !LEAD_STATUS_URL) return;
+    if (job.status === 'failed') return;
+    if (scraperIsComplete(job) && !force) return;
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? window.setTimeout(function () { controller.abort(); }, 8000) : null;
@@ -3020,15 +3489,53 @@
           syncCreditUI();
         }
 
-        const raw =
-          data.collected_count != null
-            ? data.collected_count
-            : data.leads_collected != null
-            ? data.leads_collected
-            : data.count;
-        const count = Number(raw);
-        if (Number.isFinite(count)) {
-          job.collected_count = clamp(Math.floor(count), 0, scraperTarget(job));
+        const toNumber = function (value) {
+          if (value === null || value === undefined || value === '') return null;
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
+
+        const targetCount = toNumber(data.target_count);
+        if (targetCount !== null && targetCount > 0) {
+          job.target_count = Math.floor(targetCount);
+        }
+        const target = scraperTarget(job);
+
+        const scraped =
+          toNumber(data.scraped_rows) !== null
+            ? toNumber(data.scraped_rows)
+            : toNumber(data.collected_count) !== null
+            ? toNumber(data.collected_count)
+            : toNumber(data.leads_collected) !== null
+            ? toNumber(data.leads_collected)
+            : toNumber(data.count);
+        if (scraped !== null) {
+          job.scraped_rows = clamp(Math.floor(scraped), 0, target);
+          job.collected_count = job.scraped_rows;
+        }
+
+        const filled =
+          toNumber(data.filled_rows) !== null
+            ? toNumber(data.filled_rows)
+            : toNumber(data.filled) !== null
+            ? toNumber(data.filled)
+            : toNumber(data.rows_filled);
+        if (filled !== null) {
+          job.filled_rows = clamp(Math.floor(filled), 0, target);
+        }
+
+        const backendPercent = toNumber(data.percent);
+        if (backendPercent !== null) {
+          job.percent = clamp(backendPercent, 0, 100);
+        } else {
+          job.percent = target ? ((Number(job.scraped_rows) || 0) / target) * 100 : 0;
+        }
+
+        if (data.download_ready != null) {
+          job.download_ready =
+            data.download_ready === true ||
+            data.download_ready === 'true' ||
+            data.download_ready === 1;
         }
 
         if (Array.isArray(data.preview_rows) && data.preview_rows.length) {
@@ -3039,28 +3546,34 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
-        const wasComplete =
-          job.status === 'completed' || job.status === 'complete' ||
-          job.status === 'success' || job.status === 'done';
         const status = String(data.status || job.status || 'running').toLowerCase();
         job.status = status;
-
-        if (status === 'queued' || status === 'pending') {
-          setScraperBadge('pending', 'Queued — waiting for worker slot…');
-          saveState();
-          updateScraperProgress();
-          return;
-        }
-
-        if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1 ||
-            Number(job.collected_count) >= scraperTarget(job)) {
-          completeScraperJob(wasComplete);
-          return;
-        }
+        job.status_warned = false;
 
         if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
           failScraperJob(data.error ? String(data.error) : '');
           return;
+        }
+
+        if (status === 'completed' || status === 'complete' || status === 'success' || status === 'done') {
+          if (job.download_ready === true) {
+            completeScraperJob(true);
+          } else {
+            setScraperBadge('pending', 'Completed — finalizing Excel…');
+            saveState();
+            updateScraperProgress();
+            renderLeadsTable();
+          }
+          return;
+        }
+
+        if (status === 'queued' || status === 'pending') {
+          setScraperBadge('pending', 'Queued — waiting for worker slot…');
+        } else {
+          setScraperBadge(
+            'pending',
+            'Live extraction · ' + Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
+          );
         }
 
         saveState();
@@ -3070,69 +3583,16 @@
       .catch(function (err) {
         if (timer) window.clearTimeout(timer);
         console.warn(
-          '[Agentic] Lead scraper status unavailable — switching to demo mode.',
+          '[Agentic] Lead scraper status check failed — retrying live status.',
           err && err.message ? err.message : err
         );
-        switchToDemo(job);
+        if (job && !job.status_warned) {
+          job.status_warned = true;
+          saveState();
+          setScraperBadge('pending', 'Live status unavailable — retrying…');
+        }
+        updateScraperProgress();
       });
-  }
-
-  function switchToDemo(job, reason) {
-    if (!job || job.status === 'completed') return;
-    if (scraperDemoTimer) return;
-
-    if (scraperPollTimer) {
-      window.clearInterval(scraperPollTimer);
-      scraperPollTimer = null;
-    }
-
-    job.mode = 'demo';
-    job.posted = true;
-    saveState();
-
-    if (!job.demo_notified && reason) {
-      job.demo_notified = true;
-      saveState();
-      toast('Backend offline — running a local demo scrape.', 'info');
-    }
-
-    startDemoScrape();
-  }
-
-  /* ----- offline demo: +10 leads (= +1%) every 160ms ----- */
-  function startDemoScrape() {
-    if (scraperDemoTimer) return;
-    if (!scraperPageActive()) return;
-    const job = state.scraperJob;
-    if (!job) return;
-
-    renderLeadsTable();
-
-    if (Number(job.collected_count) >= scraperTarget(job)) {
-      completeScraperJob(true);
-      return;
-    }
-
-    setScraperBadge('pending', 'Demo mode · scraping sample leads…');
-
-    scraperDemoTimer = window.setInterval(function () {
-      const current = state.scraperJob;
-      if (!current) {
-        stopScraperTimers();
-        return;
-      }
-
-      const target = scraperTarget(current);
-      const step = Math.max(1, Math.ceil(target / 100)); // ~100 smooth ticks
-      current.collected_count = Math.min(target, (Number(current.collected_count) || 0) + step);
-      updateScraperProgress();
-
-      if (current.collected_count % step === 0) saveState();
-
-      if (current.collected_count >= target) {
-        completeScraperJob(false);
-      }
-    }, 160);
   }
 
   /* ----- resume / check job ----- */
@@ -3157,7 +3617,12 @@
     job.mode = 'live';
     job.status = 'running';
     job.posted = true;
-    if (Number(job.collected_count) >= scraperTarget(job)) job.collected_count = 0;
+    job.scraped_rows = 0;
+    job.filled_rows = 0;
+    job.percent = 0;
+    job.download_ready = false;
+    job.collected_count = 0;
+    job.status_warned = false;
     saveState();
 
     renderJobSummary();
@@ -3171,7 +3636,7 @@
     const job = state.scraperJob;
     if (!job) return;
 
-    if (job.mode === 'live' && LEAD_DOWNLOAD_URL) {
+    if (LEAD_DOWNLOAD_URL) {
       const url = LEAD_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(job.job_id);
       toast('Requesting your .xlsx from the cloud…', 'info');
 
@@ -3211,18 +3676,7 @@
       return;
     }
 
-    const rows = getDemoRows(job, scraperTarget(job));
-    const blob = buildXlsx(job, rows);
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download =
-      'agentic-leads-' + slug(job.country || 'global') + '-' + job.job_id + '.xlsx';
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    window.setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-    toast(rows.length.toLocaleString('en-US') + ' leads exported to .xlsx.', 'success');
+    toast('Download unlocks when the backend marks the Excel ready.', 'warn');
   }
 
   /* ----- configuration modal ----- */
@@ -3501,6 +3955,11 @@
       search_terms: terms,
       selected_columns: columns,
       target_rows: quote.target,
+      target_count: quote.target,
+      scraped_rows: 0,
+      filled_rows: 0,
+      percent: 0,
+      download_ready: false,
       credits_spent: quote.required,
       started_at: new Date().toISOString(),
       status: 'running',
@@ -3514,7 +3973,6 @@
     state.name = name;
     state.email = email;
     state.scraperJob = job;
-    delete demoRowsCache[job.job_id];
     saveState();
 
     syncCreditUI();
@@ -3600,50 +4058,6 @@
         .map(function (word) { return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(); })
         .join(' ') || 'Business'
     );
-  }
-
-  function getDemoRows(job, limit) {
-    if (!job) return [];
-    const total = Math.min(limit || 25, LEAD_MAX_TARGET);
-    const key = job.job_id + '|' + total;
-    if (demoRowsCache[key]) return demoRowsCache[key];
-
-    const rng = mulberry32(hashSeed(job.job_id + '|' + job.country + '|' + (job.search_terms || []).join(',')));
-    const meta = COUNTRY_META[job.country] || COUNTRY_META.Other;
-    const terms = job.search_terms && job.search_terms.length ? job.search_terms : ['Business services'];
-    const rows = [];
-
-    for (let i = 0; i < total; i += 1) {
-      const term = terms[i % terms.length];
-      const prefix = COMPANY_PREFIXES[Math.floor(rng() * COMPANY_PREFIXES.length)];
-      const industry = industryWords(term);
-      const company = prefix + ' ' + industry + ' ' + meta.suffix;
-      const city = meta.cities[Math.floor(rng() * meta.cities.length)];
-      const domain = slug(prefix + industry) + meta.tld;
-      const street = STREETS[Math.floor(rng() * STREETS.length)];
-      const streetNo = 1 + Math.floor(rng() * 240);
-      const postcode = 10000 + Math.floor(rng() * 80000);
-      const phone =
-        meta.dial + ' ' + (10 + Math.floor(rng() * 89)) + ' ' +
-        (1000 + Math.floor(rng() * 8999)) + ' ' + (1000 + Math.floor(rng() * 8999));
-      const rating = (3.8 + rng() * 1.2).toFixed(1);
-      const reviews = 40 + Math.floor(rng() * 900);
-
-      rows.push({
-        company_name: company,
-        email: (rng() > 0.5 ? 'info@' : 'sales@') + domain,
-        phone: phone,
-        website: 'https://' + domain,
-        address: streetNo + ' ' + street + ', ' + city + ' ' + postcode + ', ' + job.country,
-        maps_url: 'https://maps.google.com/?q=' + encodeURIComponent(company + ', ' + city),
-        rating: rating + '★ · ' + reviews + ' reviews',
-        category: String(term).charAt(0).toUpperCase() + String(term).slice(1),
-        hours: HOURS_BANK[Math.floor(rng() * HOURS_BANK.length)]
-      });
-    }
-
-    demoRowsCache[key] = rows;
-    return rows;
   }
 
   /* ----- minimal, dependency-free .xlsx (store-only ZIP + OOXML) ----- */

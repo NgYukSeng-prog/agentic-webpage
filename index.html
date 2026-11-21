@@ -9,7 +9,7 @@
   <meta property="og:title" content="Agentic — Autonomous Pre-Market Intelligence" />
   <meta property="og:description" content="Two live AI agents. A 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M8 22.5 L13.5 15.5 L18 19.5 L24 9.5' fill='none' stroke='%2322D3EE' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='9.5' r='2.4' fill='%236366F1'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -77,33 +77,35 @@
       </nav>
 
       <div class="nav-actions">
-        <div class="auth-guest" id="authGuest">
-          <button type="button" class="btn btn-ghost btn-sm auth-login-btn" data-auth-open="login">Log In</button>
-          <button type="button" class="btn btn-primary btn-sm auth-signup-btn" data-auth-open="register">
-            Sign Up
-            <span class="auth-signup-free">5 Free Credits</span>
-          </button>
-        </div>
-
-        <div class="auth-user" id="authUser" hidden>
-          <button type="button" class="user-pill" id="accountPill" aria-haspopup="dialog">
-            <span class="user-avatar" id="navAvatar" aria-hidden="true"></span>
-            <span class="user-meta">
-              <strong id="navUserName">Account</strong>
-              <span id="navUserEmail">Signed in</span>
-            </span>
-            <span class="user-credit-badge" id="navCreditBadge">
-              Credits <strong data-credit-count>0</strong>
-            </span>
-          </button>
-          <button type="button" class="btn btn-ghost btn-sm auth-settings-btn" data-open-account>Account Settings</button>
-          <button type="button" class="btn btn-ghost btn-sm auth-logout-btn" id="logoutBtn">Log Out</button>
-        </div>
-
         <a class="btn btn-primary btn-sm nav-cta" href="#plans">Top Up Credits</a>
         <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="navLinks">
           <span></span><span></span><span></span>
         </button>
+
+        <!-- Profile UI is deliberately the rightmost header item. -->
+        <div class="profile-slot" id="profileSlot">
+          <div class="auth-guest" id="authGuest">
+            <button type="button" class="btn btn-ghost btn-sm auth-login-btn" data-auth-open="login">Log In</button>
+            <button type="button" class="btn btn-primary btn-sm auth-signup-btn" data-auth-open="register">
+              Sign Up
+              <span class="auth-signup-free">5 Free Credits</span>
+            </button>
+          </div>
+
+          <div class="auth-user" id="authUser" hidden>
+            <button type="button" class="user-pill" id="accountPill" aria-haspopup="dialog" aria-label="Open profile and account settings">
+              <span class="user-avatar" id="navAvatar" aria-hidden="true"></span>
+              <span class="user-meta">
+                <strong id="navUserName">Account</strong>
+                <span id="navUserEmail">Signed in</span>
+              </span>
+              <span class="user-credit-badge" id="navCreditBadge">
+                Credits <strong data-credit-count>0</strong>
+              </span>
+              <span class="user-chevron" aria-hidden="true">⌄</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </header>
@@ -717,7 +719,7 @@
         <div class="page-head configure-head">
           <span class="eyebrow">B2B Lead Scraper Agent</span>
           <h1>Your Excel is being built.</h1>
-          <p>Live extraction progress · first 25 rows preview · .xlsx at 100%.</p>
+          <p>Live extraction progress · first 25 rows preview · .xlsx when the backend completes.</p>
         </div>
 
         <div class="panel" id="scraperEmpty" hidden>
@@ -738,12 +740,12 @@
                 </svg>
                 <div class="ring-center">
                   <strong id="ringPercent">0%</strong>
-                  <span id="ringCount">0 / 50 leads</span>
+                  <span id="ringCount">0 / 0 leads scraped · 0 / 0 filled</span>
                 </div>
               </div>
               <span class="webhook-badge" id="scraperStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
-                <span class="webhook-text">Starting…</span>
+                <span class="webhook-text">Connecting to live status…</span>
               </span>
               <p class="ring-hint" id="ringRule">3 credits per term · 50 leads each</p>
               <p class="ring-email" id="scraperEmailNote">Excel (.xlsx) will also be emailed to your delivery email when complete — safe to close this tab.</p>
@@ -788,7 +790,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="downloadTitle">Excel (.xlsx)</strong>
-                <span id="downloadSub">Unlocks when the target is reached</span>
+                <span id="downloadSub">Awaiting live backend status</span>
               </div>
               <button type="button" class="btn btn-primary" id="downloadBtn" disabled>Download Full Excel (.xlsx)</button>
             </div>
@@ -932,7 +934,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="config.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

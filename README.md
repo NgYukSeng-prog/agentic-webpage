@@ -174,6 +174,7 @@ only the columns the user selected.
 | `API_BASE` | `https://n8n.20.205.96.122.sslip.io/webhook` | Neon auth/account API root |
 | `AUTH_TOKEN_KEY` | `aaas_token` | localStorage key for the session token |
 | `FREE_SIGNUP_CREDITS` | `5` | Credits granted by a new account |
+| `GOOGLE_CLIENT_ID` | empty | Google Identity Services web client ID; empty shows a disabled Google button |
 | `CREDITS_PER_STOCK_WEEK` | `5` | Credits for 1 stock × 7 days |
 | `SUBSCRIPTION_DAYS` | `7` | Length of an activation window |
 | `TIMEZONE` | `Asia/Kuala_Lumpur` | Payload timezone + delivery timezone |
@@ -188,9 +189,9 @@ only the columns the user selected.
 | `LEAD_SCRAPER_MAX_TERMS` | `10` | Max terms (500 leads) |
 | `LEAD_SCRAPER_CREDITS` | `3` | Legacy alias for the minimum |
 | `LEAD_SCRAPER_START_URL` | n8n endpoint | `POST` job start |
-| `LEAD_SCRAPER_STATUS_URL` | n8n endpoint | `GET ?job_id=` polled every 5s |
+| `LEAD_SCRAPER_STATUS_URL` | n8n endpoint | `GET ?job_id=` polled every 2.5s |
 | `LEAD_SCRAPER_DOWNLOAD_URL` | n8n endpoint | `GET ?job_id=` for the `.xlsx` |
-| `LEAD_SCRAPER_POLL_MS` | `5000` | Status poll interval |
+| `LEAD_SCRAPER_POLL_MS` | `2500` | Realtime status poll interval |
 | `LEAD_SCRAPER_COUNTRIES` | 22 options | Country selector, incl. Other |
 | `LEAD_SCRAPER_SAMPLE_TERMS` | 10 terms | Placeholders + Fill Sample button |
 | `LEAD_SCRAPER_REQUIRED_COLUMNS` | 3 | Company, email, phone (always on) |
