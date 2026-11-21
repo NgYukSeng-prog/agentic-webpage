@@ -131,7 +131,6 @@ window.CONFIG = {
   /* Always exported — not toggleable. */
   LEAD_SCRAPER_REQUIRED_COLUMNS: [
     { id: 'company_name', label: 'Company Name' },
-    { id: 'email', label: 'Email' },
     { id: 'phone', label: 'Phone Number' }
   ],
 

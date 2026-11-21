@@ -74,7 +74,6 @@
     ? CFG.LEAD_SCRAPER_REQUIRED_COLUMNS
     : [
         { id: 'company_name', label: 'Company Name' },
-        { id: 'email', label: 'Email' },
         { id: 'phone', label: 'Phone Number' }
       ];
   const LEAD_OPTIONAL_COLUMNS = Array.isArray(CFG.LEAD_SCRAPER_OPTIONAL_COLUMNS)
@@ -565,6 +564,11 @@
     if (user.name) return user.name;
     const email = String(user.email || '');
     return email ? email.split('@')[0] : 'Account';
+  }
+
+  /* Delivery email is always the authenticated account email. */
+  function accountEmail() {
+    return String((auth.user && auth.user.email) || '').trim();
   }
 
   function renderAuthUI() {
@@ -2194,8 +2198,10 @@
         '<div class="field"><label for="fullName">Full name <span class="req">*</span></label>' +
         '<input type="text" id="fullName" name="fullName" placeholder="Alex Tan" autocomplete="name" required />' +
         '<span class="field-error" id="nameError" role="alert"></span></div>' +
-        '<div class="field"><label for="email">Delivery email <span class="req">*</span></label>' +
-        '<input type="email" id="email" name="email" placeholder="you@example.com" autocomplete="email" inputmode="email" required />' +
+        '<div class="field"><label for="email">Delivery email <span class="label-note">🔒 Locked</span> <span class="req">*</span></label>' +
+        '<input type="email" id="email" name="email" class="is-locked" value="' +
+        escapeHtml(accountEmail()) + '" readonly aria-readonly="true" required />' +
+        '<span class="field-hint">Locked to your account email.</span>' +
         '<span class="field-error" id="emailError" role="alert"></span></div>' +
         '</div>' +
         '<div class="config-summary" id="configSummary"></div>' +
@@ -2236,7 +2242,11 @@
     const nameEl = $('#fullName');
     const emailEl = $('#email');
     if (nameEl && !nameEl.value && state.name) nameEl.value = state.name;
-    if (emailEl && !emailEl.value && state.email) emailEl.value = state.email;
+    if (emailEl) {
+      emailEl.value = accountEmail();
+      emailEl.setAttribute('readonly', 'readonly');
+      emailEl.setAttribute('aria-readonly', 'true');
+    }
 
     renderConfigure();
   }
@@ -2398,7 +2408,9 @@
     clearFieldError(emailEl);
 
     const name = nameEl.value.trim();
-    const email = emailEl.value.trim();
+    const email = accountEmail();
+    if (emailEl) emailEl.value = email;
+
     const cost = selectedStocks.length * CREDITS_PER_STOCK;
     let valid = true;
 
@@ -2407,7 +2419,10 @@
       valid = false;
     }
     if (!isValidEmail(email)) {
-      setFieldError(emailEl, 'Enter a valid email address (e.g. you@example.com).');
+      setFieldError(
+        emailEl,
+        'Your account email is missing. Please log out and log in again.'
+      );
       valid = false;
     }
     if (selectedStocks.length === 0) {
@@ -3908,9 +3923,9 @@
     const emailErr = $('#scraperEmailError');
     if (emailErr) {
       if (!emailValue) {
-        emailErr.textContent = scraperEmailTouched ? 'Delivery email is required.' : '';
+        emailErr.textContent = 'Account email missing — please log in again.';
       } else if (!emailValid) {
-        emailErr.textContent = 'Enter a valid email (e.g. you@company.com).';
+        emailErr.textContent = 'Your account email is not valid — please log in again.';
       } else {
         emailErr.textContent = '';
       }
@@ -3975,10 +3990,10 @@
         '<input type="text" id="scraperName" autocomplete="name" placeholder="Alex Tan" value="' +
         escapeHtml(state.name || '') + '" /></div>' +
         '<div class="field"><label for="scraperEmail">Delivery Email ' +
-        '<span class="label-note">(Excel .xlsx sent here)</span> <span class="req">*</span></label>' +
-        '<input type="email" id="scraperEmail" autocomplete="email" inputmode="email" placeholder="you@company.com" value="' +
-        escapeHtml(state.email || '') + '" />' +
-        '<span class="field-hint">Your finished .xlsx file will be emailed here automatically when ready.</span>' +
+        '<span class="label-note">🔒 Locked · Excel sent here</span> <span class="req">*</span></label>' +
+        '<input type="email" id="scraperEmail" class="is-locked" value="' +
+        escapeHtml(accountEmail()) + '" readonly aria-readonly="true" />' +
+        '<span class="field-hint">Locked to your account email — the finished .xlsx will be sent here.</span>' +
         '<span class="field-error" id="scraperEmailError" role="alert"></span></div>' +
         '</div>' +
         '<div class="field"><label for="scraperCountry">Target country</label>' +
@@ -3995,7 +4010,7 @@
         '<span class="modal-credit-total is-zero" id="scraperCreditTotal">0 credits</span>' +
         '</div>' +
         '<div class="modal-section"><h3>Excel columns</h3>' +
-        '<span class="fine">Company, email and phone always included</span></div>' +
+        '<span class="fine">Company and phone always included</span></div>' +
         '<div class="column-group">' +
         '<div class="column-locked">' + lockedColumns + '</div>' +
         '<p class="col-group-label">Optional columns</p>' +
@@ -4076,7 +4091,9 @@
     if (!nameEl || !emailEl) return;
 
     const name = nameEl.value.trim();
-    const email = emailEl.value.trim();
+    const email = accountEmail();
+    if (emailEl) emailEl.value = email;
+
     const countryEl = $('#scraperCountry');
     const customEl = $('#scraperCustomCountry');
     const countryValue = countryEl ? countryEl.value : 'Malaysia';
@@ -4098,8 +4115,11 @@
     const problems = [];
     if (name.length < 2) problems.push('Full name is required.');
     if (!isValidEmail(email)) {
-      setFieldError(emailEl, 'Enter a valid delivery email (e.g. you@company.com).');
-      problems.push('A valid delivery email is required.');
+      setFieldError(
+        emailEl,
+        'Your account email is missing. Please log out and log in again.'
+      );
+      problems.push('A valid account email is required.');
     } else {
       clearFieldError(emailEl);
     }

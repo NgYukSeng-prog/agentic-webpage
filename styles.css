@@ -498,6 +498,20 @@ ol {
   background: #fef2f2;
 }
 
+.field input.is-locked {
+  background: var(--slate-100);
+  border-color: var(--slate-200);
+  color: var(--slate-600, #475569);
+  cursor: not-allowed;
+  -webkit-text-fill-color: var(--slate-600, #475569);
+}
+
+.field input.is-locked:focus {
+  background: var(--slate-100);
+  border-color: var(--slate-200);
+  box-shadow: none;
+}
+
 .field-error {
   font-size: 0.79rem;
   color: var(--red);
@@ -4258,6 +4272,21 @@ table.leads-table {
 
 .modal-calc .calc-value {
   font-size: 1.08rem;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.modal-calc .calc-label,
+.modal-calc .calc-sub {
+  color: #475569;
+}
+
+.modal-calc .calc-cell-total {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.modal-calc .calc-cell-total .calc-value {
+  color: #3730a3;
 }
 
 .modal .form-two {

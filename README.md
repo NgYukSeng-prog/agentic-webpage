@@ -194,7 +194,7 @@ only the columns the user selected.
 | `LEAD_SCRAPER_POLL_MS` | `2500` | Realtime status poll interval |
 | `LEAD_SCRAPER_COUNTRIES` | 22 options | Country selector, incl. Other |
 | `LEAD_SCRAPER_SAMPLE_TERMS` | 10 terms | Placeholders + Fill Sample button |
-| `LEAD_SCRAPER_REQUIRED_COLUMNS` | 3 | Company, email, phone (always on) |
+| `LEAD_SCRAPER_REQUIRED_COLUMNS` | 2 | Company, phone (always on) |
 | `LEAD_SCRAPER_OPTIONAL_COLUMNS` | 6 | Website, address, maps, rating, category, hours |
 
 Add or remove entries in `SUPPORTED_STOCKS` (`{ symbol, name, tag }`) and the selection grid
@@ -264,7 +264,7 @@ Live identity and credits are never cached — they always come from `GET /auth/
     "job_id": "lead_…",
     "country": "Malaysia",
     "search_terms": ["CNC machining"],
-    "selected_columns": ["company_name", "email", "phone", "website"],
+    "selected_columns": ["company_name", "phone", "website"],
     "collected_count": 420,
     "mode": "demo",
     "status": "running"
