@@ -1,12 +1,12 @@
 /* ============================================================================
-   Agentic — styles.css
+   LiteWork — styles.css
    ----------------------------------------------------------------------------
    1.  Reset & design tokens
    2.  Typography & layout primitives
    3.  Buttons, badges, forms
    4.  Navbar (glassmorphic, sticky) + mobile menu
    5.  Home (hero, inbox preview, stats, steps, CTA)
-   6.  Agentic Agent (mascot, cards, teasers)
+   6.  AI Agents (mascot, cards, teasers)
    7.  Manage My Plan (wallet strip, packs, subscriptions)
    8.  About (story, standards, FAQ, disclaimer)
    9.  Configure (calculator, stock grid, form)
@@ -550,14 +550,18 @@ ol {
 .nav-inner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 20px;
   height: 72px;
+  width: 100%;
+  max-width: none;
+  padding-inline: 28px;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 10px;
   font-weight: 800;
   font-size: 1.12rem;
@@ -581,6 +585,7 @@ ol {
 .nav-links {
   display: flex;
   align-items: center;
+  margin-inline: auto;
   gap: 4px;
 }
 
@@ -607,6 +612,7 @@ ol {
 .nav-actions {
   display: flex;
   align-items: center;
+  margin-left: auto;
   gap: 12px;
 }
 
@@ -658,7 +664,7 @@ ol {
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
   gap: 56px;
-  align-items: center;
+  align-items: start;
 }
 
 .hero h1 {
@@ -5604,5 +5610,384 @@ table.leads-table {
 
   .account-session .btn {
     width: 100%;
+  }
+}
+
+/* ============ 25. LITEWORK · STABLE HERO + COMPACT BRIEF =============== */
+.hero-visual {
+  align-self: start;
+}
+
+/* Profile pill sits at the true far-right edge of the navbar. */
+.profile-slot {
+  margin-left: auto;
+}
+
+/* Both agent panes are stacked in the same grid cell, so the preview card is
+   always as tall as the taller pane — switching tabs never shifts the hero. */
+.preview-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.preview-body > .home-pane {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+
+.preview-body > .home-pane[hidden] {
+  display: block;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Compact stock brief — mirrors the delivered 07:00 MYT email */
+.brief-ident {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 13px 18px 11px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.brief-ident-main {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.brief-symbol {
+  font-size: 1.26rem;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+}
+
+.brief-company {
+  font-size: 0.78rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brief-ident-price {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brief-close {
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.brief-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 11px 18px 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.metric {
+  min-width: 0;
+}
+
+.metric span {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.78rem;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brief-bias {
+  margin: 11px 18px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.brief-bias-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 10px;
+  flex-wrap: wrap;
+  font-size: 0.67rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.bias-pills {
+  display: inline-flex;
+  gap: 5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.bias-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.bias-pill.hold {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.bias-pill.sell {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.brief-bias-note {
+  margin: 7px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #475569;
+}
+
+.brief-why {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+  margin: 11px 18px 0;
+}
+
+.brief-why-col {
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.brief-why-col h4 {
+  margin: 0 0 5px;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.brief-why-col:last-child h4 {
+  color: #b91c1c;
+}
+
+.brief-why-col ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 14px;
+  list-style: disc;
+}
+
+.brief-why-col li {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #334155;
+}
+
+/* Active search term line under the scraper percentage ring */
+.ring-active {
+  max-width: 230px;
+  margin: 10px auto 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  color: #a5f3fc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ring-active[hidden] {
+  display: none;
+}
+
+/* ============ 26. SUBSCRIPTIONS & HISTORY (grouped by agent) =========== */
+.history-panel .row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.history-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.history-tab {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.history-tab:hover {
+  color: #0f172a;
+}
+
+.history-tab.is-active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.history-pane[hidden] {
+  display: none;
+}
+
+.hist-list {
+  display: grid;
+  gap: 12px;
+}
+
+.hist-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.hist-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.hist-card-top strong {
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+
+.hist-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px 14px;
+  margin: 12px 0 0;
+}
+
+.hist-meta div {
+  min-width: 0;
+}
+
+.hist-meta dt {
+  font-size: 0.6rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.hist-meta dd {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: #334155;
+  overflow-wrap: anywhere;
+}
+
+.hist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hist-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.hist-note {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+@media (max-width: 960px) {
+  .nav-inner {
+    padding-inline: 18px;
+  }
+
+  .nav-links {
+    margin-inline: 0;
+  }
+
+  /* Single column: let the inactive pane collapse normally. */
+  .preview-body {
+    display: block;
+  }
+
+  .preview-body > .home-pane[hidden] {
+    display: none;
+    visibility: visible;
+  }
+}
+
+@media (max-width: 560px) {
+  .brief-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brief-why {
+    grid-template-columns: 1fr;
+  }
+
+  .history-tabs {
+    border-radius: 16px;
+  }
+
+  .history-tab {
+    flex: 1 1 100%;
   }
 }

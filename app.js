@@ -1,5 +1,5 @@
 /* ============================================================================
-   Agentic — app.js
+   LiteWork — app.js
    ----------------------------------------------------------------------------
    Vanilla JS single-page application.
 
@@ -48,6 +48,7 @@
   const FORGOT_PASSWORD_URL = API_BASE + '/auth/forgot-password';
   const RESET_PASSWORD_URL = API_BASE + '/auth/reset-password';
   const ACCOUNT_AVATAR_URL = API_BASE + '/account/avatar';
+  const ACCOUNT_HISTORY_URL = API_BASE + '/account/history';
   const FREE_SIGNUP_CREDITS = toPositiveInt(CFG.FREE_SIGNUP_CREDITS, 5);
   const GOOGLE_CLIENT_ID = String(CFG.GOOGLE_CLIENT_ID || '').trim();
   const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -202,72 +203,91 @@
   ];
 
   /* Realistic sample briefs used by the home preview + "live sample" modal.
-     Numbers are illustrative only. */
+     They mirror the delivered email: ticker + close, a 4-metric strip, both
+     bias badges, and the Why Hold / Why Sell columns. Illustrative only. */
   const BRIEFS = {
     NVDA: {
       symbol: 'NVDA',
+      name: 'NVIDIA Corporation',
       price: 138.42,
-      prev: 135.88,
+      changePct: 2.4,
+      dayLow: 134.1,
+      dayHigh: 139.02,
       low52: 86.62,
       high52: 153.13,
-      volume: '1.8× avg vol',
-      changePct: 1.87,
-      bias: 'Hold',
-      score: 62,
-      note:
-        'MACD line +0.42 above signal +0.28 (histogram +0.14). Bullish structure intact above the $132.40 shelf, but momentum is flattening — hence Hold rather than Buy.',
-      news: [
-        { text: 'Hyperscaler capex guidance reaffirmed for H2; data-centre orders remain the swing factor.', src: 'Reuters' },
-        { text: 'Rack-scale Blackwell shipments reportedly tracking ahead of internal schedule.', src: 'Bloomberg' },
-        { text: 'Options desks flag heavy call skew into the December expiry.', src: 'MarketWatch' }
+      marketCap: '$3.39T',
+      pe: '64.2',
+      fundamental: { hold: 62, sell: 38 },
+      macd: { hold: 68, sell: 32 },
+      takeaway:
+        'Constructive structure, but momentum is flattening above the $132 shelf — hold rather than chase the open.',
+      whyHold: [
+        'Data-centre capex guidance reaffirmed for H2.',
+        'Price keeps holding above the $132.40 support shelf.'
+      ],
+      whySell: [
+        'MACD histogram is flattening as RSI cools from 58.',
+        'At 64× earnings there is little room for a miss.'
       ]
     },
     AAPL: {
       symbol: 'AAPL',
+      name: 'Apple Inc.',
       price: 227.64,
-      prev: 229.11,
+      changePct: -0.8,
+      dayLow: 226.2,
+      dayHigh: 231.4,
       low52: 164.08,
       high52: 240.03,
-      volume: '0.9× avg vol',
-      changePct: -0.64,
-      bias: 'Hold',
-      score: 47,
-      note:
-        'MACD line +0.08 versus signal +0.05 (histogram +0.03). Momentum is neutral and price is mid-range — no actionable edge until either $218 support or $234 resistance breaks.',
-      news: [
-        { text: 'Services revenue mix hits a record share of gross profit, per channel checks.', src: 'CNBC' },
-        { text: 'EU App Store fee ruling adds a modest, quantified overhang to services margins.', src: 'Financial Times' },
-        { text: 'Supplier orders for the next handset cycle described as "stable, not urgent".', src: 'Nikkei' }
+      marketCap: '$3.44T',
+      pe: '35.8',
+      fundamental: { hold: 55, sell: 45 },
+      macd: { hold: 50, sell: 50 },
+      takeaway:
+        'Mid-range and neutral — no edge until price closes above $234.50 or tests $218 support.',
+      whyHold: [
+        'Services mix sits at a record share of gross profit.',
+        'Buyback programme cushions the downside.'
+      ],
+      whySell: [
+        'EU App Store fee ruling pressures services margins.',
+        'Supplier orders described as stable, not urgent.'
       ]
     },
     TSLA: {
       symbol: 'TSLA',
+      name: 'Tesla, Inc.',
       price: 251.87,
-      prev: 257.83,
+      changePct: -2.9,
+      dayLow: 249.4,
+      dayHigh: 259.1,
       low52: 138.8,
       high52: 299.29,
-      volume: '1.4× avg vol',
-      changePct: -2.31,
-      bias: 'Sell',
-      score: 27,
-      note:
-        'MACD line −1.86 below signal −1.21 (histogram −0.65). Bearish crossover with expanding negative histogram; rallies into $265 have been sold.',
-      news: [
-        { text: 'Quarterly delivery estimates trimmed by two sell-side desks on softer European registrations.', src: 'Reuters' },
-        { text: 'Energy storage deployments hit a quarterly record, partially offsetting auto softness.', src: 'Bloomberg' },
-        { text: 'Price cuts extended to two more markets; margin commentary due at the next call.', src: 'WSJ' }
+      marketCap: '$802B',
+      pe: '78.4',
+      fundamental: { hold: 35, sell: 65 },
+      macd: { hold: 28, sell: 72 },
+      takeaway:
+        'Bearish crossover with a widening histogram — rallies into $265 keep getting sold, so stay defensive.',
+      whyHold: [
+        'Energy storage deployments hit a quarterly record.',
+        'Cash cushion still covers the current capex plan.'
+      ],
+      whySell: [
+        'Delivery estimates trimmed on softer EU registrations.',
+        'Fresh price cuts extended to two more markets.'
       ]
     }
   };
 
   const TITLES = {
-    home: 'Agentic — Autonomous Pre-Market Intelligence',
-    agents: 'Agentic Agent — Stock Brief and B2B Lead Scraper',
-    plans: 'Manage My Plan — Credit Top-Ups in USD',
-    about: 'About Us — Agentic',
-    configure: 'Configure Your Subscription — Agentic',
-    'scraper-results': 'Scraper Results — Agentic',
-    success: 'Subscription Confirmed — Agentic'
+    home: 'LiteWork — Your Low-Cost AI Workforce',
+    agents: 'AI Agents — Stock Brief and B2B Lead Scraper',
+    plans: 'Manage My Plan — Credits & History',
+    about: 'About Us — LiteWork',
+    configure: 'Configure Your Worker — LiteWork',
+    'scraper-results': 'Scraper Results — LiteWork',
+    success: 'Subscription Confirmed — LiteWork'
   };
 
   /* ============================ C. STATE ================================== */
@@ -326,7 +346,7 @@
       );
     } catch (err) {
       // Private mode / storage disabled — the session still works in memory.
-      console.warn('[Agentic] Could not persist state to localStorage.', err);
+      console.warn('[LiteWork] Could not persist state to localStorage.', err);
     }
   }
 
@@ -355,7 +375,7 @@
     try {
       window.localStorage.setItem(TOKEN_KEY, String(token));
     } catch (err) {
-      console.warn('[Agentic] Could not persist the session token.', err);
+      console.warn('[LiteWork] Could not persist the session token.', err);
     }
   }
 
@@ -583,15 +603,17 @@
 
     if (signedIn) {
       const nameEl = $('#navUserName');
-      const emailEl = $('#navUserEmail');
       const avatarEl = $('#navAvatar');
+      /* Compact pill: name (or email prefix) only — the email address stays
+         inside Account Settings. */
       if (nameEl) nameEl.textContent = displayUserName(auth.user);
-      if (emailEl) emailEl.textContent = auth.user.email || 'Signed in';
       if (avatarEl) avatarEl.innerHTML = avatarMarkup(auth.user.avatar_id, 'avatar--nav');
     }
 
     updateSubscribeButton();
     updateScraperButton();
+
+    if (currentRoute() === 'plans') renderHistory();
   }
 
   function refreshSession() {
@@ -625,7 +647,7 @@
       .catch(function (err) {
         auth.loading = false;
         renderAuthUI();
-        console.warn('[Agentic] Could not refresh the live session.', err);
+        console.warn('[LiteWork] Could not refresh the live session.', err);
         return false;
       });
   }
@@ -638,6 +660,7 @@
     state.credits = 0;
     state.email = '';
     state.name = '';
+    historyState = { loaded: false, loading: false, stock: [], b2b: [] };
     stopScraperTimers();
     renderAuthUI();
     syncCreditUI();
@@ -889,7 +912,7 @@
         width: btnWidth
       });
     } catch (err) {
-      console.warn('[Agentic] Google Sign-In renderButton failed.', err);
+      console.warn('[LiteWork] Google Sign-In renderButton failed.', err);
       showGoogleUnavailable(slot, 'Google Sign-In is unavailable right now.');
     }
   }
@@ -943,7 +966,7 @@
         });
       })
       .catch(function (err) {
-        console.warn('[Agentic] Google Sign-In could not load.', err);
+        console.warn('[LiteWork] Google Sign-In could not load.', err);
         const failedScript = document.querySelector(GOOGLE_GSI_SELECTOR);
         if (
           failedScript &&
@@ -1876,62 +1899,102 @@
   }
 
   /* ==================== F. HOME / SAMPLE BRIEF RENDER ===================== */
+  /* The preview mirrors the delivered 07:00 MYT email: a Daily Market Brief
+     header, ticker + close, a 4-metric strip, both bias badges with a one-line
+     takeaway, the Why Hold / Why Sell columns and a quiet disclaimer. */
+  function briefDateLabel() {
+    const offsetMs = (Number(CFG.TIMEZONE_OFFSET_HOURS) || 8) * 3600000;
+    const myt = new Date(Date.now() + offsetMs);
+    const y = myt.getUTCFullYear();
+    const m = String(myt.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(myt.getUTCDate()).padStart(2, '0');
+    return y + '-' + m + '-' + d;
+  }
+
+  function briefBullets(items) {
+    const list = Array.isArray(items) ? items : [];
+    return (
+      '<ul>' +
+      list
+        .map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; })
+        .join('') +
+      '</ul>'
+    );
+  }
+
   function renderBrief(symbol) {
     const b = BRIEFS[symbol];
     if (!b) return '';
 
-    const rangePct = clamp(((b.price - b.low52) / (b.high52 - b.low52)) * 100, 2, 98);
-    const scorePct = clamp((b.score + 100) / 2, 2, 98);
-    const up = b.changePct >= 0;
-    const changeText = (up ? '+' : '-') + Math.abs(b.changePct).toFixed(2) + '%';
-    const biasClass = String(b.bias).toLowerCase();
-
-    const news = b.news
-      .map(function (item) {
-        return '<li>' + escapeHtml(item.text) + ' <em>· ' + escapeHtml(item.src) + '</em></li>';
-      })
-      .join('');
+    const up = Number(b.changePct) >= 0;
+    const changeText =
+      (up ? '+' : '-') + Math.abs(Number(b.changePct) || 0).toFixed(1) + '%';
+    const fundamental = b.fundamental || { hold: 50, sell: 50 };
+    const macd = b.macd || { hold: 50, sell: 50 };
+    const dayRange =
+      b.dayLow == null || b.dayHigh == null
+        ? '—'
+        : money(b.dayLow) + ' – ' + money(b.dayHigh);
 
     return (
-      '<div class="brief">' +
+      '<div class="brief brief-compact">' +
       '  <div class="brief-head">' +
       '    <div class="brief-agent">' +
-      '      <span class="brief-avatar" aria-hidden="true">A</span>' +
+      '      <span class="brief-avatar" aria-hidden="true">L</span>' +
       '      <div class="brief-agent-text">' +
-      '        <strong>' + escapeHtml(AGENT_NAME) + '</strong>' +
-      '        <span>to you · 07:00 MYT · Day 1 of ' + SUB_DAYS + '</span>' +
+      '        <strong>Daily Market Brief</strong>' +
+      '        <span>Good morning · ' + escapeHtml(briefDateLabel()) + ' (MYT)</span>' +
       '      </div>' +
       '    </div>' +
-      '    <span class="brief-tag">7-Day Brief</span>' +
+      '    <span class="brief-tag">07:00 MYT</span>' +
       '  </div>' +
-      '  <div class="brief-title">Pre-market brief · ' + escapeHtml(b.symbol) + '</div>' +
-      '  <div class="brief-price-row">' +
-      '    <div class="brief-price-wrap">' +
-      '      <span class="brief-price">' + money(b.price) + '</span>' +
+      '  <div class="brief-ident">' +
+      '    <div class="brief-ident-main">' +
+      '      <span class="brief-symbol">' + escapeHtml(b.symbol) + '</span>' +
+      '      <span class="brief-company">' + escapeHtml(b.name || '') + '</span>' +
+      '    </div>' +
+      '    <div class="brief-ident-price">' +
+      '      <span class="brief-close">' + money(b.price) + '</span>' +
       '      <span class="pill-change ' + (up ? 'up' : 'down') + '">' + changeText + '</span>' +
       '    </div>' +
-      '    <span class="brief-sub">Prev close ' + money(b.prev) + ' · ' + escapeHtml(b.volume) + '</span>' +
       '  </div>' +
-      '  <div class="brief-block">' +
-      '    <div class="brief-block-head"><span>52-week range</span><span>' +
-      money(b.low52) + ' — ' + money(b.high52) + '</span></div>' +
-      '    <div class="range-track">' +
-      '      <span class="range-fill" style="width:' + rangePct.toFixed(1) + '%"></span>' +
-      '      <span class="range-marker" style="left:' + rangePct.toFixed(1) + '%"></span>' +
+      '  <div class="brief-metrics">' +
+      '    <div class="metric"><span>Day Range</span><strong>' + dayRange + '</strong></div>' +
+      '    <div class="metric"><span>52-Wk Range</span><strong>' +
+      money(b.low52) + ' – ' + money(b.high52) + '</strong></div>' +
+      '    <div class="metric"><span>Market Cap</span><strong>' +
+      escapeHtml(b.marketCap || '—') + '</strong></div>' +
+      '    <div class="metric"><span>P/E Ratio</span><strong>' +
+      escapeHtml(b.pe || '—') + '</strong></div>' +
+      '  </div>' +
+      '  <div class="brief-bias">' +
+      '    <div class="brief-bias-head">' +
+      '      <span>Fundamental / News Bias</span>' +
+      '      <span class="bias-pills">' +
+      '        <span class="bias-pill hold">Hold ' + (Number(fundamental.hold) || 0) + '%</span>' +
+      '        <span class="bias-pill sell">Sell ' + (Number(fundamental.sell) || 0) + '%</span>' +
+      '      </span>' +
+      '    </div>' +
+      '    <p class="brief-bias-note">' + escapeHtml(b.takeaway || '') + '</p>' +
+      '  </div>' +
+      '  <div class="brief-bias">' +
+      '    <div class="brief-bias-head">' +
+      '      <span>MACD Technical Bias</span>' +
+      '      <span class="bias-pills">' +
+      '        <span class="bias-pill hold">Hold ' + (Number(macd.hold) || 0) + '%</span>' +
+      '        <span class="bias-pill sell">Sell ' + (Number(macd.sell) || 0) + '%</span>' +
+      '      </span>' +
       '    </div>' +
       '  </div>' +
-      '  <div class="brief-block">' +
-      '    <div class="brief-block-head"><span>MACD 12/26/9 momentum</span>' +
-      '      <span class="bias-chip ' + biasClass + '">' + escapeHtml(b.bias.toUpperCase()) + '</span></div>' +
-      '    <div class="bias-track"><span class="bias-marker" style="left:' + scorePct.toFixed(1) + '%"></span></div>' +
-      '    <div class="bias-scale"><span>Sell</span><span>Hold</span><span>Buy</span></div>' +
-      '    <p class="brief-note">' + escapeHtml(b.note) + '</p>' +
+      '  <div class="brief-why">' +
+      '    <div class="brief-why-col">' +
+      '      <h4>Why Hold</h4>' + briefBullets(b.whyHold) +
+      '    </div>' +
+      '    <div class="brief-why-col">' +
+      '      <h4>Why Sell</h4>' + briefBullets(b.whySell) +
+      '    </div>' +
       '  </div>' +
-      '  <div class="brief-news">' +
-      '    <div class="brief-block-head"><span>Curated news synthesis</span><span>3 sources</span></div>' +
-      '    <ul>' + news + '</ul>' +
-      '  </div>' +
-      '  <div class="brief-foot">Verified OHLC · MACD 12/26/9 · Not financial advice</div>' +
+      '  <div class="brief-foot">Informational only · Not financial advice</div>' +
       '</div>'
     );
   }
@@ -2007,45 +2070,421 @@
       });
     });
 
-    renderActiveSubs();
+    renderHistory();
     $$('[data-credit-count]').forEach(function (el) {
       el.textContent = String(state.credits);
     });
   }
 
-  function renderActiveSubs() {
-    const target = $('#activeSubsList');
-    if (!target) return;
+  /* ---------------- Subscriptions & run history (per agent) --------------
+     Loaded from GET /webhook/account/history with the session bearer token.
+     Both agents are kept in separate lists so the UI can render clean tabs. */
+  let historyState = { loaded: false, loading: false, stock: [], b2b: [] };
 
-    const subs = activeSubscriptions();
+  function historySource(body) {
+    if (body && typeof body === 'object' && body.data && typeof body.data === 'object') {
+      return body.data;
+    }
+    return body && typeof body === 'object' ? body : {};
+  }
 
-    if (!subs.length) {
-      target.innerHTML =
-        '<p class="empty-note">No active subscriptions yet. Activate the Stock Market News Agent to start receiving 07:00 MYT briefs.</p>';
+  function pickArray(source, keys) {
+    for (let i = 0; i < keys.length; i += 1) {
+      const value = source ? source[keys[i]] : null;
+      if (Array.isArray(value)) return value;
+    }
+    return [];
+  }
+
+  function firstValue(source, keys, fallback) {
+    for (let i = 0; i < keys.length; i += 1) {
+      const value = source ? source[keys[i]] : null;
+      if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+    }
+    return fallback;
+  }
+
+  function normalizeHistorySub(raw) {
+    const sub = raw && typeof raw === 'object' ? raw : {};
+    const tickersRaw = firstValue(
+      sub,
+      ['tickers', 'watchlist', 'selected_tickers', 'symbols', 'stocks', 'ticker'],
+      null
+    );
+    let tickers = [];
+    if (Array.isArray(tickersRaw)) tickers = tickersRaw.slice();
+    else if (typeof tickersRaw === 'string') {
+      tickers = tickersRaw.split(/[,\s]+/).filter(function (t) { return !!t; });
+    }
+    const expiresAt = firstValue(
+      sub,
+      ['expires_at', 'expiresAt', 'expiry_date', 'end_date', 'end'],
+      ''
+    );
+    const startedAt = firstValue(
+      sub,
+      ['started_at', 'activated_at', 'start_date', 'created_at', 'createdAt'],
+      ''
+    );
+    const status = String(firstValue(sub, ['status', 'state'], '')).toLowerCase();
+    const expiredByDate =
+      !!expiresAt && new Date(expiresAt).getTime() < Date.now();
+    const expired =
+      status === 'expired' ||
+      status === 'cancelled' ||
+      status === 'canceled' ||
+      expiredByDate;
+
+    return {
+      tickers: tickers,
+      active: !expired,
+      email: String(
+        firstValue(sub, ['delivery_email', 'email', 'user_email'], accountEmail()) || ''
+      ),
+      startedAt: startedAt,
+      expiresAt: expiresAt,
+      credits: Number(
+        firstValue(sub, ['credits_spent', 'creditsSpent', 'credits', 'credits_used'], 0)
+      ) || 0
+    };
+  }
+
+  function normalizeHistoryJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const termsRaw = firstValue(
+      job,
+      ['search_terms', 'terms', 'keywords', 'query', 'active_query'],
+      ''
+    );
+    let terms = [];
+    if (Array.isArray(termsRaw)) terms = termsRaw.slice();
+    else if (typeof termsRaw === 'string') {
+      terms = termsRaw.split(',').map(function (t) { return t.trim(); }).filter(function (t) { return !!t; });
+    }
+
+    return {
+      job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      country: String(firstValue(job, ['country', 'location', 'region'], '—')),
+      terms: terms,
+      scraped:
+        Number(
+          firstValue(job, ['scraped_rows', 'collected_count', 'leads_collected', 'count'], 0)
+        ) || 0,
+      target: Number(firstValue(job, ['target_count', 'target_rows', 'target'], 0)) || 0,
+      status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
+      date: firstValue(job, ['completed_at', 'created_at', 'started_at', 'date', 'createdAt'], ''),
+      credits:
+        Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits', 'credits_used'], 0)) || 0,
+      downloadReady:
+        job.download_ready === true ||
+        job.download_ready === 'true' ||
+        job.download_ready === 1
+    };
+  }
+
+  function renderStockHistoryCard(sub) {
+    const tickers = sub.tickers.length
+      ? sub.tickers
+          .map(function (t) { return '<span class="pill-ticker">' + escapeHtml(t) + '</span>'; })
+          .join('')
+      : '<span class="pill-ticker">—</span>';
+
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>' + escapeHtml(AGENT_NAME) + '</strong>' +
+      '<span class="mini-pill' + (sub.active ? ' mini-pill-emerald' : '') + '">' +
+      (sub.active ? 'Active' : 'Expired') + '</span>' +
+      '</div>' +
+      '<div class="hist-pill-row">' + tickers + '</div>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Delivery email</dt><dd>' + escapeHtml(sub.email || '—') + '</dd></div>' +
+      '<div><dt>Start date</dt><dd>' +
+      escapeHtml(sub.startedAt ? fmtMYT(sub.startedAt) : '—') + '</dd></div>' +
+      '<div><dt>Expiry date</dt><dd>' +
+      escapeHtml(sub.expiresAt ? fmtMYT(sub.expiresAt) : '—') + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + sub.credits + '</dd></div>' +
+      '</dl>' +
+      '</article>'
+    );
+  }
+
+  function renderB2BHistoryCard(job) {
+    const labels = {
+      completed: 'Completed',
+      complete: 'Completed',
+      success: 'Completed',
+      done: 'Completed',
+      running: 'Running',
+      processing: 'Running',
+      waiting: 'Running',
+      queued: 'Queued',
+      pending: 'Queued',
+      failed: 'Failed',
+      error: 'Failed',
+      cancelled: 'Cancelled',
+      canceled: 'Cancelled'
+    };
+    const ok = labels[job.status] === 'Completed';
+    const label = labels[job.status] || (job.status ? job.status : 'Unknown');
+    const terms = job.terms.length
+      ? job.terms
+          .map(function (t) { return '<span class="pill-ticker">' + escapeHtml(t) + '</span>'; })
+          .join('')
+      : '<span class="pill-ticker">—</span>';
+    const progress =
+      (job.status === 'completed' ? Math.max(job.scraped, job.target) : job.scraped) +
+      ' / ' + (job.target ? job.target : '—');
+
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>B2B Lead Scraper Agent</strong>' +
+      '<span class="mini-pill' + (ok ? ' mini-pill-emerald' : '') + '">' + escapeHtml(label) + '</span>' +
+      '</div>' +
+      '<div class="hist-pill-row">' + terms + '</div>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Country</dt><dd>' + escapeHtml(job.country) + '</dd></div>' +
+      '<div><dt>Leads</dt><dd>' + escapeHtml(progress) + '</dd></div>' +
+      '<div><dt>Date</dt><dd>' + escapeHtml(job.date ? fmtMYT(job.date) : '—') + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + job.credits + '</dd></div>' +
+      '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-history-resume="' +
+      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') + '>View Progress</button>' +
+      (job.downloadReady && job.job_id
+        ? '<button type="button" class="btn btn-primary btn-sm" data-history-download="' +
+          escapeHtml(job.job_id) + '">Download .xlsx</button>'
+        : '') +
+      '</div>' +
+      '</article>'
+    );
+  }
+
+  function paintHistory() {
+    const stockPane = $('#historyStock');
+    const b2bPane = $('#historyB2B');
+
+    if (stockPane) {
+      stockPane.innerHTML = historyState.stock.length
+        ? '<div class="hist-list">' +
+          historyState.stock.map(renderStockHistoryCard).join('') +
+          '</div>'
+        : '<p class="empty-note">You haven\u2019t subscribed to the Stock Market News Agent yet. Activate a ticker to start receiving 07:00 MYT briefs.</p>';
+    }
+
+    if (b2bPane) {
+      b2bPane.innerHTML = historyState.b2b.length
+        ? '<div class="hist-list">' +
+          historyState.b2b.map(renderB2BHistoryCard).join('') +
+          '</div>'
+        : '<p class="empty-note">No B2B lead scraping jobs yet. Start a run from the B2B Lead Scraper card to see its progress here.</p>';
+    }
+  }
+
+  function renderHistory(force) {
+    const stockPane = $('#historyStock');
+    const b2bPane = $('#historyB2B');
+    if (!stockPane && !b2bPane) return;
+
+    if (!isLoggedIn()) {
+      historyState = { loaded: false, loading: false, stock: [], b2b: [] };
+      if (stockPane) {
+        stockPane.innerHTML =
+          '<p class="empty-note">Log in to load your stock brief subscriptions and credit history. ' +
+          '<button type="button" class="linklike" data-history-login>Log in</button></p>';
+      }
+      if (b2bPane) {
+        b2bPane.innerHTML =
+          '<p class="empty-note">Log in to load your B2B lead scraping jobs. ' +
+          '<button type="button" class="linklike" data-history-login>Log in</button></p>';
+      }
       return;
     }
 
-    target.innerHTML = subs
-      .map(function (sub) {
-        const tickers = (sub.watchlist || [])
-          .map(function (t) { return '<span class="pill-ticker">' + escapeHtml(t) + '</span>'; })
-          .join('');
-        const left = daysLeft(sub.expiresAt);
-        return (
-          '<div class="sub-row">' +
-          '<div class="sub-row-main">' +
-          '<strong>' + escapeHtml(sub.agentName || AGENT_NAME) + '</strong>' +
-          '<span class="sub-emails">' + escapeHtml(sub.email || '') + ' · expires ' + escapeHtml(fmtMYT(sub.expiresAt)) + '</span>' +
-          '</div>' +
-          '<div class="sub-row-tickers">' + tickers + '</div>' +
-          '<div class="sub-row-meta">' +
-          '<span>' + left + ' day' + (left === 1 ? '' : 's') + ' left</span>' +
-          '<span>' + (sub.creditsSpent || 0) + ' credits</span>' +
-          '</div>' +
-          '</div>'
-        );
+    if (historyState.loading) return;
+    if (historyState.loaded && !force) {
+      paintHistory();
+      return;
+    }
+
+    historyState.loading = true;
+    if (stockPane) stockPane.innerHTML = '<p class="empty-note">Loading your subscriptions…</p>';
+    if (b2bPane) b2bPane.innerHTML = '<p class="empty-note">Loading your scraping jobs…</p>';
+
+    apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (response.status === 401) {
+            handleAuthExpired(
+              'Your session expired. Log in again to view your history.',
+              null
+            );
+            return null;
+          }
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return body;
+        });
       })
-      .join('');
+      .then(function (body) {
+        historyState.loading = false;
+        if (body === null) return;
+
+        const source = historySource(body);
+        const stockRaw = pickArray(source, [
+          'subscriptions',
+          'stock_subscriptions',
+          'stock_history',
+          'briefs',
+          'stock'
+        ]);
+        const b2bRaw = pickArray(source, [
+          'jobs',
+          'scraper_jobs',
+          'lead_jobs',
+          'b2b',
+          'b2b_jobs',
+          'scrapes'
+        ]);
+        const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
+        const stockExtra = [];
+        const b2bExtra = [];
+
+        combined.forEach(function (item) {
+          const kind = String(
+            (item && (item.agent || item.agent_id || item.type || item.kind)) || ''
+          ).toLowerCase();
+          if (kind.indexOf('lead') !== -1 || kind.indexOf('scrap') !== -1 || kind.indexOf('b2b') !== -1) {
+            b2bExtra.push(item);
+          } else {
+            stockExtra.push(item);
+          }
+        });
+
+        historyState.stock = stockRaw.concat(stockExtra).map(normalizeHistorySub);
+        historyState.b2b = b2bRaw.concat(b2bExtra).map(normalizeHistoryJob);
+
+        /* Fall back to the locally cached activations when the server has
+           nothing recorded yet for this browser. */
+        if (!historyState.stock.length && Array.isArray(state.subscriptions) && state.subscriptions.length) {
+          historyState.stock = state.subscriptions.map(function (sub) {
+            return normalizeHistorySub({
+              tickers: sub.watchlist,
+              expires_at: sub.expiresAt,
+              started_at: sub.startedAt,
+              email: sub.email,
+              credits_spent: sub.creditsSpent,
+              status: sub.status
+            });
+          });
+        }
+
+        historyState.loaded = true;
+        paintHistory();
+      })
+      .catch(function (err) {
+        historyState.loading = false;
+        const message =
+          err && err.name === 'AbortError'
+            ? 'History request timed out'
+            : err && err.message
+            ? err.message
+            : 'Could not load history';
+        const note =
+          '<p class="empty-note">Could not load your history (' +
+          escapeHtml(message) +
+          '). <button type="button" class="linklike" data-history-retry>Try again</button>.</p>';
+        if (stockPane) stockPane.innerHTML = note;
+        if (b2bPane) b2bPane.innerHTML = note;
+        console.warn('[LiteWork] Account history unavailable.', message);
+      });
+  }
+
+  function openHistoryJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return;
+
+    stopScraperTimers();
+    const known = (historyState.b2b || []).filter(function (entry) {
+      return String(entry.job_id || '') === id;
+    })[0];
+    const current = state.scraperJob;
+    if (!current || String(current.job_id || '') !== id) {
+      state.scraperJob = {
+        job_id: id,
+        mode: 'live',
+        status: 'running',
+        starting: false,
+        posted: true,
+        scraped_rows: 0,
+        filled_rows: 0,
+        percent: 0,
+        download_ready: false,
+        collected_count: 0,
+        target_count: known ? known.target : 0,
+        country: known ? known.country : '',
+        search_terms: known ? known.terms : [],
+        selected_columns: LEAD_REQUIRED_COLUMNS.map(function (c) { return c.id; }),
+        credits_spent: known ? known.credits : 0,
+        started_at: '',
+        email: accountEmail(),
+        poll_errors: 0,
+        status_warned: false
+      };
+      saveState();
+    }
+
+    if (currentRoute() === 'scraper-results') {
+      renderScraperResults();
+    } else {
+      window.location.hash = '#scraper-results';
+    }
+  }
+
+  function downloadHistoryJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id || !LEAD_DOWNLOAD_URL) {
+      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      return;
+    }
+
+    const url = LEAD_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id);
+    toast('Requesting your .xlsx from the cloud…', 'info');
+
+    fetch(url, { mode: 'cors', headers: authHeaders() })
+      .then(function (response) {
+        if (response.status === 401) {
+          handleAuthExpired(
+            'Your session expired. Log in again to download your leads.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          toast('Insufficient credits for this download.', 'warn');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (!blob) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download =
+          'litework-leads-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
+        toast('Excel download ready.', 'success');
+      })
+      .catch(function (err) {
+        console.warn('[LiteWork] History download failed.', err);
+        toast('Could not download the Excel file. Please try again.', 'warn');
+      });
   }
 
   function openCheckout(packId) {
@@ -2470,8 +2909,8 @@
       expires_at: subscription.expiresAt
     };
 
-    console.log('[Agentic] subscriber.activated → ' + (CFG.WEBHOOK_URL || '(no webhook configured)'));
-    console.log('[Agentic] webhook payload:', JSON.stringify(payload, null, 2));
+    console.log('[LiteWork] subscriber.activated → ' + (CFG.WEBHOOK_URL || '(no webhook configured)'));
+    console.log('[LiteWork] webhook payload:', JSON.stringify(payload, null, 2));
 
     postAgentWebhook(payload).then(function (result) {
       pendingWebhook = false;
@@ -2590,7 +3029,7 @@
       .catch(function (err) {
         if (timer) window.clearTimeout(timer);
         console.warn(
-          '[Agentic] Agent webhook unreachable — keeping the local activation.',
+          '[LiteWork] Agent webhook unreachable — keeping the local activation.',
           err && err.message ? err.message : err
         );
         return { kind: 'offline', reason: 'network', error: err, remaining: null };
@@ -2772,6 +3211,7 @@
     state.subscriptions = [];
     state.lastSubscription = null;
     state.scraperJob = null;
+    historyState = { loaded: false, loading: false, stock: [], b2b: [] };
     saveState();
 
     clearAuthSession();
@@ -2938,6 +3378,54 @@
     $$('[data-open-sample]').forEach(function (btn) {
       btn.addEventListener('click', openSampleModal);
     });
+
+    /* Subscriptions & history: per-agent tabs */
+    $$('[data-history-tab]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const name = btn.getAttribute('data-history-tab');
+        $$('[data-history-tab]').forEach(function (b) {
+          const on = b === btn;
+          b.classList.toggle('is-active', on);
+          b.setAttribute('aria-selected', String(on));
+        });
+        $$('[data-history-pane]').forEach(function (pane) {
+          pane.hidden = pane.getAttribute('data-history-pane') !== name;
+        });
+      });
+    });
+
+    /* Subscriptions & history: refresh, retry, resume and download */
+    const historyRefresh = $('#historyRefresh');
+    if (historyRefresh) {
+      historyRefresh.addEventListener('click', function () {
+        renderHistory(true);
+      });
+    }
+
+    const historyPanel = $('#historyPanel');
+    if (historyPanel) {
+      historyPanel.addEventListener('click', function (event) {
+        const login = event.target.closest('[data-history-login]');
+        if (login) {
+          openAuthModal('login', 'Log in to load your subscriptions and run history.');
+          return;
+        }
+        const retry = event.target.closest('[data-history-retry]');
+        if (retry) {
+          renderHistory(true);
+          return;
+        }
+        const resume = event.target.closest('[data-history-resume]');
+        if (resume) {
+          openHistoryJob(resume.getAttribute('data-history-resume'));
+          return;
+        }
+        const download = event.target.closest('[data-history-download]');
+        if (download) {
+          downloadHistoryJob(download.getAttribute('data-history-download'));
+        }
+      });
+    }
 
     /* Coming-soon waitlist buttons */
     $$('[data-waitlist]').forEach(function (btn) {
@@ -3231,6 +3719,15 @@
     ensureScraperRunning();
   }
 
+  /* 95 → "1m 35s" */
+  function formatElapsed(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    if (mins <= 0) return secs + 's';
+    return mins + 'm ' + (secs < 10 ? '0' + secs : String(secs)) + 's';
+  }
+
   function renderJobSummary() {
     const job = state.scraperJob;
     if (!job) return;
@@ -3309,6 +3806,27 @@
         target.toLocaleString('en-US') + ' filled';
     }
 
+    /* Current search term + elapsed time, next to the percentage ring. */
+    const activeEl = $('#ringActive');
+    if (activeEl) {
+      const activeQuery = String(job.active_query || '').trim();
+      const phase = String(job.status || '').toLowerCase();
+      const terminal =
+        complete ||
+        phase === 'completed' ||
+        phase === 'complete' ||
+        phase === 'failed' ||
+        phase === 'error';
+      if (activeQuery && !terminal) {
+        activeEl.hidden = false;
+        activeEl.textContent =
+          'Scraping "' + activeQuery + '" · ' + formatElapsed(job.query_elapsed_s);
+      } else {
+        activeEl.hidden = true;
+        activeEl.textContent = '';
+      }
+    }
+
     const card = $('#ringCard');
     if (card) card.classList.toggle('is-complete', complete);
 
@@ -3370,6 +3888,46 @@
     return [];
   }
 
+  /* The backend returns cells under a few different key names. Normalise the
+     common aliases so Phone Number / Company Name never render blank. */
+  function leadCellValue(row, id) {
+    if (!row || typeof row !== 'object') return '—';
+
+    const read = function (keys) {
+      for (let i = 0; i < keys.length; i += 1) {
+        const raw = row[keys[i]];
+        if (raw === null || raw === undefined) continue;
+        const text = String(raw).trim();
+        if (text) return text;
+      }
+      return '';
+    };
+
+    let value = '';
+    if (id === 'phone') {
+      value = read([
+        'phone',
+        'phone_number',
+        'Phone Number',
+        'Phone',
+        'phoneNumber',
+        'telephone',
+        'mobile'
+      ]);
+    } else if (id === 'company_name') {
+      value = read(['company_name', 'name', 'title', 'Company Name', 'Company', 'company']);
+    } else {
+      const label = LEAD_COLUMN_LABELS[id];
+      value = read(
+        label && label !== id
+          ? [id, label, String(label).replace(/\s+/g, '_').toLowerCase()]
+          : [id]
+      );
+    }
+
+    return value || '—';
+  }
+
   function renderLeadsTable() {
     const table = $('#leadsTable');
     if (!table || !state.scraperJob) return;
@@ -3402,7 +3960,7 @@
               '<tr>' +
               cols
                 .map(function (id, index) {
-                  const value = row[id] == null || row[id] === '' ? '—' : String(row[id]);
+                  const value = leadCellValue(row, id);
                   return '<td class="' + (index === 0 ? 'cell-strong' : '') + '">' + escapeHtml(value) + '</td>';
                 })
                 .join('') +
@@ -3610,7 +4168,7 @@
       .catch(function (err) {
         if (timer) window.clearTimeout(timer);
         console.warn(
-          '[Agentic] Lead scraper start response unavailable.',
+          '[LiteWork] Lead scraper start response unavailable.',
           err && err.message ? err.message : err
         );
         failStart('Could not reach the Lead Scraper backend. Please try again.');
@@ -3630,7 +4188,7 @@
   function startLivePolling(job) {
     if (scraperPollTimer) return;
     if (!scraperPageActive()) return;
-    setScraperBadge('pending', 'Live extraction in progress…');
+    setScraperBadge('pending', 'Starting cloud scraper…');
     pollScraperStatus();
     scraperPollTimer = window.setInterval(pollScraperStatus, LEAD_POLL_MS);
   }
@@ -3642,7 +4200,8 @@
     if (scraperIsComplete(job) && !force) return;
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = controller ? window.setTimeout(function () { controller.abort(); }, 8000) : null;
+    /* 12s: brief VPS CPU spikes must not abort a perfectly good poll. */
+    const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
 
     fetch(LEAD_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
       mode: 'cors',
@@ -3731,9 +4290,19 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
+        /* Live active search term + elapsed timer for that term. */
+        if (data.active_query != null) {
+          job.active_query = String(data.active_query);
+        }
+        const queryElapsed = toNumber(data.query_elapsed_s);
+        if (queryElapsed !== null) {
+          job.query_elapsed_s = Math.max(0, queryElapsed);
+        }
+
         const status = String(data.status || job.status || 'running').toLowerCase();
         job.status = status;
         job.status_warned = false;
+        job.poll_errors = 0;
 
         if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
           failScraperJob(data.error ? String(data.error) : '');
@@ -3752,8 +4321,13 @@
           return;
         }
 
-        if (status === 'queued' || status === 'pending') {
-          setScraperBadge('pending', 'Queued — waiting for worker slot…');
+        if (
+          status === 'queued' ||
+          status === 'pending' ||
+          status === 'starting' ||
+          String(data.phase || '').toLowerCase() === 'starting'
+        ) {
+          setScraperBadge('pending', 'Starting cloud scraper…');
         } else {
           setScraperBadge(
             'pending',
@@ -3767,14 +4341,27 @@
       })
       .catch(function (err) {
         if (timer) window.clearTimeout(timer);
+
+        /* Transient spikes are normal. Keep the last good status on the first
+           two failures and only surface "Reconnecting…" after three. */
+        const failures = (Number(job && job.poll_errors) || 0) + 1;
+        if (job) job.poll_errors = failures;
+
         console.warn(
-          '[Agentic] Lead scraper status check failed — retrying live status.',
+          '[LiteWork] Lead scraper status check failed (' + failures + ').',
           err && err.message ? err.message : err
         );
-        if (job && !job.status_warned) {
-          job.status_warned = true;
+
+        if (job) {
+          if (failures >= 3) {
+            setScraperBadge('pending', 'Reconnecting…');
+          } else {
+            const phase = String(job.status || '').toLowerCase();
+            if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
+              setScraperBadge('pending', 'Starting cloud scraper…');
+            }
+          }
           saveState();
-          setScraperBadge('pending', 'Live status unavailable — retrying…');
         }
         updateScraperProgress();
       });
@@ -3848,7 +4435,7 @@
           const anchor = document.createElement('a');
           anchor.href = objectUrl;
           anchor.download =
-            'agentic-leads-' + slug(job.country || 'global') + '-' + job.job_id + '.xlsx';
+            'litework-leads-' + slug(job.country || 'global') + '-' + job.job_id + '.xlsx';
           document.body.appendChild(anchor);
           anchor.click();
           document.body.removeChild(anchor);
@@ -3856,7 +4443,7 @@
           toast('Excel download ready.', 'success');
         })
         .catch(function (err) {
-          console.warn('[Agentic] Authenticated download failed.', err);
+          console.warn('[LiteWork] Authenticated download failed.', err);
           toast('Could not download the Excel file. Please try again.', 'warn');
         });
       return;

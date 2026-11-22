@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agentic — Autonomous Pre-Market Intelligence</title>
-  <meta name="description" content="Agentic deploys autonomous AI agents: a 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go from $5 USD." />
+  <title>LiteWork — Your Low-Cost AI Workforce</title>
+  <meta name="description" content="LiteWork gives you low-cost AI workers pay-as-you-go: a 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Credits from $5 USD, never expire." />
   <meta name="theme-color" content="#0F172A" />
-  <meta property="og:title" content="Agentic — Autonomous Pre-Market Intelligence" />
-  <meta property="og:description" content="Two live AI agents. A 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go." />
+  <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
+  <meta property="og:description" content="Two live AI workers. A 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=13" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M8 22.5 L13.5 15.5 L18 19.5 L24 9.5' fill='none' stroke='%2322D3EE' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='24' cy='9.5' r='2.4' fill='%236366F1'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M19.6 5.8 10.4 17.4h4.9l-2.3 8.8 9.4-11.9h-4.9z' fill='%2322D3EE'/%3E%3Crect x='7.4' y='21.6' width='3.6' height='3.6' rx='1.1' fill='%236366F1'/%3E%3C/svg%3E" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -42,6 +42,14 @@
         <stop offset="0" stop-color="#F59E0B" />
         <stop offset="1" stop-color="#FCD34D" />
       </linearGradient>
+      <!-- LiteWork mark: lightweight modular tile + geometric spark bolt -->
+      <symbol id="liteworkMark" viewBox="0 0 32 32">
+        <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#brandGrad)" />
+        <path d="M19.6 5.8 10.4 17.4h4.9l-2.3 8.8 9.4-11.9h-4.9l2.1-8.5z" fill="#07131F" />
+        <rect x="7.4" y="21.6" width="3.6" height="3.6" rx="1.1" fill="#07131F" opacity="0.72" />
+        <rect x="7.4" y="26.2" width="3.6" height="2.4" rx="1" fill="#07131F" opacity="0.42" />
+        <rect x="22.4" y="23.4" width="3.2" height="3.2" rx="1" fill="#07131F" opacity="0.28" />
+      </symbol>
       <filter id="mascotGlow" x="-60%" y="-60%" width="220%" height="220%">
         <feGaussianBlur stdDeviation="2.4" result="blur" />
         <feMerge>
@@ -56,21 +64,19 @@
        Sticky glass navbar
        ====================================================================== -->
   <header class="navbar" id="navbar">
-    <div class="container nav-inner">
-      <a class="brand" href="#home" aria-label="Agentic — home">
+    <div class="nav-inner">
+      <a class="brand" href="#home" aria-label="LiteWork — home">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="26" height="26">
-            <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#brandGrad)" />
-            <path d="M8 22.5 L13.5 15.5 L18 19.5 L24 9.5" fill="none" stroke="#07131F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
-            <circle cx="24" cy="9.5" r="2.4" fill="#07131F" />
+          <svg viewBox="0 0 32 32" width="28" height="28">
+            <use href="#liteworkMark"></use>
           </svg>
         </span>
-        <span class="brand-text">Agentic</span>
+        <span class="brand-text">LiteWork</span>
       </a>
 
       <nav class="nav-links" id="navLinks" aria-label="Primary">
         <a href="#home" data-route="home">Home</a>
-        <a href="#agents" data-route="agents">Agentic Agent</a>
+        <a href="#agents" data-route="agents">AI Agents</a>
         <a href="#plans" data-route="plans">Manage My Plan</a>
         <a href="#about" data-route="about">About Us</a>
         <a class="btn btn-primary btn-sm nav-cta-mobile" href="#plans">Top Up Credits</a>
@@ -97,7 +103,6 @@
               <span class="user-avatar" id="navAvatar" aria-hidden="true"></span>
               <span class="user-meta">
                 <strong id="navUserName">Account</strong>
-                <span id="navUserEmail">Signed in</span>
               </span>
               <span class="user-credit-badge" id="navCreditBadge">
                 Credits <strong data-credit-count>0</strong>
@@ -120,16 +125,16 @@
           <div class="hero-copy">
             <span class="badge-live">
               <span class="live-dot" aria-hidden="true"></span>
-              <strong>2 Live Agents Ready</strong>
+              <strong>2 AI workers ready</strong>
               <span class="badge-divider" aria-hidden="true">|</span>
-              Pay-As-You-Go Credits
+              Pay-as-you-go credits
             </span>
 
-            <h1>Your AI back office,<br /><span class="text-grad">on autopilot.</span></h1>
+            <h1>Your low-cost AI workforce,<br /><span class="text-grad">on demand.</span></h1>
 
             <p class="lead">
-              Specialised autonomous agents for market intel and B2B leads — pay per run with
-              credits.
+              Hire specialized digital workers pay-as-you-go with credits — no bloated retainers
+              or monthly lock-in.
             </p>
 
             <div class="hero-cta">
@@ -140,7 +145,7 @@
             <ul class="hero-trust">
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                2 live agents
+                2 AI workers live
               </li>
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -157,7 +162,7 @@
             <div class="preview-shell">
               <div class="preview-head">
                 <span class="preview-label"><span class="live-dot" aria-hidden="true"></span> Live output preview</span>
-                <span class="mini-pill">2 agents</span>
+                <span class="mini-pill">2 workers</span>
               </div>
 
               <div class="home-tabs" role="tablist" aria-label="Agent output preview">
@@ -165,6 +170,7 @@
                 <button type="button" class="home-tab" data-home-tab="scraper" role="tab" aria-selected="false">B2B Lead Scraper</button>
               </div>
 
+              <div class="preview-body">
               <div class="home-pane" data-home-pane="stock">
                 <div class="preview-subhead">
                   <span class="preview-label">07:00 MYT · <span id="nextBriefIn">next brief soon</span></span>
@@ -203,11 +209,12 @@
                       </tbody>
                     </table>
                   </div>
-                  <p class="preview-fine">5 of 1,000 rows · downloads as .xlsx</p>
+                  <p class="preview-fine">5 of 500 rows · downloads as .xlsx</p>
                 </div>
               </div>
+              </div>
             </div>
-            <p class="preview-note">Generated by live agents — switch tabs to preview each output.</p>
+            <p class="preview-note">Generated by live AI workers — switch tabs to preview each output.</p>
           </div>
         </div>
       </div>
@@ -300,8 +307,8 @@
          ==================================================================== -->
     <section class="view" data-view="agents" id="view-agents">
       <div class="container page-head">
-        <span class="eyebrow">Agentic Agent marketplace</span>
-        <h1>Two live agents. Zero busywork.</h1>
+        <span class="eyebrow">LiteWork AI workers</span>
+        <h1>Two live workers. Zero busywork.</h1>
         <p>Pay per run with credits. No seats, no contracts.</p>
       </div>
 
@@ -562,12 +569,31 @@
       </div>
 
       <div class="container">
-        <div class="panel subs-panel">
-          <div class="panel-head">
-            <h2>Active subscriptions</h2>
-            <p>Each activation runs its own 7-day window.</p>
+        <div class="panel history-panel" id="historyPanel">
+          <div class="panel-head row-head">
+            <div>
+              <h2>Subscriptions and History</h2>
+              <p>Every run, grouped by worker — pulled live from your LiteWork account.</p>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="historyRefresh">Refresh</button>
           </div>
-          <div id="activeSubsList"></div>
+
+          <div class="history-tabs" role="tablist" aria-label="Agent history">
+            <button type="button" class="history-tab is-active" data-history-tab="stock" role="tab" aria-selected="true">
+              Stock Market News Agent
+            </button>
+            <button type="button" class="history-tab" data-history-tab="b2b" role="tab" aria-selected="false">
+              B2B Lead Scraper
+            </button>
+          </div>
+
+          <div class="history-pane" data-history-pane="stock" id="historyStock" aria-live="polite">
+            <p class="empty-note">Log in to load your stock brief subscriptions.</p>
+          </div>
+
+          <div class="history-pane" data-history-pane="b2b" id="historyB2B" aria-live="polite" hidden>
+            <p class="empty-note">Log in to load your B2B lead scraping jobs.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -577,27 +603,48 @@
          ==================================================================== -->
     <section class="view" data-view="about" id="view-about">
       <div class="container page-head">
-        <span class="eyebrow">About Agentic</span>
-        <h1>The analyst you can't afford to hire.</h1>
-        <p>Built by two traders who were tired of 6am chart scrolling.</p>
+        <span class="eyebrow">About LiteWork</span>
+        <h1>Digital workers, priced like a coffee run.</h1>
+        <p>Low-cost AI help for everyday businesses — without the salaries or the subscriptions.</p>
       </div>
 
       <div class="container about-grid">
         <div class="about-copy panel">
-          <h2>Our story</h2>
+          <h2>Our purpose</h2>
           <p>
-            The data that mattered lived in five places at five different times. By the time we
-            assembled it, the pre-market window was gone.
+            LiteWork exists for the people who run lean: solo founders, small teams and busy
+            individuals who need real analytical and research work done, but cannot justify a
+            full-time hire — and are tired of stacking expensive monthly SaaS subscriptions for
+            tools they only touch once or twice a week.
           </p>
           <p>
-            So we automated it: nightly scripts became autonomous agents that do the boring,
-            disciplined reading for us — every morning at <strong>07:00 MYT</strong>.
+            So we built something simpler: a small roster of specialized <strong>digital workers</strong>
+            you hire by the task. A morning market brief. A clean list of B2B leads. Real output,
+            delivered to your inbox, for a few dollars.
+          </p>
+
+          <h2 class="mt">How LiteWork helps</h2>
+          <p>
+            Everything runs on <strong>simple credits that never expire</strong>. You only pay for the
+            exact work you need — whether that is a 7-day morning stock briefing for one ticker, or a
+            50–500 lead B2B Excel list pulled from your own search terms. No minimum term, no
+            auto-renewal, and no credits burned on months you don't use us.
           </p>
           <p>
-            Agentic is pay-as-you-go on purpose. Buy credits, deploy an agent, get results.
+            Top up once, then deploy a worker whenever a task lands on your desk. Unused credits sit
+            quietly in your wallet until you need them.
           </p>
-          <h2 class="mt">Why pre-market?</h2>
-          <p>Briefs that arrive after the open are entertainment. Ours arrive before the answer is free.</p>
+
+          <h2 class="mt">Built for real output</h2>
+          <p>
+            You should not need prompt engineering to get value from AI. Pick your tickers or paste
+            your search terms, choose the columns you want, and press go — configuration takes about
+            30 seconds. The worker does the reading, the scraping and the formatting, then delivers
+            clean, ready-to-use results straight to your inbox.
+          </p>
+          <p>
+            No dashboards to babysit. No exports to clean up. Just the finished work.
+          </p>
         </div>
 
         <aside class="about-aside">
@@ -612,7 +659,7 @@
           </div>
           <div class="aside-card aside-card-accent">
             <h3>Delivery promise</h3>
-            <p><strong>07:00 MYT</strong>, every day of your window. Late feed? The agent waits for verified candles instead of guessing.</p>
+            <p><strong>07:00 MYT</strong>, every day of your brief window — and your .xlsx lands in your inbox the moment it is ready. Late feed? The worker waits for verified candles instead of guessing.</p>
           </div>
         </aside>
       </div>
@@ -674,7 +721,7 @@
             <details class="faq-item">
               <summary>How does the Lead Scraper deliver?</summary>
               <div class="faq-body">
-                <p>It searches your 10 terms, stops at 1,000 unique leads, and builds an .xlsx with only the columns you picked.</p>
+                <p>It searches your terms, stops at your chosen lead target (50–500), and builds an .xlsx with only the columns you picked.</p>
               </div>
             </details>
             <details class="faq-item">
@@ -696,7 +743,7 @@
       <div class="container">
         <div class="disclaimer-card">
           <h3>Financial disclaimer</h3>
-          <p>For informational and educational tracking purposes only. Not financial advice. Agentic Labs is not a broker, dealer, investment adviser or fiduciary.</p>
+          <p>For informational and educational tracking purposes only. Not financial advice. LiteWork Labs is not a broker, dealer, investment adviser or fiduciary.</p>
         </div>
       </div>
     </section>
@@ -713,7 +760,7 @@
     <section class="view" data-view="scraper-results" id="view-scraper-results">
       <div class="container">
         <a class="back-link" href="#agents">
-          <span aria-hidden="true">←</span> Back to Agentic Agent
+          <span aria-hidden="true">←</span> Back to AI Agents
         </a>
 
         <div class="page-head configure-head">
@@ -743,6 +790,7 @@
                   <span id="ringCount">0 / 0 leads scraped · 0 / 0 filled</span>
                 </div>
               </div>
+              <p class="ring-active" id="ringActive" hidden></p>
               <span class="webhook-badge" id="scraperStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
                 <span class="webhook-text">Connecting to live status…</span>
@@ -824,7 +872,7 @@
           <dl class="summary-grid" id="successSummary"></dl>
 
           <div class="success-actions">
-            <a class="btn btn-ghost" href="#agents">Return to Agentic Agent</a>
+            <a class="btn btn-ghost" href="#agents">Return to AI Agents</a>
             <a class="btn btn-primary" href="#plans">Top Up More Credits</a>
           </div>
 
@@ -835,7 +883,7 @@
           <h1>No activation to show yet.</h1>
           <p>Activate the Stock Market News Agent to start receiving 07:00 MYT briefs.</p>
           <div class="success-actions">
-            <a class="btn btn-primary" href="#agents">Browse Agentic Agent</a>
+            <a class="btn btn-primary" href="#agents">Browse AI Workers</a>
             <a class="btn btn-ghost" href="#plans">Buy credits</a>
           </div>
         </div>
@@ -849,24 +897,22 @@
   <footer class="site-footer">
     <div class="container footer-grid">
       <div class="footer-brand">
-        <a class="brand" href="#home" aria-label="Agentic — home">
+        <a class="brand" href="#home" aria-label="LiteWork — home">
           <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" width="26" height="26">
-              <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#brandGrad)" />
-              <path d="M8 22.5 L13.5 15.5 L18 19.5 L24 9.5" fill="none" stroke="#07131F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" />
-              <circle cx="24" cy="9.5" r="2.4" fill="#07131F" />
+            <svg viewBox="0 0 32 32" width="28" height="28">
+              <use href="#liteworkMark"></use>
             </svg>
           </span>
-          <span class="brand-text">Agentic</span>
+          <span class="brand-text">LiteWork</span>
         </a>
-        <p>Autonomous agents for pre-market intel and B2B lead extraction.</p>
-        <p class="footer-tag">Static site · zero dependencies · GitHub Pages ready</p>
+        <p>Low-cost AI workers for pre-market intel and B2B lead extraction.</p>
+        <p class="footer-tag">Pay-as-you-go credits · Static site · zero dependencies</p>
       </div>
 
       <div class="footer-col">
         <h3>Product</h3>
         <a href="#home">Home</a>
-        <a href="#agents">Agentic Agent</a>
+        <a href="#agents">AI Agents</a>
         <a href="#plans">Manage My Plan</a>
         <a href="#about">About Us</a>
       </div>
@@ -883,7 +929,7 @@
     </div>
 
     <div class="container footer-bottom">
-      <p>© <span id="year">2026</span> Agentic Labs. All rights reserved.</p>
+      <p>© <span id="year">2026</span> LiteWork Labs. All rights reserved.</p>
       <p class="disclaimer">For informational and educational tracking purposes only. Not financial advice.</p>
     </div>
   </footer>
@@ -935,7 +981,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=13"></script>
-  <script src="app.js?v=13"></script>
+  <script src="config.js?v=14"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

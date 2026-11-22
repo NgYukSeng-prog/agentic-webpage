@@ -1,4 +1,4 @@
-# Agentic — Autonomous Pre-Market Intelligence
+# LiteWork — Your Low-Cost AI Workforce
 
 A production-ready, **zero-dependency** static SaaS web app for a marketplace of autonomous
 AI agents. Built with plain HTML, CSS and vanilla JavaScript — no build step, no npm, no
@@ -11,7 +11,6 @@ Two agents are live:
 - **B2B Lead Scraper Agent** — up to 500 verified B2B leads from up to 10 search terms, exported
   to `.xlsx`. `1 term = 50 leads = 3 credits`, with a live circular ring scaled to the job
   target, 25-row preview and client-side demo export when the backend is offline.
-======>>>>>>> REPLACE
 
 ---
 
@@ -302,6 +301,6 @@ reset anymore: the server owns the wallet.
 
 ## 10. Disclaimer
 
-For informational and educational tracking purposes only. **Not financial advice.** Agentic
+For informational and educational tracking purposes only. **Not financial advice.** LiteWork
 Labs is not a broker, dealer, investment adviser or fiduciary. Market data can be delayed,
 incomplete or revised.

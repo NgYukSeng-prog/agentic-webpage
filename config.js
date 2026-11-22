@@ -1,5 +1,5 @@
 /* ============================================================================
-   Agentic — Centralized configuration
+   LiteWork — Centralized configuration
    ----------------------------------------------------------------------------
    This is the ONLY file you need to touch to wire the app to your backend.
 
