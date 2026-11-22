@@ -661,6 +661,7 @@
     state.email = '';
     state.name = '';
     historyState = { loaded: false, loading: false, stock: [], b2b: [] };
+    historyPages = { stock: 1, b2b: 1 };
     stopScraperTimers();
     renderAuthUI();
     syncCreditUI();
@@ -2094,7 +2095,9 @@
   /* ---------------- Subscriptions & run history (per agent) --------------
      Loaded from GET /webhook/account/history with the session bearer token.
      Both agents are kept in separate lists so the UI can render clean tabs. */
+  const HISTORY_PAGE_SIZE = 5;
   let historyState = { loaded: false, loading: false, stock: [], b2b: [] };
+  let historyPages = { stock: 1, b2b: 1 };
 
   function historySource(body) {
     if (body && typeof body === 'object' && body.data && typeof body.data === 'object') {
@@ -2352,17 +2355,49 @@
     );
   }
 
+  /* 5 items per page, clamped to the current list length. */
+  function historyPageSlice(kind, list) {
+    const pages = Math.max(1, Math.ceil(list.length / HISTORY_PAGE_SIZE));
+    const page = clamp(Number(historyPages[kind]) || 1, 1, pages);
+    historyPages[kind] = page;
+    return {
+      page: page,
+      pages: pages,
+      items: list.slice((page - 1) * HISTORY_PAGE_SIZE, page * HISTORY_PAGE_SIZE)
+    };
+  }
+
+  function renderHistoryPager(kind, label, page, pages, total) {
+    if (total <= HISTORY_PAGE_SIZE) return '';
+    const atStart = page <= 1;
+    const atEnd = page >= pages;
+    return (
+      '<nav class="hist-pager" aria-label="' + escapeHtml(label) + ' pagination">' +
+      '<button type="button" class="btn btn-ghost btn-sm hist-pager-btn" data-hist-page="' + kind +
+      '" data-hist-dir="prev"' + (atStart ? ' disabled aria-disabled="true"' : '') +
+      '>← Previous</button>' +
+      '<span class="hist-pager-info" aria-live="polite">Page ' + page + ' of ' + pages + '</span>' +
+      '<button type="button" class="btn btn-ghost btn-sm hist-pager-btn" data-hist-page="' + kind +
+      '" data-hist-dir="next"' + (atEnd ? ' disabled aria-disabled="true"' : '') +
+      '>Next →</button>' +
+      '</nav>'
+    );
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
     const stockCount = historyState.stock.length;
     const b2bCount = historyState.b2b.length;
+    const stockPage = historyPageSlice('stock', historyState.stock);
+    const b2bPage = historyPageSlice('b2b', historyState.b2b);
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
         ? '<div class="hist-list">' +
-          historyState.stock.map(renderStockHistoryCard).join('') +
-          '</div>'
+          stockPage.items.map(renderStockHistoryCard).join('') +
+          '</div>' +
+          renderHistoryPager('stock', 'Stock subscriptions', stockPage.page, stockPage.pages, stockCount)
         : '<div class="hist-empty">' +
           '<p class="empty-note">No stock brief subscriptions yet. Subscribe to a ticker and your first brief lands in your inbox at 07:00 MYT.</p>' +
           '<a class="btn btn-primary btn-sm" href="#agents">Subscribe to Stock Brief</a>' +
@@ -2372,8 +2407,9 @@
     if (b2bPane) {
       b2bPane.innerHTML = b2bCount
         ? '<div class="hist-list">' +
-          historyState.b2b.map(renderB2BHistoryCard).join('') +
-          '</div>'
+          b2bPage.items.map(renderB2BHistoryCard).join('') +
+          '</div>' +
+          renderHistoryPager('b2b', 'B2B jobs', b2bPage.page, b2bPage.pages, b2bCount)
         : '<div class="hist-empty">' +
           '<p class="empty-note">No B2B lead scraping jobs yet. Run the scraper and the .xlsx history will appear here.</p>' +
           '<a class="btn btn-primary btn-sm" href="#agents">Run B2B Lead Scraper</a>' +
@@ -2404,12 +2440,19 @@
     $$('[data-hist-group]').forEach(function (group) {
       group.hidden = filter !== 'all' && group.getAttribute('data-hist-group') !== filter;
     });
+
+    /* Switching agent filters always returns every list to page 1. */
+    historyPages = { stock: 1, b2b: 1 };
+    if (isLoggedIn() && !historyState.loading) paintHistory();
   }
 
   function renderHistory(force) {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
     if (!stockPane && !b2bPane) return;
+
+    /* Refresh (and every fresh fetch) starts from page 1. */
+    if (force) historyPages = { stock: 1, b2b: 1 };
 
     if (!isLoggedIn()) {
       historyState = { loaded: false, loading: false, stock: [], b2b: [] };
@@ -3341,6 +3384,7 @@
     state.lastSubscription = null;
     state.scraperJob = null;
     historyState = { loaded: false, loading: false, stock: [], b2b: [] };
+    historyPages = { stock: 1, b2b: 1 };
     saveState();
 
     clearAuthSession();
@@ -3526,6 +3570,20 @@
     const historyPanel = $('#historyPanel');
     if (historyPanel) {
       historyPanel.addEventListener('click', function (event) {
+        const pageBtn = event.target.closest('[data-hist-page]');
+        if (pageBtn) {
+          const kind = pageBtn.getAttribute('data-hist-page');
+          const dir = pageBtn.getAttribute('data-hist-dir');
+          if (kind === 'stock' || kind === 'b2b') {
+            const total = kind === 'stock' ? historyState.stock.length : historyState.b2b.length;
+            const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
+            const current = clamp(Number(historyPages[kind]) || 1, 1, pages);
+            historyPages[kind] = clamp(current + (dir === 'next' ? 1 : -1), 1, pages);
+            paintHistory();
+          }
+          return;
+        }
+
         const login = event.target.closest('[data-history-login]');
         if (login) {
           openAuthModal('login', 'Log in to load your subscriptions and run history.');

@@ -572,7 +572,16 @@ ol {
 .brand-mark {
   display: grid;
   place-items: center;
-  filter: drop-shadow(0 6px 14px rgba(34, 211, 238, 0.35));
+  filter: drop-shadow(0 6px 14px rgba(34, 211, 238, 0.4))
+    drop-shadow(0 2px 7px rgba(99, 102, 241, 0.45));
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.35s ease;
+}
+
+.brand:hover .brand-mark,
+.brand:focus-visible .brand-mark {
+  transform: translateY(-1px) rotate(-6deg) scale(1.07);
+  filter: drop-shadow(0 9px 20px rgba(34, 211, 238, 0.5))
+    drop-shadow(0 3px 12px rgba(168, 85, 247, 0.55));
 }
 
 .brand-text {
@@ -6017,6 +6026,51 @@ table.leads-table {
 /* Account Settings → history shortcut */
 .account-history-btn {
   margin: 14px 0 18px;
+}
+
+/* History pagination (5 items per page) */
+.hist-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.hist-pager-info {
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: #64748b;
+}
+
+.hist-pager .btn {
+  font-size: 0.78rem;
+  padding: 7px 12px;
+}
+
+.hist-pager .btn[disabled] {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Second section on #plans (Manage My Plan sits below history) */
+.plans-section-head {
+  padding-top: 10px;
+  padding-bottom: 24px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  margin-top: 8px;
+}
+
+.page-head-title {
+  font-size: clamp(1.7rem, 3.6vw, 2.35rem);
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin-bottom: 10px;
 }
 
 .hist-list {
