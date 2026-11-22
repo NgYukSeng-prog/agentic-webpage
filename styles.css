@@ -6155,6 +6155,28 @@ table.leads-table {
   margin-top: 12px;
 }
 
+/* Dark, readable action buttons on the light history cards */
+.hist-actions .btn-ghost {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  font-weight: 700;
+}
+
+.hist-actions .btn-ghost:hover:not([disabled]) {
+  color: #0f172a;
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.hist-actions .btn-ghost[disabled] {
+  color: #94a3b8;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .hist-pill-row {
   display: flex;
   flex-wrap: wrap;
