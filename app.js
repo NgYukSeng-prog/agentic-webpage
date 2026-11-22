@@ -82,6 +82,45 @@
     : [];
   const RING_LENGTH = 364.42; // 2 * PI * 58
 
+  /* --- Invoice OCR agent (3rd live worker) ------------------------------- */
+  const INV_AGENT_ID = CFG.INVOICE_OCR_AGENT_ID || 'invoice-ocr';
+  const INV_AGENT_NAME = CFG.INVOICE_OCR_AGENT_NAME || 'Invoice OCR Agent';
+  const INV_TIER_1_MAX = toPositiveInt(CFG.INVOICE_OCR_TIER_1_MAX, 5);
+  const INV_TIER_1_CREDITS = toPositiveInt(CFG.INVOICE_OCR_TIER_1_CREDITS, 5);
+  const INV_TIER_2_MAX = toPositiveInt(CFG.INVOICE_OCR_TIER_2_MAX, 15);
+  const INV_TIER_2_CREDITS = toPositiveInt(CFG.INVOICE_OCR_TIER_2_CREDITS, 10);
+  const INV_MAX_FILE_BYTES = (Number(CFG.INVOICE_OCR_MAX_FILE_MB) || 10) * 1024 * 1024;
+  const INV_POLL_MS = toPositiveInt(CFG.INVOICE_OCR_POLL_MS, 2500);
+  const INV_START_URL = CFG.INVOICE_OCR_START_URL || '';
+  const INV_STATUS_URL = CFG.INVOICE_OCR_STATUS_URL || '';
+  const INV_DOWNLOAD_URL = CFG.INVOICE_OCR_DOWNLOAD_URL || '';
+  const INV_ACCEPT =
+    CFG.INVOICE_OCR_ACCEPT || '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp';
+  const INV_COLUMNS =
+    Array.isArray(CFG.INVOICE_OCR_COLUMNS) && CFG.INVOICE_OCR_COLUMNS.length
+      ? CFG.INVOICE_OCR_COLUMNS
+      : [
+          'Source File',
+          'Document Type',
+          'Invoice Number',
+          'Invoice Date',
+          'Due Date',
+          'Payment Terms',
+          'Supplier Name',
+          'Supplier Tax/Reg ID',
+          'Buyer Name',
+          'PO / Ref No.',
+          'Currency',
+          'Subtotal',
+          'Tax Type & Rate',
+          'Tax Amount',
+          'Discount / Rounding',
+          'Grand Total',
+          'Payment Status / Method',
+          'Confidence / Notes'
+        ];
+  const INV_SHEET2_NOTE = 'Sheet 2: Itemized Line Items';
+
   function toPositiveInt(value, fallback) {
     const n = Number(value);
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
@@ -282,11 +321,12 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — Stock Brief and B2B Lead Scraper',
+    agents: 'AI Agents — Stock Brief, B2B Leads and Invoice OCR',
     plans: 'Manage My Plan — Credits & History',
     about: 'About Us — LiteWork',
     configure: 'Configure Your Worker — LiteWork',
     'scraper-results': 'Scraper Results — LiteWork',
+    'invoice-results': 'Invoice Results — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -299,7 +339,8 @@
       name: '',
       subscriptions: [],
       lastSubscription: null,
-      scraperJob: null
+      scraperJob: null,
+      invoiceJob: null
     };
   }
 
@@ -327,6 +368,10 @@
           typeof parsed.scraperJob === 'object' &&
           parsed.scraperJob.mode !== 'demo'
             ? parsed.scraperJob
+            : null,
+        invoiceJob:
+          parsed.invoiceJob && typeof parsed.invoiceJob === 'object'
+            ? parsed.invoiceJob
             : null
       };
     } catch (err) {
@@ -341,7 +386,8 @@
         JSON.stringify({
           subscriptions: state.subscriptions || [],
           lastSubscription: state.lastSubscription || null,
-          scraperJob: state.scraperJob || null
+          scraperJob: state.scraperJob || null,
+          invoiceJob: state.invoiceJob || null
         })
       );
     } catch (err) {
@@ -660,8 +706,8 @@
     state.credits = 0;
     state.email = '';
     state.name = '';
-    historyState = { loaded: false, loading: false, stock: [], b2b: [] };
-    historyPages = { stock: 1, b2b: 1 };
+    historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
+    historyPages = { stock: 1, b2b: 1, invoice: 1 };
     stopScraperTimers();
     renderAuthUI();
     syncCreditUI();
@@ -687,6 +733,7 @@
     window.setTimeout(function () {
       if (gate.action === 'stock') openStockModal();
       else if (gate.action === 'scraper') openScraperModal();
+      else if (gate.action === 'invoice') openInvoiceModal();
       else if (gate.action === 'checkout') openCheckout(gate.packId);
       else if (gate.action === 'account') openAccountModal();
     }, 180);
@@ -1725,7 +1772,16 @@
   }
 
   /* ============================ D. ROUTER ================================= */
-  const ROUTES = ['home', 'agents', 'plans', 'about', 'configure', 'scraper-results', 'success'];
+  const ROUTES = [
+    'home',
+    'agents',
+    'plans',
+    'about',
+    'configure',
+    'scraper-results',
+    'invoice-results',
+    'success'
+  ];
 
   function currentRoute() {
     const raw = String(window.location.hash || '').replace(/^#\/?/, '');
@@ -1742,7 +1798,11 @@
 
     $$('.nav-links a[data-route]').forEach(function (link) {
       const r = link.getAttribute('data-route');
-      const agentRoutes = route === 'configure' || route === 'success' || route === 'scraper-results';
+      const agentRoutes =
+        route === 'configure' ||
+        route === 'success' ||
+        route === 'scraper-results' ||
+        route === 'invoice-results';
       const active = r === route || (agentRoutes && r === 'agents');
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
@@ -1759,6 +1819,7 @@
 
     /* Keep the live job poller running between #scraper-results and #agents. */
     if (route !== 'agents' && route !== 'scraper-results') stopScraperTimers();
+    if (route !== 'invoice-results') stopInvoiceTimer();
 
     if (route === 'configure') {
       /* #configure is now a modal: show #agents underneath, then open it. */
@@ -1770,6 +1831,7 @@
     if (route === 'plans') renderPlans();
     if (route === 'success') renderSuccess();
     if (route === 'scraper-results') renderScraperResults();
+    if (route === 'invoice-results') renderInvoiceResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -2096,8 +2158,8 @@
      Loaded from GET /webhook/account/history with the session bearer token.
      Both agents are kept in separate lists so the UI can render clean tabs. */
   const HISTORY_PAGE_SIZE = 5;
-  let historyState = { loaded: false, loading: false, stock: [], b2b: [] };
-  let historyPages = { stock: 1, b2b: 1 };
+  let historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
+  let historyPages = { stock: 1, b2b: 1, invoice: 1 };
 
   function historySource(body) {
     if (body && typeof body === 'object' && body.data && typeof body.data === 'object') {
@@ -2265,6 +2327,30 @@
     });
   }
 
+  function normalizeInvoiceJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const filesRaw = firstValue(
+      job,
+      ['files_count', 'total_files', 'file_count', 'files_total', 'files'],
+      0
+    );
+    const files = Array.isArray(filesRaw) ? filesRaw.length : Number(filesRaw) || 0;
+
+    return {
+      job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      files: files,
+      processed:
+        Number(firstValue(job, ['files_processed', 'processed_files', 'completed_files'], 0)) || 0,
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
+      status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
+      created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
+      downloadReady:
+        job.download_ready === true ||
+        job.download_ready === 'true' ||
+        job.download_ready === 1
+    };
+  }
+
   function renderStockHistoryCard(sub) {
     const validity = subscriptionValidity(sub.expiresAt, sub.startedAt);
     const badgeClass =
@@ -2384,13 +2470,74 @@
     );
   }
 
+  function renderInvoiceHistoryCard(job) {
+    const labels = {
+      completed: 'Completed',
+      complete: 'Completed',
+      success: 'Completed',
+      done: 'Completed',
+      running: 'Running',
+      processing: 'Running',
+      ocr: 'Running',
+      queued: 'Queued',
+      pending: 'Queued',
+      starting: 'Queued',
+      failed: 'Failed',
+      error: 'Failed',
+      cancelled: 'Cancelled',
+      canceled: 'Cancelled'
+    };
+    const label = labels[job.status] || (job.status ? job.status : 'Unknown');
+    const ok = label === 'Completed';
+    const tone = ok
+      ? 'ok'
+      : label === 'Failed' || label === 'Cancelled'
+      ? 'bad'
+      : label === 'Running' || label === 'Queued'
+      ? 'warn'
+      : 'muted';
+    const fileText = job.files
+      ? job.files + ' file' + (job.files === 1 ? '' : 's')
+      : '—';
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Invoice OCR Agent</strong>' +
+      '<span class="hist-badge ' + tone + '">' + escapeHtml(label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(fileText) + ' · ' + escapeHtml(creditText) + '</p>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Files</dt><dd>' + escapeHtml(fileText) + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Created</dt><dd>' +
+      escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
+      '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-invoice-resume="' +
+      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') +
+      '>View Results</button>' +
+      (job.downloadReady && job.job_id
+        ? '<button type="button" class="btn btn-primary btn-sm" data-invoice-download="' +
+          escapeHtml(job.job_id) + '">Download .xlsx</button>'
+        : '') +
+      '</div>' +
+      '</article>'
+    );
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
+    const invoicePane = $('#historyInvoice');
     const stockCount = historyState.stock.length;
     const b2bCount = historyState.b2b.length;
+    const invoiceCount = historyState.invoice.length;
     const stockPage = historyPageSlice('stock', historyState.stock);
     const b2bPage = historyPageSlice('b2b', historyState.b2b);
+    const invoicePage = historyPageSlice('invoice', historyState.invoice);
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
@@ -2416,10 +2563,24 @@
           '</div>';
     }
 
+    if (invoicePane) {
+      invoicePane.innerHTML = invoiceCount
+        ? renderHistoryPager('invoice', 'Invoice OCR jobs', invoicePage.page, invoicePage.pages, invoiceCount) +
+          '<div class="hist-list">' +
+          invoicePage.items.map(renderInvoiceHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No invoice OCR jobs yet. Upload a batch and the extracted Excel history will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Run Invoice OCR</a>' +
+          '</div>';
+    }
+
     /* Keep tab + section counters in sync. */
     $$('[data-hist-count]').forEach(function (el) {
       const key = el.getAttribute('data-hist-count');
-      el.textContent = String(key === 'stock' ? stockCount : b2bCount);
+      el.textContent = String(
+        key === 'stock' ? stockCount : key === 'b2b' ? b2bCount : invoiceCount
+      );
     });
     $$('[data-hist-count-label="stock"]').forEach(function (el) {
       el.textContent = stockCount + ' subscription' + (stockCount === 1 ? '' : 's');
@@ -2427,11 +2588,15 @@
     $$('[data-hist-count-label="b2b"]').forEach(function (el) {
       el.textContent = b2bCount + ' job' + (b2bCount === 1 ? '' : 's');
     });
+    $$('[data-hist-count-label="invoice"]').forEach(function (el) {
+      el.textContent = invoiceCount + ' job' + (invoiceCount === 1 ? '' : 's');
+    });
   }
 
-  /* All / stock / b2b filter for the history panel. */
+  /* All / stock / b2b / invoice filter for the history panel. */
   function applyHistoryFilter(name) {
-    const filter = name === 'stock' || name === 'b2b' ? name : 'all';
+    const filter =
+      name === 'stock' || name === 'b2b' || name === 'invoice' ? name : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
       const on = btn.getAttribute('data-history-tab') === filter;
       btn.classList.toggle('is-active', on);
@@ -2442,30 +2607,33 @@
     });
 
     /* Switching agent filters always returns every list to page 1. */
-    historyPages = { stock: 1, b2b: 1 };
+    historyPages = { stock: 1, b2b: 1, invoice: 1 };
     if (isLoggedIn() && !historyState.loading) paintHistory();
   }
 
   function renderHistory(force) {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
-    if (!stockPane && !b2bPane) return;
+    const invoicePane = $('#historyInvoice');
+    if (!stockPane && !b2bPane && !invoicePane) return;
 
     /* Refresh (and every fresh fetch) starts from page 1. */
-    if (force) historyPages = { stock: 1, b2b: 1 };
+    if (force) historyPages = { stock: 1, b2b: 1, invoice: 1 };
 
     if (!isLoggedIn()) {
-      historyState = { loaded: false, loading: false, stock: [], b2b: [] };
+      historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs and B2B lead runs are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, B2B lead runs and invoice batches are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
       if (b2bPane) b2bPane.innerHTML = loginCard;
+      if (invoicePane) invoicePane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
       $$('[data-hist-count-label="b2b"]').forEach(function (el) { el.textContent = '0 jobs'; });
+      $$('[data-hist-count-label="invoice"]').forEach(function (el) { el.textContent = '0 jobs'; });
       return;
     }
 
@@ -2478,6 +2646,7 @@
     historyState.loading = true;
     if (stockPane) stockPane.innerHTML = '<p class="empty-note">Loading your subscriptions…</p>';
     if (b2bPane) b2bPane.innerHTML = '<p class="empty-note">Loading your scraping jobs…</p>';
+    if (invoicePane) invoicePane.innerHTML = '<p class="empty-note">Loading your invoice jobs…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -2516,15 +2685,29 @@
           'b2b_jobs',
           'scrapes'
         ]);
+        const invoiceRaw = pickArray(source, [
+          'invoice_ocr',
+          'invoice_jobs',
+          'invoice_history',
+          'invoices',
+          'invoice'
+        ]);
         const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
         const stockExtra = [];
         const b2bExtra = [];
+        const invoiceExtra = [];
 
         combined.forEach(function (item) {
           const kind = String(
             (item && (item.agent || item.agent_id || item.type || item.kind)) || ''
           ).toLowerCase();
-          if (kind.indexOf('lead') !== -1 || kind.indexOf('scrap') !== -1 || kind.indexOf('b2b') !== -1) {
+          if (kind.indexOf('invoice') !== -1 || kind.indexOf('ocr') !== -1) {
+            invoiceExtra.push(item);
+          } else if (
+            kind.indexOf('lead') !== -1 ||
+            kind.indexOf('scrap') !== -1 ||
+            kind.indexOf('b2b') !== -1
+          ) {
             b2bExtra.push(item);
           } else {
             stockExtra.push(item);
@@ -2533,6 +2716,7 @@
 
         historyState.stock = stockRaw.concat(stockExtra).map(normalizeHistorySub);
         historyState.b2b = b2bRaw.concat(b2bExtra).map(normalizeHistoryJob);
+        historyState.invoice = invoiceRaw.concat(invoiceExtra).map(normalizeInvoiceJob);
 
         /* Fall back to the locally cached activations when the server has
            nothing recorded yet for this browser. */
@@ -2551,6 +2735,7 @@
 
         historyState.stock = sortNewestFirst(historyState.stock, 'startedAt');
         historyState.b2b = sortNewestFirst(historyState.b2b, 'created');
+        historyState.invoice = sortNewestFirst(historyState.invoice, 'created');
 
         historyState.loaded = true;
         paintHistory();
@@ -3374,6 +3559,7 @@
   function logoutUser() {
     stopScraperTimers();
     stopEmailTrail();
+    stopInvoiceTimer();
     pendingGate = null;
     selectedStocks = [];
     lastWebhookResult = null;
@@ -3383,8 +3569,9 @@
     state.subscriptions = [];
     state.lastSubscription = null;
     state.scraperJob = null;
-    historyState = { loaded: false, loading: false, stock: [], b2b: [] };
-    historyPages = { stock: 1, b2b: 1 };
+    state.invoiceJob = null;
+    historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
+    historyPages = { stock: 1, b2b: 1, invoice: 1 };
     saveState();
 
     clearAuthSession();
@@ -3574,8 +3761,13 @@
         if (pageBtn) {
           const kind = pageBtn.getAttribute('data-hist-page');
           const dir = pageBtn.getAttribute('data-hist-dir');
-          if (kind === 'stock' || kind === 'b2b') {
-            const total = kind === 'stock' ? historyState.stock.length : historyState.b2b.length;
+          if (kind === 'stock' || kind === 'b2b' || kind === 'invoice') {
+            const total =
+              kind === 'stock'
+                ? historyState.stock.length
+                : kind === 'b2b'
+                ? historyState.b2b.length
+                : historyState.invoice.length;
             const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
             const current = clamp(Number(historyPages[kind]) || 1, 1, pages);
             historyPages[kind] = clamp(current + (dir === 'next' ? 1 : -1), 1, pages);
@@ -3602,6 +3794,18 @@
         const download = event.target.closest('[data-history-download]');
         if (download) {
           downloadHistoryJob(download.getAttribute('data-history-download'));
+          return;
+        }
+
+        const invResume = event.target.closest('[data-invoice-resume]');
+        if (invResume) {
+          openInvoiceHistoryJob(invResume.getAttribute('data-invoice-resume'));
+          return;
+        }
+
+        const invDownload = event.target.closest('[data-invoice-download]');
+        if (invDownload) {
+          downloadInvoiceExcel(invDownload.getAttribute('data-invoice-download'));
         }
       });
     }
@@ -3649,6 +3853,33 @@
     $$('[data-open-columns]').forEach(function (btn) {
       btn.addEventListener('click', openColumnsModal);
     });
+
+    /* Invoice OCR: launch modal, resume + download */
+    $$('[data-open-invoice]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openInvoiceModal();
+      });
+    });
+
+    const invoiceResumeBtn = $('#invoiceResumeBtn');
+    if (invoiceResumeBtn) {
+      invoiceResumeBtn.addEventListener('click', function () {
+        const input = $('#invoiceResumeId');
+        const value = input ? input.value.trim() : '';
+        if (!value) {
+          toast('Enter an Invoice Job ID to check.', 'warn');
+          return;
+        }
+        openInvoiceHistoryJob(value);
+      });
+    }
+
+    const invoiceDownloadBtn = $('#invoiceDownloadBtn');
+    if (invoiceDownloadBtn) {
+      invoiceDownloadBtn.addEventListener('click', function () {
+        downloadInvoiceExcel();
+      });
+    }
 
     /* Scraper results: resume + download */
     const resumeBtn = $('#resumeBtn');
@@ -5193,6 +5424,943 @@
       { name: 'xl/_rels/workbook.xml.rels', content: workbookRels },
       { name: 'xl/worksheets/sheet1.xml', content: sheet }
     ]);
+  }
+
+  /* ========================= L. INVOICE OCR AGENT ======================== */
+  let invoiceFiles = [];
+  let invoicePollTimer = null;
+  let invoiceStarting = false;
+
+  const INVOICE_PREVIEW_COLUMNS = [
+    { label: 'Source File', keys: ['source_file', 'file_name', 'filename', 'Source File'] },
+    {
+      label: 'Invoice No',
+      keys: ['invoice_number', 'invoice_no', 'invoiceNumber', 'Invoice Number', 'Invoice No']
+    },
+    { label: 'Date', keys: ['invoice_date', 'date', 'Invoice Date', 'Date'] },
+    { label: 'Supplier', keys: ['supplier_name', 'supplier', 'Supplier Name', 'Supplier'] },
+    { label: 'Tax ID', keys: ['supplier_tax_id', 'tax_id', 'Supplier Tax/Reg ID', 'Tax ID'] },
+    { label: 'Currency', keys: ['currency', 'Currency'] },
+    { label: 'Subtotal', keys: ['subtotal', 'Subtotal'] },
+    { label: 'Tax', keys: ['tax_amount', 'tax', 'Tax Amount', 'Tax'] },
+    { label: 'Grand Total', keys: ['grand_total', 'total', 'Grand Total'] },
+    { label: 'Confidence', keys: ['confidence', 'confidence_notes', 'Confidence / Notes', 'notes'] }
+  ];
+
+  /* 1–5 files = 5 credits, 6–15 files = 10 credits, 0 files = 0 credits. */
+  function invoiceQuote(count) {
+    const n = clamp(Number(count) || 0, 0, INV_TIER_2_MAX);
+    let credits = 0;
+    let tier = 'No files';
+    if (n > 0) {
+      if (n <= INV_TIER_1_MAX) {
+        credits = INV_TIER_1_CREDITS;
+        tier = 'Up to ' + INV_TIER_1_MAX + ' files';
+      } else {
+        credits = INV_TIER_2_CREDITS;
+        tier = INV_TIER_1_MAX + 1 + '–' + INV_TIER_2_MAX + ' files';
+      }
+    }
+    return { count: n, credits: credits, tier: tier };
+  }
+
+  function invoiceIsComplete(job) {
+    return (
+      !!job &&
+      String(job.status || '').toLowerCase() === 'completed' &&
+      job.download_ready === true
+    );
+  }
+
+  function invoicePageActive() {
+    return currentRoute() === 'invoice-results';
+  }
+
+  function stopInvoiceTimer() {
+    if (invoicePollTimer) {
+      window.clearInterval(invoicePollTimer);
+      invoicePollTimer = null;
+    }
+  }
+
+  function setInvoiceBadge(kind, text) {
+    const badge = $('#invoiceStatus');
+    if (!badge) return;
+    badge.classList.remove('is-pending', 'is-ok', 'is-fail');
+    if (kind) badge.classList.add('is-' + kind);
+    const label = $('.webhook-text', badge);
+    if (label) label.textContent = text;
+  }
+
+  function startInvoicePolling(job) {
+    if (invoicePollTimer) return;
+    if (!invoicePageActive() || !job || !INV_STATUS_URL) return;
+    setInvoiceBadge('pending', 'Starting invoice OCR…');
+    pollInvoiceStatus();
+    invoicePollTimer = window.setInterval(pollInvoiceStatus, INV_POLL_MS);
+  }
+
+  function ensureInvoiceRunning() {
+    const job = state.invoiceJob;
+    if (!job || job.status === 'failed' || invoiceIsComplete(job)) return;
+    if (!isLoggedIn()) return;
+    startInvoicePolling(job);
+  }
+
+  function pollInvoiceStatus() {
+    const job = state.invoiceJob;
+    if (!job || !INV_STATUS_URL) return;
+    if (job.status === 'failed') return;
+    if (invoiceIsComplete(job)) return;
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    /* 12s timeout + 3-strike tolerance, same policy as the B2B scraper. */
+    const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
+
+    fetch(INV_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
+      mode: 'cors',
+      headers: authHeaders(),
+      signal: controller ? controller.signal : undefined
+    })
+      .then(function (response) {
+        if (timer) window.clearTimeout(timer);
+        if (response.status === 401) {
+          stopInvoiceTimer();
+          handleAuthExpired(
+            'Your session expired. Log in again to check this invoice job.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          failInvoiceJob('Insufficient credits');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (typeof data !== 'object') throw new Error('Empty status response');
+
+        if (setLiveCredits(extractRemaining(data))) syncCreditUI();
+
+        const toNumber = function (value) {
+          if (value === null || value === undefined || value === '') return null;
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
+        const firstNumber = function () {
+          for (let i = 0; i < arguments.length; i += 1) {
+            const n = toNumber(arguments[i]);
+            if (n !== null) return n;
+          }
+          return null;
+        };
+
+        const percent = toNumber(data.percent);
+        if (percent !== null) job.percent = clamp(percent, 0, 100);
+
+        const total = firstNumber(data.files_total, data.total_files, data.file_count);
+        if (total !== null) job.files_total = Math.max(0, Math.floor(total));
+
+        const processed = firstNumber(
+          data.files_processed,
+          data.processed_files,
+          data.completed_files
+        );
+        if (processed !== null) job.files_processed = Math.max(0, Math.floor(processed));
+
+        if (data.active_file != null) job.active_file = String(data.active_file);
+
+        if (data.download_ready != null) {
+          job.download_ready =
+            data.download_ready === true ||
+            data.download_ready === 'true' ||
+            data.download_ready === 1;
+        }
+        if (data.email_sent != null) {
+          job.email_sent = data.email_sent === true || data.email_sent === 'true';
+        }
+
+        const rowsRaw = Array.isArray(data.preview_rows)
+          ? data.preview_rows
+          : Array.isArray(data.invoices)
+          ? data.invoices
+          : null;
+        if (rowsRaw && rowsRaw.length) job.preview_rows = rowsRaw.slice(0, 50);
+
+        const status = String(data.status || job.status || 'processing').toLowerCase();
+        job.status = status;
+        job.poll_errors = 0;
+
+        if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
+          failInvoiceJob(data.error ? String(data.error) : '');
+          return;
+        }
+
+        if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1) {
+          if (job.download_ready === true) {
+            completeInvoiceJob(true);
+          } else {
+            setInvoiceBadge('pending', 'Completed — finalizing Excel…');
+            saveState();
+            updateInvoiceProgress();
+            renderInvoiceTable();
+          }
+          return;
+        }
+
+        if (status === 'queued' || status === 'pending' || status === 'starting') {
+          setInvoiceBadge('pending', 'Starting invoice OCR…');
+        } else {
+          setInvoiceBadge(
+            'pending',
+            'Extracting invoices · ' +
+              Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
+          );
+        }
+
+        saveState();
+        updateInvoiceProgress();
+        renderInvoiceTable();
+      })
+      .catch(function (err) {
+        if (timer) window.clearTimeout(timer);
+
+        const failures = (Number(job && job.poll_errors) || 0) + 1;
+        if (job) job.poll_errors = failures;
+
+        console.warn(
+          '[LiteWork] Invoice status check failed (' + failures + ').',
+          err && err.message ? err.message : err
+        );
+
+        if (job) {
+          if (failures >= 3) {
+            setInvoiceBadge('pending', 'Reconnecting…');
+          } else {
+            const phase = String(job.status || '').toLowerCase();
+            if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
+              setInvoiceBadge('pending', 'Starting invoice OCR…');
+            }
+          }
+          saveState();
+        }
+        updateInvoiceProgress();
+      });
+  }
+
+  function renderInvoiceResults() {
+    const empty = $('#invoiceEmpty');
+    const main = $('#invoiceMain');
+    if (!empty || !main) return;
+
+    const job = state.invoiceJob;
+    if (!job) {
+      empty.hidden = false;
+      main.hidden = true;
+      return;
+    }
+
+    empty.hidden = true;
+    main.hidden = false;
+
+    const resume = $('#invoiceResumeId');
+    if (resume) resume.value = job.job_id || '';
+
+    renderInvoiceJobSummary();
+    renderInvoiceTable();
+    updateInvoiceProgress();
+
+    if (invoiceIsComplete(job)) {
+      completeInvoiceJob(true);
+      return;
+    }
+    if (String(job.status || '').toLowerCase() === 'failed') {
+      setInvoiceBadge('fail', 'Job failed · ' + (job.error || 'upload a new batch'));
+      return;
+    }
+    ensureInvoiceRunning();
+  }
+
+  function renderInvoiceJobSummary() {
+    const job = state.invoiceJob;
+    if (!job) return;
+    const meta = $('#invoiceJobMeta');
+    const summary = $('#invoiceJobSummary');
+    const files = Number(job.files_total) || 0;
+    const credits = Number(job.credits_spent) || 0;
+
+    if (meta) {
+      meta.textContent = files
+        ? files + ' file' + (files === 1 ? '' : 's') + ' · ' + credits + ' credits'
+        : 'Waiting for the first status update…';
+    }
+
+    if (summary) {
+      summary.innerHTML =
+        '<div class="summary-row"><dt>Files</dt><dd><strong>' + files + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Processed</dt><dd>' +
+        (Number(job.files_processed) || 0) + '</dd></div>' +
+        '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + credits + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Delivery email</dt><dd>' +
+        escapeHtml(job.email || accountEmail() || '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Started</dt><dd>' +
+        escapeHtml(job.created_at ? fmtMYT(job.created_at) : '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
+        escapeHtml(job.job_id) + '</code></dd></div>';
+    }
+  }
+
+  function updateInvoiceProgress() {
+    const job = state.invoiceJob;
+    if (!job) return;
+
+    const total = Number(job.files_total) || 0;
+    const processed = clamp(Math.floor(Number(job.files_processed) || 0), 0, total || 9999);
+    const complete = invoiceIsComplete(job);
+    /* The ring follows the backend percent exactly (5 → 90 → 95 → 100). */
+    const percent = complete
+      ? 100
+      : Math.floor(clamp(Number(job.percent) || 0, 0, 100));
+
+    const fill = $('#invRingFill');
+    if (fill) fill.style.strokeDashoffset = String(RING_LENGTH - (RING_LENGTH * percent) / 100);
+
+    const percentEl = $('#invRingPercent');
+    if (percentEl) percentEl.textContent = percent + '%';
+
+    const countEl = $('#invRingCount');
+    if (countEl) {
+      countEl.textContent = processed + ' / ' + (total || '—') + ' files processed';
+    }
+
+    const activeEl = $('#invRingActive');
+    if (activeEl) {
+      const activeFile = String(job.active_file || '').trim();
+      const phase = String(job.status || '').toLowerCase();
+      const terminal =
+        complete ||
+        phase === 'completed' ||
+        phase === 'complete' ||
+        phase === 'failed' ||
+        phase === 'error';
+      if (activeFile && !terminal) {
+        activeEl.hidden = false;
+        activeEl.textContent = 'Extracting "' + activeFile + '"…';
+      } else {
+        activeEl.hidden = true;
+        activeEl.textContent = '';
+      }
+    }
+
+    const card = $('#invRingCard');
+    if (card) card.classList.toggle('is-complete', complete);
+
+    const downloadBtn = $('#invoiceDownloadBtn');
+    if (downloadBtn) downloadBtn.disabled = !complete;
+
+    const downloadTitle = $('#invoiceDownloadTitle');
+    if (downloadTitle) {
+      downloadTitle.textContent =
+        complete && total ? 'Excel (.xlsx) · ' + total + ' invoices' : 'Excel (.xlsx)';
+    }
+
+    const downloadSub = $('#invoiceDownloadSub');
+    if (downloadSub) {
+      if (complete) downloadSub.textContent = 'Ready to download';
+      else if (String(job.status || '').toLowerCase() === 'completed') {
+        downloadSub.textContent = 'Finalizing Excel…';
+      } else {
+        downloadSub.textContent = 'Live progress from the OCR backend';
+      }
+    }
+
+    const emailNote = $('#invoiceEmailNote');
+    if (emailNote) {
+      const email = job.email || accountEmail() || 'your delivery email';
+      const sent = complete && job.email_sent === true;
+      emailNote.textContent = sent
+        ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
+        : 'Excel (.xlsx) will also be emailed to ' + email +
+          ' when the backend marks it ready — safe to close this tab.';
+      emailNote.classList.toggle('is-sent', sent);
+    }
+
+    const tableMeta = $('#invoiceTableMeta');
+    if (tableMeta) {
+      const count = (job.preview_rows || []).length;
+      tableMeta.textContent =
+        'Live preview · ' + count + ' invoice' + (count === 1 ? '' : 's') +
+        ' ready · fixed accounting columns';
+    }
+
+    renderInvoiceJobSummary();
+  }
+
+  function invoiceCellValue(row, col) {
+    if (!row || typeof row !== 'object') return '—';
+    for (let i = 0; i < col.keys.length; i += 1) {
+      const raw = row[col.keys[i]];
+      if (raw === null || raw === undefined) continue;
+      const text = String(raw).trim();
+      if (text) return text;
+    }
+    return '—';
+  }
+
+  function renderInvoiceTable() {
+    const table = $('#invoiceTable');
+    if (!table || !state.invoiceJob) return;
+
+    const job = state.invoiceJob;
+    const rows = Array.isArray(job.preview_rows) ? job.preview_rows.slice(0, 50) : [];
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    if (thead) {
+      thead.innerHTML =
+        '<tr>' +
+        INVOICE_PREVIEW_COLUMNS.map(function (col) {
+          return '<th>' + escapeHtml(col.label) + '</th>';
+        }).join('') +
+        '</tr>';
+    }
+
+    if (tbody) {
+      if (!rows.length) {
+        const message =
+          String(job.status || '').toLowerCase() === 'completed'
+            ? 'Preview unavailable — download the .xlsx for every invoice.'
+            : 'Waiting for the first extracted invoice…';
+        tbody.innerHTML =
+          '<tr><td colspan="' + INVOICE_PREVIEW_COLUMNS.length +
+          '" class="table-empty">' + message + '</td></tr>';
+      } else {
+        tbody.innerHTML = rows
+          .map(function (row) {
+            return (
+              '<tr>' +
+              INVOICE_PREVIEW_COLUMNS.map(function (col, index) {
+                return '<td class="' + (index === 0 ? 'cell-strong' : '') + '">' +
+                  escapeHtml(invoiceCellValue(row, col)) + '</td>';
+              }).join('') +
+              '</tr>'
+            );
+          })
+          .join('');
+      }
+    }
+
+    const pill = $('#invoicePreviewPill');
+    if (pill) pill.textContent = rows.length + ' invoice' + (rows.length === 1 ? '' : 's');
+  }
+
+  function completeInvoiceJob(silent) {
+    const job = state.invoiceJob;
+    if (!job) return;
+
+    job.status = 'completed';
+    job.download_ready = true;
+    job.percent = 100;
+    stopInvoiceTimer();
+    /* Force the history panel to re-fetch next time it opens. */
+    historyState.loaded = false;
+    saveState();
+
+    updateInvoiceProgress();
+    renderInvoiceTable();
+    setInvoiceBadge('ok', 'Completed · .xlsx ready');
+    if (!silent) toast('Invoice Excel is ready to download.', 'success');
+  }
+
+  function failInvoiceJob(reason) {
+    const job = state.invoiceJob;
+    if (!job) return;
+    job.status = 'failed';
+    job.error = reason || '';
+    stopInvoiceTimer();
+    saveState();
+    updateInvoiceProgress();
+    setInvoiceBadge('fail', 'Job failed · ' + (reason || 'please try again'));
+  }
+
+  function downloadInvoiceExcel(jobId) {
+    const job = state.invoiceJob || {};
+    const id = String(jobId || job.job_id || '').trim();
+    if (!id || !INV_DOWNLOAD_URL) {
+      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      return;
+    }
+
+    toast('Requesting your invoice Excel from the cloud…', 'info');
+
+    fetch(INV_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
+      mode: 'cors',
+      headers: authHeaders()
+    })
+      .then(function (response) {
+        if (response.status === 401) {
+          handleAuthExpired(
+            'Your session expired. Log in again to download your invoices.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          toast('Insufficient credits for this download.', 'warn');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (!blob) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = 'litework-invoices-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
+        toast('Invoice Excel download ready.', 'success');
+      })
+      .catch(function (err) {
+        console.warn('[LiteWork] Invoice download failed.', err);
+        toast('Could not download the invoice Excel. Please try again.', 'warn');
+      });
+  }
+
+  function openInvoiceHistoryJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return;
+
+    stopInvoiceTimer();
+    const known = (historyState.invoice || []).filter(function (entry) {
+      return String(entry.job_id || '') === id;
+    })[0];
+    const current = state.invoiceJob;
+    if (!current || String(current.job_id || '') !== id) {
+      state.invoiceJob = {
+        job_id: id,
+        status: 'processing',
+        percent: 0,
+        files_total: known ? known.files : 0,
+        files_processed: known ? known.processed : 0,
+        active_file: '',
+        download_ready: false,
+        preview_rows: [],
+        credits_spent: known ? known.credits : 0,
+        email: accountEmail(),
+        created_at: new Date().toISOString(),
+        poll_errors: 0
+      };
+      saveState();
+    }
+
+    if (currentRoute() === 'invoice-results') renderInvoiceResults();
+    else window.location.hash = '#invoice-results';
+  }
+
+  /* ----- invoice upload helpers ----- */
+  function formatFileSize(bytes) {
+    const n = Number(bytes) || 0;
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' KB';
+    return n + ' B';
+  }
+
+  function invoiceExt(name) {
+    const m = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    return m ? m[1] : '';
+  }
+
+  function invoiceFileBadge(name) {
+    const ext = invoiceExt(name);
+    if (ext === 'pdf') return 'PDF';
+    if (ext === 'doc' || ext === 'docx') return 'DOCX';
+    if (ext === 'xls' || ext === 'xlsx') return 'XLSX';
+    if (ext === 'csv') return 'CSV';
+    if (ext === 'txt') return 'TXT';
+    if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'webp') return 'IMG';
+    return ext ? ext.toUpperCase() : 'FILE';
+  }
+
+  function invoiceFileAllowed(name) {
+    const ext = invoiceExt(name);
+    const allowed = INV_ACCEPT.split(',')
+      .map(function (item) { return item.trim().replace(/^\./, '').toLowerCase(); })
+      .filter(Boolean);
+    return allowed.indexOf(ext) !== -1;
+  }
+
+  function renderInvoiceFiles() {
+    const list = $('#invFileList');
+    if (list) {
+      list.innerHTML = invoiceFiles.length
+        ? invoiceFiles
+            .map(function (entry, index) {
+              return (
+                '<li class="inv-file-row">' +
+                '<span class="inv-file-badge">' + escapeHtml(invoiceFileBadge(entry.name)) + '</span>' +
+                '<span class="inv-file-meta"><strong>' + escapeHtml(entry.name) + '</strong>' +
+                '<span>' + escapeHtml(formatFileSize(entry.size)) + '</span></span>' +
+                '<button type="button" class="inv-file-remove" data-inv-remove="' + index +
+                '" aria-label="Remove ' + escapeHtml(entry.name) + '">×</button>' +
+                '</li>'
+              );
+            })
+            .join('')
+        : '<li class="inv-file-empty">No files queued yet — add up to ' + INV_TIER_2_MAX + ' invoices.</li>';
+    }
+    updateInvoiceQuote();
+  }
+
+  function addInvoiceFiles(fileList) {
+    const errEl = $('#invoiceFormError');
+    const incoming = Array.prototype.slice.call(fileList || []);
+    if (!incoming.length) return;
+    const errors = [];
+
+    incoming.forEach(function (file) {
+      if (invoiceFiles.length >= INV_TIER_2_MAX) {
+        errors.push('Maximum ' + INV_TIER_2_MAX + ' files per run.');
+        return;
+      }
+      if (!invoiceFileAllowed(file.name)) {
+        errors.push(file.name + ' is not a supported file type.');
+        return;
+      }
+      if (file.size > INV_MAX_FILE_BYTES) {
+        errors.push(
+          file.name + ' is larger than ' +
+          Math.round(INV_MAX_FILE_BYTES / 1048576) + ' MB.'
+        );
+        return;
+      }
+      const duplicate = invoiceFiles.some(function (entry) {
+        return entry.name === file.name && entry.size === file.size;
+      });
+      if (duplicate) {
+        errors.push(file.name + ' is already queued.');
+        return;
+      }
+      invoiceFiles.push({ name: file.name, size: file.size, type: file.type || '', file: file });
+    });
+
+    if (errEl) errEl.textContent = errors.length ? errors[0] : '';
+    renderInvoiceFiles();
+  }
+
+  function updateInvoiceQuote() {
+    const quote = invoiceQuote(invoiceFiles.length);
+
+    const available = $('#invAvailable');
+    if (available) available.textContent = state.credits + ' Credits';
+
+    const filesEl = $('#invFileCount');
+    if (filesEl) filesEl.textContent = quote.count + ' / ' + INV_TIER_2_MAX;
+
+    const tierEl = $('#invTier');
+    if (tierEl) tierEl.textContent = quote.tier;
+
+    const costEl = $('#invCost');
+    if (costEl) {
+      costEl.textContent = quote.credits + ' Credits';
+      costEl.classList.toggle('is-zero', quote.credits === 0);
+    }
+
+    const btn = $('#invoiceStartBtn');
+    if (btn) {
+      btn.disabled = quote.count === 0 || invoiceStarting;
+      btn.textContent = invoiceStarting
+        ? 'Uploading invoices…'
+        : 'Confirm & Spend ' + quote.credits + ' Credits · Process ' + quote.count +
+          ' File' + (quote.count === 1 ? '' : 's');
+    }
+
+    const shortfall = Math.max(0, quote.credits - state.credits);
+    const shortEl = $('#invoiceShortfall');
+    if (shortEl) {
+      if (shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          '. Top up in Manage My Plan.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        const result = String(reader.result || '');
+        const comma = result.indexOf(',');
+        resolve(comma >= 0 ? result.slice(comma + 1) : result);
+      };
+      reader.onerror = function () {
+        reject(
+          reader.error || new Error('Could not read ' + (file && file.name ? file.name : 'file'))
+        );
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openInvoiceModal() {
+    if (!requireAuth({ action: 'invoice' })) return;
+
+    invoiceFiles = [];
+    invoiceStarting = false;
+
+    const chips = INV_COLUMNS.map(function (label) {
+      return '<span class="inv-chip">' + escapeHtml(label) + '</span>';
+    }).join('');
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Invoice OCR Agent</h2>' +
+      '<p class="modal-sub">5 credits for 1–5 files · 10 credits for 6–15 files · PDF, Word, Excel, images & TXT</p>' +
+      '<div class="calc-card modal-calc"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="invAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Files selected</span>' +
+      '<span class="calc-value" id="invFileCount">0 / ' + INV_TIER_2_MAX + '</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Tier</span>' +
+      '<span class="calc-value" id="invTier">No files</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="invCost">0 Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="invoiceForm" novalidate>' +
+      '<div class="field"><label for="invoiceEmail">Delivery email</label>' +
+      '<input type="email" id="invoiceEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" />' +
+      '<span class="field-error" id="invoiceEmailError" role="alert"></span></div>' +
+      '<label class="inv-drop" id="invDrop" for="invFileInput">' +
+      '<span class="inv-drop-icon" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#6366F1" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 16V5" /><path d="m7 10 5-5 5 5" />' +
+      '<path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17" />' +
+      '</svg></span>' +
+      '<strong>Drag & drop invoices here</strong>' +
+      '<span class="inv-drop-sub">or click to browse · up to ' + INV_TIER_2_MAX +
+      ' files · max ' + Math.round(INV_MAX_FILE_BYTES / 1048576) + ' MB each</span>' +
+      '<span class="inv-drop-types">PDF · DOCX · XLSX · CSV · TXT · JPG · PNG · WEBP</span>' +
+      '</label>' +
+      '<input type="file" id="invFileInput" class="inv-file-input" accept="' +
+      escapeHtml(INV_ACCEPT) + '" multiple />' +
+      '<ul class="inv-filelist" id="invFileList"></ul>' +
+      '<div class="inv-cols-block">' +
+      '<p class="inv-cols-title">Fixed Excel Columns Extracted ' +
+      '<span>(18 Summary Fields + Line Items Sheet)</span></p>' +
+      '<div class="inv-chips">' + chips + '</div>' +
+      '<p class="inv-chip-note">' + escapeHtml(INV_SHEET2_NOTE) + '</p>' +
+      '</div>' +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="invoiceFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="invoiceShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="invoiceStartBtn" disabled>' +
+      'Confirm & Spend 0 Credits · Process 0 Files</button>' +
+      '<p class="fine">Credits are deducted immediately. OCR runs in the cloud.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    const drop = $('#invDrop');
+    const input = $('#invFileInput');
+    if (drop && input) {
+      ['dragenter', 'dragover'].forEach(function (evt) {
+        drop.addEventListener(evt, function (event) {
+          event.preventDefault();
+          drop.classList.add('is-drag');
+        });
+      });
+      ['dragleave', 'dragend'].forEach(function (evt) {
+        drop.addEventListener(evt, function () {
+          drop.classList.remove('is-drag');
+        });
+      });
+      drop.addEventListener('drop', function (event) {
+        event.preventDefault();
+        drop.classList.remove('is-drag');
+        if (event.dataTransfer && event.dataTransfer.files) {
+          addInvoiceFiles(event.dataTransfer.files);
+        }
+      });
+      input.addEventListener('change', function () {
+        addInvoiceFiles(input.files);
+        input.value = '';
+      });
+    }
+
+    const fileList = $('#invFileList');
+    if (fileList) {
+      fileList.addEventListener('click', function (event) {
+        const btn = event.target.closest('[data-inv-remove]');
+        if (!btn) return;
+        const index = Number(btn.getAttribute('data-inv-remove'));
+        if (Number.isFinite(index)) {
+          invoiceFiles.splice(index, 1);
+          renderInvoiceFiles();
+        }
+      });
+    }
+
+    const form = $('#invoiceForm');
+    if (form) form.addEventListener('submit', handleInvoiceStart);
+
+    renderInvoiceFiles();
+  }
+
+  function handleInvoiceStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'invoice' });
+      return;
+    }
+
+    const errEl = $('#invoiceFormError');
+    const quote = invoiceQuote(invoiceFiles.length);
+
+    if (!invoiceFiles.length) {
+      if (errEl) errEl.textContent = 'Add at least one invoice file to continue.';
+      return;
+    }
+    if (invoiceFiles.length > INV_TIER_2_MAX) {
+      if (errEl) errEl.textContent = 'Maximum ' + INV_TIER_2_MAX + ' files per run.';
+      return;
+    }
+    if (state.credits < quote.credits) {
+      const shortfall = quote.credits - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this batch. Top up in Manage My Plan.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    invoiceStarting = true;
+    updateInvoiceQuote();
+
+    const email = accountEmail();
+    const batch = invoiceFiles.slice();
+    const fileCount = batch.length;
+
+    Promise.all(
+      batch.map(function (entry) {
+        return readFileAsBase64(entry.file).then(function (data) {
+          return {
+            name: entry.name,
+            type: entry.type || '',
+            size: entry.size,
+            data_base64: data
+          };
+        });
+      })
+    )
+      .then(function (files) {
+        return apiFetch(
+          INV_START_URL,
+          {
+            method: 'POST',
+            body: JSON.stringify({ email: email, files: files })
+          },
+          120000
+        );
+      })
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to launch Invoice OCR.',
+            { action: 'invoice' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this invoice batch. Top up in Manage My Plan.';
+            }
+            invoiceStarting = false;
+            updateInvoiceQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const payload = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = payload.data && typeof payload.data === 'object' ? payload.data : {};
+        const jobId =
+          payload.job_id || payload.jobId || payload.id || inner.job_id || inner.id || '';
+
+        state.invoiceJob = {
+          job_id: String(jobId || 'inv_' + Date.now()),
+          status: String(payload.status || inner.status || 'processing').toLowerCase(),
+          percent: 0,
+          files_total:
+            Number(payload.files_total || payload.total_files || payload.file_count || 0) ||
+            fileCount,
+          files_processed: 0,
+          active_file: '',
+          download_ready: false,
+          preview_rows: [],
+          credits_spent: quote.credits,
+          email: email,
+          created_at: new Date().toISOString(),
+          poll_errors: 0
+        };
+        saveState();
+
+        invoiceStarting = false;
+        invoiceFiles = [];
+        closeModal(false);
+        toast(
+          'Invoice OCR started — ' + fileCount + ' file' +
+            (fileCount === 1 ? '' : 's') + ' queued.',
+          'success'
+        );
+
+        if (window.location.hash === '#invoice-results') {
+          renderInvoiceResults();
+          startInvoicePolling(state.invoiceJob);
+        } else {
+          window.location.hash = '#invoice-results';
+        }
+      })
+      .catch(function (err) {
+        invoiceStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the invoice job. Please try again.';
+        }
+        updateInvoiceQuote();
+        console.warn('[LiteWork] Invoice OCR start failed.', err);
+      });
   }
 
   /* ============================== INIT =================================== */

@@ -173,5 +173,48 @@ window.CONFIG = {
       short: 'Hours',
       hint: 'Best time for cold calls'
     }
+  ],
+
+  /* --- Invoice OCR agent -------------------------------------------------
+     3rd live worker. Up to 15 files per run: 5 credits for 1–5 files,
+     10 credits for 6–15 files. Uploads are sent as base64 in the POST. */
+  INVOICE_OCR_AGENT_ID: 'invoice-ocr',
+  INVOICE_OCR_AGENT_NAME: 'Invoice OCR Agent',
+  INVOICE_OCR_TIER_1_MAX: 5,
+  INVOICE_OCR_TIER_1_CREDITS: 5,
+  INVOICE_OCR_TIER_2_MAX: 15,
+  INVOICE_OCR_TIER_2_CREDITS: 10,
+  INVOICE_OCR_MAX_FILE_MB: 10,
+  INVOICE_OCR_POLL_MS: 2500,
+  INVOICE_OCR_START_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/invoice-ocr-start',
+  INVOICE_OCR_STATUS_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/invoice-ocr-status',
+  INVOICE_OCR_DOWNLOAD_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-invoice-excel',
+  INVOICE_OCR_ACCEPT:
+    '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp',
+
+  /* The 18 fixed summary fields written to Sheet 1 of the .xlsx.
+     Sheet 2 holds the itemized line items for every invoice. */
+  INVOICE_OCR_COLUMNS: [
+    'Source File',
+    'Document Type',
+    'Invoice Number',
+    'Invoice Date',
+    'Due Date',
+    'Payment Terms',
+    'Supplier Name',
+    'Supplier Tax/Reg ID',
+    'Buyer Name',
+    'PO / Ref No.',
+    'Currency',
+    'Subtotal',
+    'Tax Type & Rate',
+    'Tax Amount',
+    'Discount / Rounding',
+    'Grand Total',
+    'Payment Status / Method',
+    'Confidence / Notes'
   ]
 };

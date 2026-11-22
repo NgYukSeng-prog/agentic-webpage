@@ -7,9 +7,9 @@
   <meta name="description" content="LiteWork gives you low-cost AI workers pay-as-you-go: a 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Credits from $5 USD, never expire." />
   <meta name="theme-color" content="#0F172A" />
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
-  <meta property="og:description" content="Two live AI workers. A 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go with credits." />
+  <meta property="og:description" content="Three live AI workers: a 07:00 MYT stock brief, a 50–500 lead B2B Excel scraper and an Invoice OCR agent. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='0.52' stop-color='%236366F1'/%3E%3Cstop offset='1' stop-color='%23A855F7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Cpath d='M19.4 4.6 9.2 17.4h4.55L12 26.9 23 14.2h-4.7z' fill='%2307131F'/%3E%3Ccircle cx='24.9' cy='7.4' r='1.05' fill='%23E0F2FE'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -160,7 +160,7 @@
           <div class="hero-copy">
             <span class="badge-live">
               <span class="live-dot" aria-hidden="true"></span>
-              <strong>2 AI workers ready</strong>
+              <strong>3 Live Agents Ready</strong>
               <span class="badge-divider" aria-hidden="true">|</span>
               Pay-as-you-go credits
             </span>
@@ -180,7 +180,7 @@
             <ul class="hero-trust">
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                2 AI workers live
+                3 AI workers live
               </li>
               <li>
                 <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M4 10.5l4 4 8-8" fill="none" stroke="#34D399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -197,12 +197,13 @@
             <div class="preview-shell">
               <div class="preview-head">
                 <span class="preview-label"><span class="live-dot" aria-hidden="true"></span> Live output preview</span>
-                <span class="mini-pill">2 workers</span>
+                <span class="mini-pill">3 workers</span>
               </div>
 
               <div class="home-tabs" role="tablist" aria-label="Agent output preview">
                 <button type="button" class="home-tab is-active" data-home-tab="stock" role="tab" aria-selected="true">Stock Market Brief</button>
                 <button type="button" class="home-tab" data-home-tab="scraper" role="tab" aria-selected="false">B2B Lead Scraper</button>
+                <button type="button" class="home-tab" data-home-tab="invoice" role="tab" aria-selected="false">Invoice OCR</button>
               </div>
 
               <div class="preview-body">
@@ -247,6 +248,36 @@
                   <p class="preview-fine">5 of 500 rows · downloads as .xlsx</p>
                 </div>
               </div>
+
+              <div class="home-pane" data-home-pane="invoice" hidden>
+                <div class="home-scrape">
+                  <div class="home-scrape-head">
+                    <div class="home-scrape-title">
+                      <strong>invoices-extracted.xlsx</strong>
+                      <span>5 invoices · 18 fields + line items</span>
+                    </div>
+                    <span class="mini-pill mini-pill-emerald">100% · ready</span>
+                  </div>
+                  <div class="home-progress"><span></span></div>
+                  <div class="table-scroll">
+                    <table class="leads-table home-leads inv-home-table">
+                      <thead>
+                        <tr>
+                          <th>Invoice No</th><th>Date</th><th>Supplier</th><th>Currency</th><th>Tax</th><th>Grand Total</th><th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr><td class="cell-strong">INV-2026-004</td><td>2026-11-18</td><td>Meridian Precision Sdn Bhd</td><td>MYR</td><td>8% · 960.00</td><td>12,960.00</td><td>Paid</td></tr>
+                        <tr><td class="cell-strong">INV-2026-003</td><td>2026-11-15</td><td>Apex CNC Machining</td><td>MYR</td><td>8% · 480.00</td><td>6,480.00</td><td>Pending</td></tr>
+                        <tr><td class="cell-strong">INV-2026-002</td><td>2026-11-11</td><td>Summit Automation</td><td>SGD</td><td>9% · 315.00</td><td>3,815.00</td><td>Paid</td></tr>
+                        <tr><td class="cell-strong">INV-2026-001</td><td>2026-11-08</td><td>Cobalt Packaging Works</td><td>USD</td><td>0% · 0.00</td><td>2,450.00</td><td>Paid</td></tr>
+                        <tr><td class="cell-strong">CRN-2026-009</td><td>2026-11-05</td><td>Lumen Medical Supply</td><td>MYR</td><td>8% · 176.00</td><td>-2,376.00</td><td>Credit note</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p class="preview-fine">5 of 5 invoices · Sheet 2 carries line items</p>
+                </div>
+              </div>
               </div>
             </div>
             <p class="preview-note">Generated by live AI workers — switch tabs to preview each output.</p>
@@ -257,7 +288,7 @@
       <div class="container">
         <div class="stats-band">
           <div class="stat">
-            <span class="stat-value">2</span>
+            <span class="stat-value">3</span>
             <span class="stat-label">Live agents</span>
           </div>
           <div class="stat">
@@ -304,8 +335,8 @@
                 </svg>
               </span>
               <h3>Pick an agent</h3>
-              <p>Tickers or 10 search terms.</p>
-              <span class="mini-pill">2 live agents</span>
+              <p>Tickers, search terms or invoices.</p>
+              <span class="mini-pill">3 live agents</span>
             </article>
 
             <article class="step-card">
@@ -326,7 +357,7 @@
       <div class="container">
         <div class="cta-band">
           <div>
-            <h2>Two agents. One credit wallet.</h2>
+            <h2>Three agents. One credit wallet.</h2>
             <p>Start with $5. Add agents when the workload grows.</p>
           </div>
           <div class="cta-band-actions">
@@ -343,7 +374,7 @@
     <section class="view" data-view="agents" id="view-agents">
       <div class="container page-head">
         <span class="eyebrow">LiteWork AI workers</span>
-        <h1>Two live workers. Zero busywork.</h1>
+        <h1>Three live workers. Zero busywork.</h1>
         <p>Pay per run with credits. No seats, no contracts.</p>
       </div>
 
@@ -530,6 +561,91 @@
           </div>
         </article>
 
+        <!-- 3rd live worker: Invoice OCR -->
+        <article class="agent-card agent-card-featured agent-card-invoice" id="invoiceAgentCard">
+          <div class="agent-visual agent-visual-invoice">
+            <div class="agent-visual-glow agent-visual-glow-invoice" aria-hidden="true"></div>
+
+            <svg class="inv-mascot" viewBox="0 0 200 160" role="img" aria-label="Invoice OCR Agent — an invoice document being scanned with an OCR beam">
+              <g>
+                <rect x="44" y="20" width="88" height="114" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2" />
+                <path d="M44 44h88v-12a12 12 0 0 0-12-12H56a12 12 0 0 0-12 12z" fill="#6366F1" />
+                <text x="88" y="38" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="9" font-weight="800" letter-spacing="1" fill="#EEF2FF">INVOICE</text>
+                <g fill="#CBD5E1">
+                  <rect x="58" y="58" width="58" height="4" rx="2" />
+                  <rect x="58" y="70" width="44" height="4" rx="2" />
+                  <rect x="58" y="82" width="52" height="4" rx="2" />
+                  <rect x="58" y="94" width="36" height="4" rx="2" />
+                </g>
+                <rect x="58" y="110" width="30" height="13" rx="3" fill="#22D3EE" opacity="0.4" />
+                <rect x="94" y="110" width="22" height="13" rx="3" fill="#A855F7" opacity="0.35" />
+                <g class="inv-scan">
+                  <rect x="34" y="50" width="108" height="6" rx="3" fill="#22D3EE" opacity="0.5" />
+                  <rect x="34" y="50" width="108" height="2" rx="1" fill="#E0F2FE" />
+                </g>
+                <g>
+                  <circle cx="150" cy="104" r="20" fill="rgba(34,211,238,0.12)" stroke="#E2E8F0" stroke-width="4" />
+                  <line x1="164" y1="118" x2="178" y2="134" stroke="#CBD5E1" stroke-width="6" stroke-linecap="round" />
+                  <text x="150" y="109" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="11" font-weight="800" fill="#E0F2FE">OCR</text>
+                </g>
+              </g>
+            </svg>
+
+            <span class="agent-status">
+              <span class="status-dot" aria-hidden="true"></span>
+              Ready & Online · 1–15 files per run
+            </span>
+          </div>
+
+          <div class="agent-body">
+            <div class="agent-title-row">
+              <h2>Invoice OCR Agent</h2>
+              <span class="price-tag price-tag-invoice">5 Credits (1–5 files) · 10 Credits (6–15 files)</span>
+            </div>
+            <p class="agent-desc">Turns invoices, receipts and credit notes into one clean accounting Excel — a summary sheet plus itemized line items.</p>
+
+            <div class="pill-row">
+              <span class="mini-pill">PDF</span>
+              <span class="mini-pill">Word .docx</span>
+              <span class="mini-pill">Excel .xlsx / .csv</span>
+              <span class="mini-pill">Images JPG/PNG/WEBP</span>
+              <span class="mini-pill">TXT</span>
+            </div>
+
+            <details class="inv-columns">
+              <summary>What gets extracted into your Excel (.xlsx)</summary>
+              <div class="inv-chips">
+                <span class="inv-chip">Source File</span>
+                <span class="inv-chip">Document Type</span>
+                <span class="inv-chip">Invoice Number</span>
+                <span class="inv-chip">Invoice Date</span>
+                <span class="inv-chip">Due Date</span>
+                <span class="inv-chip">Payment Terms</span>
+                <span class="inv-chip">Supplier Name</span>
+                <span class="inv-chip">Supplier Tax/Reg ID</span>
+                <span class="inv-chip">Buyer Name</span>
+                <span class="inv-chip">PO / Ref No.</span>
+                <span class="inv-chip">Currency</span>
+                <span class="inv-chip">Subtotal</span>
+                <span class="inv-chip">Tax Type & Rate</span>
+                <span class="inv-chip">Tax Amount</span>
+                <span class="inv-chip">Discount / Rounding</span>
+                <span class="inv-chip">Grand Total</span>
+                <span class="inv-chip">Payment Status / Method</span>
+                <span class="inv-chip">Confidence / Notes</span>
+              </div>
+              <p class="inv-chip-note">Sheet 2: Itemized Line Items</p>
+            </details>
+
+            <div class="agent-actions">
+              <button type="button" class="btn btn-subscribe" data-open-invoice>Launch Invoice OCR</button>
+            </div>
+            <p class="subscribe-caption">
+              5 credits for 1–5 files · 10 credits for 6–15 files. <a href="#plans">Top up in Manage My Plan</a>.
+            </p>
+          </div>
+        </article>
+
         <!-- Coming soon -->
         <div class="teaser-grid">
           <article class="agent-card agent-card-teaser">
@@ -604,6 +720,9 @@
             <button type="button" class="history-tab" data-history-tab="b2b" role="tab" aria-selected="false">
               B2B Lead Scraper <span class="history-tab-count" data-hist-count="b2b">0</span>
             </button>
+            <button type="button" class="history-tab" data-history-tab="invoice" role="tab" aria-selected="false">
+              Invoice OCR <span class="history-tab-count" data-hist-count="invoice">0</span>
+            </button>
           </div>
 
           <div class="history-pane" id="historyPanes" aria-live="polite">
@@ -624,6 +743,16 @@
               </div>
               <div id="historyB2B">
                 <p class="empty-note">Log in to load your B2B lead scraping jobs.</p>
+              </div>
+            </section>
+
+            <section class="hist-group" data-hist-group="invoice">
+              <div class="hist-group-head">
+                <h3>Invoice OCR</h3>
+                <span class="hist-count" data-hist-count-label="invoice">0 jobs</span>
+              </div>
+              <div id="historyInvoice">
+                <p class="empty-note">Log in to load your invoice OCR jobs.</p>
               </div>
             </section>
           </div>
@@ -908,6 +1037,99 @@
     </section>
 
     <!-- ====================================================================
+         VIEW · INVOICE OCR RESULTS
+         ==================================================================== -->
+    <section class="view" data-view="invoice-results" id="view-invoice-results">
+      <div class="container">
+        <a class="back-link" href="#agents">
+          <span aria-hidden="true">←</span> Back to AI Agents
+        </a>
+
+        <div class="page-head configure-head">
+          <span class="eyebrow">Invoice OCR Agent</span>
+          <h1>Your invoice Excel is being built.</h1>
+          <p>Live OCR progress · extracted invoices preview · .xlsx when the backend completes.</p>
+        </div>
+
+        <div class="panel" id="invoiceEmpty" hidden>
+          <div class="panel-head">
+            <h2>No invoice job running</h2>
+            <p>Upload invoices to watch live progress and download your accounting Excel.</p>
+          </div>
+          <a class="btn btn-primary" href="#agents">Open the Invoice OCR Agent</a>
+        </div>
+
+        <div id="invoiceMain" hidden>
+          <div class="scraper-grid">
+            <div class="ring-card" id="invRingCard">
+              <div class="ring-wrap">
+                <svg class="ring" viewBox="0 0 140 140" role="img" aria-label="Invoice OCR progress">
+                  <circle class="ring-track" cx="70" cy="70" r="58" />
+                  <circle class="ring-fill" id="invRingFill" cx="70" cy="70" r="58" transform="rotate(-90 70 70)" />
+                </svg>
+                <div class="ring-center">
+                  <strong id="invRingPercent">0%</strong>
+                  <span id="invRingCount">0 / 0 files processed</span>
+                </div>
+              </div>
+              <p class="ring-active" id="invRingActive" hidden></p>
+              <span class="webhook-badge" id="invoiceStatus">
+                <span class="webhook-dot" aria-hidden="true"></span>
+                <span class="webhook-text">Starting invoice OCR…</span>
+              </span>
+              <p class="ring-hint" id="invRingRule">5 credits (1–5 files) · 10 credits (6–15 files)</p>
+              <p class="ring-email" id="invoiceEmailNote">Excel (.xlsx) will also be emailed to your delivery email when complete — safe to close this tab.</p>
+            </div>
+
+            <div class="panel job-card">
+              <div class="panel-head">
+                <h2>Job details</h2>
+                <p id="invoiceJobMeta">—</p>
+              </div>
+
+              <dl class="summary-grid compact" id="invoiceJobSummary"></dl>
+
+              <div class="field resume-field">
+                <label for="invoiceResumeId">Resume / check Job ID</label>
+                <div class="resume-row">
+                  <input type="text" id="invoiceResumeId" placeholder="inv_xxxxx" autocomplete="off" spellcheck="false" />
+                  <button type="button" class="btn btn-ghost" id="invoiceResumeBtn">Check</button>
+                </div>
+              </div>
+
+              <p class="fine">OCR runs in the cloud. Safe to close this tab — reopen it from Subscriptions & Purchase History.</p>
+            </div>
+          </div>
+
+          <div class="panel result-panel">
+            <div class="panel-head row-head">
+              <div>
+                <h2>Extracted invoices</h2>
+                <p id="invoiceTableMeta">Live preview · fixed accounting columns</p>
+              </div>
+              <span class="mini-pill" id="invoicePreviewPill">0 invoices</span>
+            </div>
+
+            <div class="table-scroll">
+              <table class="leads-table inv-preview-table" id="invoiceTable">
+                <thead></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div class="download-bar">
+              <div class="download-info">
+                <strong id="invoiceDownloadTitle">Excel (.xlsx)</strong>
+                <span id="invoiceDownloadSub">Awaiting live backend status</span>
+              </div>
+              <button type="button" class="btn btn-primary" id="invoiceDownloadBtn" disabled>Download Invoice Excel (.xlsx)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
          VIEW · SUCCESS (stock subscription)
          ==================================================================== -->
     <section class="view" data-view="success" id="view-success">
@@ -1041,7 +1263,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=17"></script>
-  <script src="app.js?v=17"></script>
+  <script src="config.js?v=18"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
