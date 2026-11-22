@@ -2394,10 +2394,10 @@
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
-        ? '<div class="hist-list">' +
+        ? renderHistoryPager('stock', 'Stock subscriptions', stockPage.page, stockPage.pages, stockCount) +
+          '<div class="hist-list">' +
           stockPage.items.map(renderStockHistoryCard).join('') +
-          '</div>' +
-          renderHistoryPager('stock', 'Stock subscriptions', stockPage.page, stockPage.pages, stockCount)
+          '</div>'
         : '<div class="hist-empty">' +
           '<p class="empty-note">No stock brief subscriptions yet. Subscribe to a ticker and your first brief lands in your inbox at 07:00 MYT.</p>' +
           '<a class="btn btn-primary btn-sm" href="#agents">Subscribe to Stock Brief</a>' +
@@ -2406,10 +2406,10 @@
 
     if (b2bPane) {
       b2bPane.innerHTML = b2bCount
-        ? '<div class="hist-list">' +
+        ? renderHistoryPager('b2b', 'B2B jobs', b2bPage.page, b2bPage.pages, b2bCount) +
+          '<div class="hist-list">' +
           b2bPage.items.map(renderB2BHistoryCard).join('') +
-          '</div>' +
-          renderHistoryPager('b2b', 'B2B jobs', b2bPage.page, b2bPage.pages, b2bCount)
+          '</div>'
         : '<div class="hist-empty">' +
           '<p class="empty-note">No B2B lead scraping jobs yet. Run the scraper and the .xlsx history will appear here.</p>' +
           '<a class="btn btn-primary btn-sm" href="#agents">Run B2B Lead Scraper</a>' +
