@@ -5431,21 +5431,79 @@
   let invoicePollTimer = null;
   let invoiceStarting = false;
 
+  /* Exact backend summary keys, in delivery order. */
   const INVOICE_PREVIEW_COLUMNS = [
-    { label: 'Source File', keys: ['source_file', 'file_name', 'filename', 'Source File'] },
     {
+      id: 'source_file',
+      label: 'Source File',
+      keys: ['source_file', 'file_name', 'filename', 'Source File']
+    },
+    {
+      id: 'invoice_number',
       label: 'Invoice No',
       keys: ['invoice_number', 'invoice_no', 'invoiceNumber', 'Invoice Number', 'Invoice No']
     },
-    { label: 'Date', keys: ['invoice_date', 'date', 'Invoice Date', 'Date'] },
-    { label: 'Supplier', keys: ['supplier_name', 'supplier', 'Supplier Name', 'Supplier'] },
-    { label: 'Tax ID', keys: ['supplier_tax_id', 'tax_id', 'Supplier Tax/Reg ID', 'Tax ID'] },
-    { label: 'Currency', keys: ['currency', 'Currency'] },
-    { label: 'Subtotal', keys: ['subtotal', 'Subtotal'] },
-    { label: 'Tax', keys: ['tax_amount', 'tax', 'Tax Amount', 'Tax'] },
-    { label: 'Grand Total', keys: ['grand_total', 'total', 'Grand Total'] },
-    { label: 'Confidence', keys: ['confidence', 'confidence_notes', 'Confidence / Notes', 'notes'] }
+    {
+      id: 'invoice_date',
+      label: 'Date',
+      keys: ['invoice_date', 'invoiceDate', 'date', 'Invoice Date', 'Date']
+    },
+    {
+      id: 'supplier_name',
+      label: 'Supplier',
+      keys: ['supplier_name', 'supplierName', 'supplier', 'Supplier Name', 'Supplier']
+    },
+    {
+      id: 'supplier_tax_id',
+      label: 'Tax ID',
+      keys: ['supplier_tax_id', 'supplierTaxId', 'tax_id', 'Supplier Tax/Reg ID', 'Tax ID']
+    },
+    { id: 'currency', label: 'Currency', keys: ['currency', 'Currency', 'currency_code'] },
+    { id: 'subtotal', label: 'Subtotal', keys: ['subtotal', 'Subtotal'], money: true },
+    {
+      id: 'tax_amount',
+      label: 'Tax',
+      keys: ['tax_amount', 'taxAmount', 'tax', 'Tax Amount', 'Tax'],
+      money: true
+    },
+    {
+      id: 'grand_total',
+      label: 'Grand Total',
+      keys: ['grand_total', 'grandTotal', 'total', 'Grand Total'],
+      money: true
+    },
+    {
+      id: 'confidence_notes',
+      label: 'Confidence',
+      keys: ['confidence_notes', 'confidenceNotes', 'confidence', 'Confidence / Notes', 'notes']
+    }
   ];
+
+  /* The backend has returned previews as an array, a wrapped object and as
+     separate top-level keys. Normalise all of those shapes. */
+  function extractInvoicePreview(data) {
+    if (!data || typeof data !== 'object') return [];
+
+    const lists = [];
+    const preview = data.preview;
+    if (Array.isArray(preview)) {
+      lists.push(preview);
+    } else if (preview && typeof preview === 'object') {
+      if (Array.isArray(preview.rows)) lists.push(preview.rows);
+      if (Array.isArray(preview.invoices)) lists.push(preview.invoices);
+      if (Array.isArray(preview.summary)) lists.push(preview.summary);
+    }
+
+    if (Array.isArray(data.preview_rows)) lists.push(data.preview_rows);
+    if (Array.isArray(data.rows)) lists.push(data.rows);
+    if (Array.isArray(data.invoices)) lists.push(data.invoices);
+    if (Array.isArray(data.invoice_rows)) lists.push(data.invoice_rows);
+
+    for (let i = 0; i < lists.length; i += 1) {
+      if (lists[i].length) return lists[i];
+    }
+    return [];
+  }
 
   /* 1–5 files = 5 credits, 6–15 files = 10 credits, 0 files = 0 credits. */
   function invoiceQuote(count) {
@@ -5583,12 +5641,8 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
-        const rowsRaw = Array.isArray(data.preview_rows)
-          ? data.preview_rows
-          : Array.isArray(data.invoices)
-          ? data.invoices
-          : null;
-        if (rowsRaw && rowsRaw.length) job.preview_rows = rowsRaw.slice(0, 50);
+        const previewRows = extractInvoicePreview(data);
+        if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
 
         const status = String(data.status || job.status || 'processing').toLowerCase();
         job.status = status;
@@ -5799,15 +5853,51 @@
     renderInvoiceJobSummary();
   }
 
+  function formatInvoiceMoney(value) {
+    const cleaned = String(value).replace(/[^0-9.-]/g, '');
+    if (!/[0-9]/.test(cleaned)) return String(value);
+    const n = Number(cleaned);
+    if (!Number.isFinite(n)) return String(value);
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
+
+  function formatInvoiceConfidence(value) {
+    const text = String(value).trim();
+    const n = Number(text.replace('%', ''));
+    if (!Number.isFinite(n)) return text;
+    if (text.indexOf('%') !== -1) return Math.round(n) + '%';
+    if (n > 0 && n <= 1) return Math.round(n * 100) + '%';
+    if (n > 1 && n <= 100) return Math.round(n) + '%';
+    return text;
+  }
+
   function invoiceCellValue(row, col) {
     if (!row || typeof row !== 'object') return '—';
+
+    let value = '';
     for (let i = 0; i < col.keys.length; i += 1) {
       const raw = row[col.keys[i]];
       if (raw === null || raw === undefined) continue;
       const text = String(raw).trim();
-      if (text) return text;
+      if (text) {
+        value = text;
+        break;
+      }
     }
-    return '—';
+    if (!value) return '—';
+
+    if (col.id === 'invoice_date') {
+      const ms = new Date(value).getTime();
+      if (Number.isFinite(ms)) return new Date(ms).toISOString().slice(0, 10);
+      return value;
+    }
+    if (col.id === 'currency') return value.toUpperCase();
+    if (col.money) return formatInvoiceMoney(value);
+    if (col.id === 'confidence_notes') return formatInvoiceConfidence(value);
+    return value;
   }
 
   function renderInvoiceTable() {
@@ -5864,13 +5954,17 @@
     job.status = 'completed';
     job.download_ready = true;
     job.percent = 100;
+
+    /* Render the final rows, pill and subtitle BEFORE the poller stops, so the
+       completed payload's preview can never be lost. */
+    updateInvoiceProgress();
+    renderInvoiceTable();
+
     stopInvoiceTimer();
     /* Force the history panel to re-fetch next time it opens. */
     historyState.loaded = false;
     saveState();
 
-    updateInvoiceProgress();
-    renderInvoiceTable();
     setInvoiceBadge('ok', 'Completed · .xlsx ready');
     if (!silent) toast('Invoice Excel is ready to download.', 'success');
   }

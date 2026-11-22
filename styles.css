@@ -4637,13 +4637,17 @@ table.leads-table {
   align-items: flex-start;
   gap: 1px;
   max-width: 150px;
-  line-height: 1.15;
+  line-height: 1.35;
   text-align: left;
 }
 
 .user-meta strong {
+  display: block;
   font-size: 0.82rem;
   font-weight: 700;
+  /* Breathing room for descenders (g, y, p) — ellipsis still applies. */
+  line-height: 1.35;
+  padding-block: 2px;
   color: #fff;
   max-width: 150px;
   overflow: hidden;
