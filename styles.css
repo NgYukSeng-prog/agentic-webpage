@@ -5879,8 +5879,144 @@ table.leads-table {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
-.history-pane[hidden] {
+.history-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  margin-left: 5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.history-tab.is-active .history-tab-count {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.hist-group[hidden] {
   display: none;
+}
+
+.hist-group + .hist-group {
+  margin-top: 22px;
+}
+
+.hist-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.hist-group-head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+}
+
+.hist-count {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Validity / status badges */
+.hist-badge {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.hist-badge.ok {
+  background: #ccfbf1;
+  border-color: #99f6e4;
+  color: #0f766e;
+}
+
+.hist-badge.warn {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.hist-badge.bad {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.hist-badge.muted {
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+/* 7-day remaining validity bar */
+.hist-validity {
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.hist-validity span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #14b8a6, #22d3ee);
+}
+
+.hist-card.is-expired {
+  opacity: 0.78;
+}
+
+.hist-sub {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
+.hist-empty {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.hist-empty .empty-note {
+  margin: 0;
+}
+
+.hist-meta dd code,
+.hist-card code {
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
+/* Account Settings → history shortcut */
+.account-history-btn {
+  margin: 14px 0 18px;
 }
 
 .hist-list {

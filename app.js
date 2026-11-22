@@ -1473,6 +1473,8 @@
         '    <strong><span data-credit-count>' + state.credits + '</span></strong>' +
         '  </div>' +
         '</div>' +
+        '<button type="button" class="btn btn-ghost btn-block account-history-btn" id="accountHistoryBtn">' +
+        'View Subscriptions & History</button>' +
         '<div class="avatar-section-head">' +
         '  <h3>Choose your avatar</h3>' +
         '  <span>5 shapes · subtle looping animation</span>' +
@@ -1536,6 +1538,19 @@
       logoutBtn.addEventListener('click', function () {
         closeModal(false);
         logoutUser();
+      });
+    }
+
+    const historyBtn = $('#accountHistoryBtn');
+    if (historyBtn) {
+      historyBtn.addEventListener('click', function () {
+        closeModal(false);
+        if (window.location.hash === '#plans') {
+          renderHistory(true);
+          window.scrollTo(0, 0);
+        } else {
+          window.location.hash = '#plans';
+        }
       });
     }
 
@@ -2172,7 +2187,8 @@
         ) || 0,
       target: Number(firstValue(job, ['target_count', 'target_rows', 'target'], 0)) || 0,
       status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
-      date: firstValue(job, ['completed_at', 'created_at', 'started_at', 'date', 'createdAt'], ''),
+      created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
+      completed: firstValue(job, ['completed_at', 'completedAt'], ''),
       credits:
         Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits', 'credits_used'], 0)) || 0,
       downloadReady:
@@ -2182,28 +2198,102 @@
     };
   }
 
+  /* MYT calendar date for an arbitrary epoch value. */
+  function mytDateString(ms) {
+    const offsetMs = (Number(CFG.TIMEZONE_OFFSET_HOURS) || 8) * 3600000;
+    const d = new Date(ms + offsetMs);
+    return (
+      d.getUTCFullYear() +
+      '-' +
+      String(d.getUTCMonth() + 1).padStart(2, '0') +
+      '-' +
+      String(d.getUTCDate()).padStart(2, '0')
+    );
+  }
+
+  /* Live validity countdown for one subscription window. */
+  function subscriptionValidity(expiresAt, startedAt) {
+    const expiresMs = new Date(expiresAt).getTime();
+    if (!expiresAt || !Number.isFinite(expiresMs)) {
+      return { expired: false, label: 'No expiry', tone: 'muted', percent: 0, remainingMs: 0 };
+    }
+
+    const remaining = expiresMs - Date.now();
+    if (remaining <= 0) {
+      return { expired: true, label: 'Expired', tone: 'muted', percent: 0, remainingMs: 0 };
+    }
+
+    const startedMs = new Date(startedAt).getTime();
+    const windowMs =
+      Number.isFinite(startedMs) && startedMs < expiresMs
+        ? expiresMs - startedMs
+        : SUB_DAYS * 86400000;
+    const percent = clamp((remaining / Math.max(windowMs, 86400000)) * 100, 2, 100);
+
+    if (remaining < 86400000) {
+      const expiresToday = mytDateString(expiresMs) === mytDateString(Date.now());
+      return {
+        expired: false,
+        label: expiresToday ? 'Expires today' : '< 1 day left',
+        tone: 'warn',
+        percent: percent,
+        remainingMs: remaining
+      };
+    }
+
+    const days = Math.ceil(remaining / 86400000);
+    return {
+      expired: false,
+      label: days + ' day' + (days === 1 ? '' : 's') + ' left',
+      tone: 'ok',
+      percent: percent,
+      remainingMs: remaining
+    };
+  }
+
+  function historyTime(value) {
+    const ms = new Date(value).getTime();
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function sortNewestFirst(list, key) {
+    return list.slice().sort(function (a, b) {
+      return historyTime(b[key]) - historyTime(a[key]);
+    });
+  }
+
   function renderStockHistoryCard(sub) {
+    const validity = subscriptionValidity(sub.expiresAt, sub.startedAt);
+    const badgeClass =
+      validity.tone === 'ok' ? 'hist-badge ok' : validity.tone === 'warn' ? 'hist-badge warn' : 'hist-badge muted';
     const tickers = sub.tickers.length
       ? sub.tickers
           .map(function (t) { return '<span class="pill-ticker">' + escapeHtml(t) + '</span>'; })
           .join('')
       : '<span class="pill-ticker">—</span>';
 
+    const progress = validity.expired
+      ? ''
+      : '<div class="hist-validity" role="img" aria-label="' +
+        Math.round(validity.percent) + '% of the validity window remaining">' +
+        '<span style="width:' + validity.percent.toFixed(1) + '%"></span></div>';
+
     return (
-      '<article class="hist-card">' +
+      '<article class="hist-card' + (validity.expired ? ' is-expired' : '') + '">' +
       '<div class="hist-card-top">' +
       '<strong>' + escapeHtml(AGENT_NAME) + '</strong>' +
-      '<span class="mini-pill' + (sub.active ? ' mini-pill-emerald' : '') + '">' +
-      (sub.active ? 'Active' : 'Expired') + '</span>' +
+      '<span class="' + badgeClass + '">' + escapeHtml(validity.label) + '</span>' +
       '</div>' +
       '<div class="hist-pill-row">' + tickers + '</div>' +
+      progress +
       '<dl class="hist-meta">' +
-      '<div><dt>Delivery email</dt><dd>' + escapeHtml(sub.email || '—') + '</dd></div>' +
-      '<div><dt>Start date</dt><dd>' +
+      '<div><dt>Purchase date</dt><dd>' +
       escapeHtml(sub.startedAt ? fmtMYT(sub.startedAt) : '—') + '</dd></div>' +
       '<div><dt>Expiry date</dt><dd>' +
       escapeHtml(sub.expiresAt ? fmtMYT(sub.expiresAt) : '—') + '</dd></div>' +
-      '<div><dt>Credits spent</dt><dd>' + sub.credits + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + sub.credits + ' credit' +
+      (sub.credits === 1 ? '' : 's') + '</dd></div>' +
+      '<div><dt>Delivery email</dt><dd>' + escapeHtml(sub.email || '—') + '</dd></div>' +
       '</dl>' +
       '</article>'
     );
@@ -2225,34 +2315,34 @@
       cancelled: 'Cancelled',
       canceled: 'Cancelled'
     };
-    const ok = labels[job.status] === 'Completed';
     const label = labels[job.status] || (job.status ? job.status : 'Unknown');
-    const terms = job.terms.length
-      ? job.terms
-          .map(function (t) { return '<span class="pill-ticker">' + escapeHtml(t) + '</span>'; })
-          .join('')
-      : '<span class="pill-ticker">—</span>';
-    const progress =
-      (job.status === 'completed' ? Math.max(job.scraped, job.target) : job.scraped) +
-      ' / ' + (job.target ? job.target : '—');
+    const ok = label === 'Completed';
+    const tone = ok ? 'ok' : label === 'Failed' || label === 'Cancelled' ? 'bad' : label === 'Running' || label === 'Queued' ? 'warn' : 'muted';
+    const termsText = job.terms.length ? job.terms.join(' · ') : '—';
+    const subtitle =
+      job.country && job.country !== '—' ? job.country + ' · ' + termsText : termsText;
+    const leads = job.status === 'completed' ? Math.max(job.scraped, job.target) : job.scraped;
+    const leadText = leads + ' / ' + (job.target ? job.target : '—') + ' leads';
 
     return (
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>B2B Lead Scraper Agent</strong>' +
-      '<span class="mini-pill' + (ok ? ' mini-pill-emerald' : '') + '">' + escapeHtml(label) + '</span>' +
+      '<span class="hist-badge ' + tone + '">' + escapeHtml(label) + '</span>' +
       '</div>' +
-      '<div class="hist-pill-row">' + terms + '</div>' +
+      '<p class="hist-sub">' + escapeHtml(subtitle) + '</p>' +
       '<dl class="hist-meta">' +
+      '<div><dt>Leads</dt><dd>' + escapeHtml(leadText) + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + job.credits + ' credit' +
+      (job.credits === 1 ? '' : 's') + '</dd></div>' +
       '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
-      '<div><dt>Country</dt><dd>' + escapeHtml(job.country) + '</dd></div>' +
-      '<div><dt>Leads</dt><dd>' + escapeHtml(progress) + '</dd></div>' +
-      '<div><dt>Date</dt><dd>' + escapeHtml(job.date ? fmtMYT(job.date) : '—') + '</dd></div>' +
-      '<div><dt>Credits spent</dt><dd>' + job.credits + '</dd></div>' +
+      '<div><dt>Created</dt><dd>' +
+      escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
       '<div class="hist-actions">' +
       '<button type="button" class="btn btn-ghost btn-sm" data-history-resume="' +
-      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') + '>View Progress</button>' +
+      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') + '>' +
+      (ok ? 'View Results' : 'View Progress') + '</button>' +
       (job.downloadReady && job.job_id
         ? '<button type="button" class="btn btn-primary btn-sm" data-history-download="' +
           escapeHtml(job.job_id) + '">Download .xlsx</button>'
@@ -2265,22 +2355,55 @@
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
+    const stockCount = historyState.stock.length;
+    const b2bCount = historyState.b2b.length;
 
     if (stockPane) {
-      stockPane.innerHTML = historyState.stock.length
+      stockPane.innerHTML = stockCount
         ? '<div class="hist-list">' +
           historyState.stock.map(renderStockHistoryCard).join('') +
           '</div>'
-        : '<p class="empty-note">You haven\u2019t subscribed to the Stock Market News Agent yet. Activate a ticker to start receiving 07:00 MYT briefs.</p>';
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No stock brief subscriptions yet. Subscribe to a ticker and your first brief lands in your inbox at 07:00 MYT.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Subscribe to Stock Brief</a>' +
+          '</div>';
     }
 
     if (b2bPane) {
-      b2bPane.innerHTML = historyState.b2b.length
+      b2bPane.innerHTML = b2bCount
         ? '<div class="hist-list">' +
           historyState.b2b.map(renderB2BHistoryCard).join('') +
           '</div>'
-        : '<p class="empty-note">No B2B lead scraping jobs yet. Start a run from the B2B Lead Scraper card to see its progress here.</p>';
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No B2B lead scraping jobs yet. Run the scraper and the .xlsx history will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Run B2B Lead Scraper</a>' +
+          '</div>';
     }
+
+    /* Keep tab + section counters in sync. */
+    $$('[data-hist-count]').forEach(function (el) {
+      const key = el.getAttribute('data-hist-count');
+      el.textContent = String(key === 'stock' ? stockCount : b2bCount);
+    });
+    $$('[data-hist-count-label="stock"]').forEach(function (el) {
+      el.textContent = stockCount + ' subscription' + (stockCount === 1 ? '' : 's');
+    });
+    $$('[data-hist-count-label="b2b"]').forEach(function (el) {
+      el.textContent = b2bCount + ' job' + (b2bCount === 1 ? '' : 's');
+    });
+  }
+
+  /* All / stock / b2b filter for the history panel. */
+  function applyHistoryFilter(name) {
+    const filter = name === 'stock' || name === 'b2b' ? name : 'all';
+    $$('[data-history-tab]').forEach(function (btn) {
+      const on = btn.getAttribute('data-history-tab') === filter;
+      btn.classList.toggle('is-active', on);
+      btn.setAttribute('aria-selected', String(on));
+    });
+    $$('[data-hist-group]').forEach(function (group) {
+      group.hidden = filter !== 'all' && group.getAttribute('data-hist-group') !== filter;
+    });
   }
 
   function renderHistory(force) {
@@ -2290,16 +2413,16 @@
 
     if (!isLoggedIn()) {
       historyState = { loaded: false, loading: false, stock: [], b2b: [] };
-      if (stockPane) {
-        stockPane.innerHTML =
-          '<p class="empty-note">Log in to load your stock brief subscriptions and credit history. ' +
-          '<button type="button" class="linklike" data-history-login>Log in</button></p>';
-      }
-      if (b2bPane) {
-        b2bPane.innerHTML =
-          '<p class="empty-note">Log in to load your B2B lead scraping jobs. ' +
-          '<button type="button" class="linklike" data-history-login>Log in</button></p>';
-      }
+      const loginCard =
+        '<div class="hist-empty">' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs and B2B lead runs are tied to your LiteWork account.</p>' +
+        '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
+        '</div>';
+      if (stockPane) stockPane.innerHTML = loginCard;
+      if (b2bPane) b2bPane.innerHTML = loginCard;
+      $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
+      $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
+      $$('[data-hist-count-label="b2b"]').forEach(function (el) { el.textContent = '0 jobs'; });
       return;
     }
 
@@ -2333,6 +2456,8 @@
 
         const source = historySource(body);
         const stockRaw = pickArray(source, [
+          'stock_brief',
+          'stock_briefs',
           'subscriptions',
           'stock_subscriptions',
           'stock_history',
@@ -2340,6 +2465,7 @@
           'stock'
         ]);
         const b2bRaw = pickArray(source, [
+          'b2b_lead_scraper',
           'jobs',
           'scraper_jobs',
           'lead_jobs',
@@ -2379,6 +2505,9 @@
             });
           });
         }
+
+        historyState.stock = sortNewestFirst(historyState.stock, 'startedAt');
+        historyState.b2b = sortNewestFirst(historyState.b2b, 'created');
 
         historyState.loaded = true;
         paintHistory();
@@ -3379,18 +3508,10 @@
       btn.addEventListener('click', openSampleModal);
     });
 
-    /* Subscriptions & history: per-agent tabs */
+    /* Subscriptions & history: All / Stock / B2B filters */
     $$('[data-history-tab]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        const name = btn.getAttribute('data-history-tab');
-        $$('[data-history-tab]').forEach(function (b) {
-          const on = b === btn;
-          b.classList.toggle('is-active', on);
-          b.setAttribute('aria-selected', String(on));
-        });
-        $$('[data-history-pane]').forEach(function (pane) {
-          pane.hidden = pane.getAttribute('data-history-pane') !== name;
-        });
+        applyHistoryFilter(btn.getAttribute('data-history-tab'));
       });
     });
 

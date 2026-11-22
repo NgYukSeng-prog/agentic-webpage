@@ -9,7 +9,7 @@
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
   <meta property="og:description" content="Two live AI workers. A 07:00 MYT stock brief and a 50–500 lead B2B Excel scraper. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%230F172A'/%3E%3Cpath d='M19.6 5.8 10.4 17.4h4.9l-2.3 8.8 9.4-11.9h-4.9z' fill='%2322D3EE'/%3E%3Crect x='7.4' y='21.6' width='3.6' height='3.6' rx='1.1' fill='%236366F1'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -572,27 +572,44 @@
         <div class="panel history-panel" id="historyPanel">
           <div class="panel-head row-head">
             <div>
-              <h2>Subscriptions and History</h2>
-              <p>Every run, grouped by worker — pulled live from your LiteWork account.</p>
+              <h2>Subscriptions and Purchase History</h2>
+              <p>Every subscription and run, grouped by worker — pulled live from your LiteWork account.</p>
             </div>
             <button type="button" class="btn btn-ghost btn-sm" id="historyRefresh">Refresh</button>
           </div>
 
-          <div class="history-tabs" role="tablist" aria-label="Agent history">
-            <button type="button" class="history-tab is-active" data-history-tab="stock" role="tab" aria-selected="true">
-              Stock Market News Agent
+          <div class="history-tabs" role="tablist" aria-label="Filter history by agent">
+            <button type="button" class="history-tab is-active" data-history-tab="all" role="tab" aria-selected="true">
+              All
+            </button>
+            <button type="button" class="history-tab" data-history-tab="stock" role="tab" aria-selected="false">
+              Stock Market News Agent <span class="history-tab-count" data-hist-count="stock">0</span>
             </button>
             <button type="button" class="history-tab" data-history-tab="b2b" role="tab" aria-selected="false">
-              B2B Lead Scraper
+              B2B Lead Scraper <span class="history-tab-count" data-hist-count="b2b">0</span>
             </button>
           </div>
 
-          <div class="history-pane" data-history-pane="stock" id="historyStock" aria-live="polite">
-            <p class="empty-note">Log in to load your stock brief subscriptions.</p>
-          </div>
+          <div class="history-pane" id="historyPanes" aria-live="polite">
+            <section class="hist-group" data-hist-group="stock">
+              <div class="hist-group-head">
+                <h3>Stock Market News Agent</h3>
+                <span class="hist-count" data-hist-count-label="stock">0 subscriptions</span>
+              </div>
+              <div id="historyStock">
+                <p class="empty-note">Log in to load your stock brief subscriptions.</p>
+              </div>
+            </section>
 
-          <div class="history-pane" data-history-pane="b2b" id="historyB2B" aria-live="polite" hidden>
-            <p class="empty-note">Log in to load your B2B lead scraping jobs.</p>
+            <section class="hist-group" data-hist-group="b2b">
+              <div class="hist-group-head">
+                <h3>B2B Lead Scraper</h3>
+                <span class="hist-count" data-hist-count-label="b2b">0 jobs</span>
+              </div>
+              <div id="historyB2B">
+                <p class="empty-note">Log in to load your B2B lead scraping jobs.</p>
+              </div>
+            </section>
           </div>
         </div>
       </div>
@@ -981,7 +998,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+  <script src="config.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
