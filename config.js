@@ -69,7 +69,7 @@ window.CONFIG = {
     { symbol: 'NFLX', name: 'Netflix, Inc.', tag: 'Streaming' }
   ],
 
-  /* --- B2B Lead Scraper agent -------------------------------------------
+  /* --- Lead Scraper Agent -----------------------------------------------
      Second live Agent-as-a-Service. 15 credits buys one 1,000-lead .xlsx
      extraction run (10 search terms). Endpoints are consumed by app.js.  */
   /* Per-term pricing: 1 search term = 50 leads = 3 credits.
@@ -80,7 +80,7 @@ window.CONFIG = {
   LEAD_SCRAPER_MIN_CREDITS: 3,
   LEAD_SCRAPER_MAX_TERMS: 10,
   LEAD_SCRAPER_AGENT_ID: 'b2b-lead-scraper',
-  LEAD_SCRAPER_AGENT_NAME: 'B2B Lead Scraper Agent',
+  LEAD_SCRAPER_AGENT_NAME: 'Lead Scraper Agent',
   LEAD_SCRAPER_TARGET_ROWS: 1000,
   LEAD_SCRAPER_POLL_MS: 2500,
   LEAD_SCRAPER_START_URL:
@@ -201,17 +201,80 @@ window.CONFIG = {
     {
       id: 'standard',
       label: 'Standard LiteWork Excel',
-      hint: '21-column Summary + Line Items sheets'
+      hint: '21-column Summary + Line Items sheets',
+      subtitle: '21 MY/SG Summary Fields + Line Items Sheet',
+      columns: [
+        'Source File',
+        'Document Type',
+        'Invoice Number',
+        'Invoice Date',
+        'Due Date',
+        'Payment Terms',
+        'Supplier Name',
+        'Supplier TIN',
+        'Supplier BRN / UEN',
+        'Supplier SST / GST Reg',
+        'MyInvois UUID / Status',
+        'Buyer Name',
+        'PO / Ref No.',
+        'Currency',
+        'Subtotal',
+        'Tax Type & Rate',
+        'Tax Amount',
+        'Discount / Rounding',
+        'Grand Total',
+        'Payment Status / Method',
+        'Confidence / Notes'
+      ],
+      note: 'Sheet 2: Itemized Line Items (7 columns)'
     },
     {
       id: 'xero',
       label: 'Xero Bills Ready',
-      hint: 'Single-sheet Xero Bills import format — SG / Cloud SMEs'
+      hint: 'Single-sheet Xero Bills import format — SG / Cloud SMEs',
+      subtitle: '11 Xero Bills Import Columns · Single Sheet',
+      columns: [
+        '*ContactName',
+        '*InvoiceNumber',
+        '*InvoiceDate',
+        '*DueDate',
+        'Reference',
+        '*Description',
+        '*Quantity',
+        '*UnitAmount',
+        '*AccountCode',
+        '*TaxType',
+        'Currency'
+      ],
+      note: 'Single sheet ("Xero Bills") · Auto-includes Discount / Rounding lines'
     },
     {
       id: 'sql_autocount',
       label: 'SQL Account / AutoCount Ready',
-      hint: 'Single-sheet MY accounting import format'
+      hint: 'Single-sheet MY accounting import format',
+      subtitle: '19 Purchase-Invoice Columns · Single Sheet',
+      columns: [
+        'DocNo',
+        'DocDate',
+        'DueDate',
+        'SupplierName',
+        'SupplierTIN',
+        'SupplierBRN',
+        'SupplierSST',
+        'MyInvoisUUID',
+        'Currency',
+        'PONo',
+        'ItemDescription',
+        'Qty',
+        'UnitPrice',
+        'TaxType',
+        'TaxAmount',
+        'SubTotal',
+        'GrandTotal',
+        'PaymentTerms',
+        'Notes'
+      ],
+      note: 'Single sheet ("Purchase Invoices") · Ready for SQL Account, AutoCount & Bukku'
     }
   ],
   INVOICE_OCR_DEFAULT_EXPORT_FORMAT: 'standard',

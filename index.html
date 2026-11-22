@@ -9,7 +9,7 @@
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
   <meta property="og:description" content="Three live AI workers: a 07:00 MYT stock brief, a 50–500 lead B2B Excel scraper and an Invoice OCR agent. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=20" />
+  <link rel="stylesheet" href="styles.css?v=21" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='0.52' stop-color='%236366F1'/%3E%3Cstop offset='1' stop-color='%23A855F7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Cpath d='M19.4 4.6 9.2 17.4h4.55L12 26.9 23 14.2h-4.7z' fill='%2307131F'/%3E%3Ccircle cx='24.9' cy='7.4' r='1.05' fill='%23E0F2FE'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -114,11 +114,11 @@
         <a href="#agents" data-route="agents">AI Agents</a>
         <a href="#plans" data-route="plans">Manage My Plan</a>
         <a href="#about" data-route="about">About Us</a>
-        <a class="btn btn-primary btn-sm nav-cta-mobile" href="#plans">Top Up Credits</a>
+        <a class="btn btn-primary btn-sm nav-cta-mobile" href="#topup">Top Up Credits</a>
       </nav>
 
       <div class="nav-actions">
-        <a class="btn btn-primary btn-sm nav-cta" href="#plans">Top Up Credits</a>
+        <a class="btn btn-primary btn-sm nav-cta" href="#topup">Top Up Credits</a>
         <button class="nav-toggle" id="navToggle" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="navLinks">
           <span></span><span></span><span></span>
         </button>
@@ -174,7 +174,7 @@
 
             <div class="hero-cta">
               <a class="btn btn-primary btn-lg" href="#agents">Explore Agents</a>
-              <a class="btn btn-ghost btn-lg" href="#plans">Top Up Credits</a>
+              <a class="btn btn-ghost btn-lg" href="#topup">Top Up Credits</a>
             </div>
 
             <ul class="hero-trust">
@@ -202,7 +202,7 @@
 
               <div class="home-tabs" role="tablist" aria-label="Agent output preview">
                 <button type="button" class="home-tab is-active" data-home-tab="stock" role="tab" aria-selected="true">Stock Market Brief</button>
-                <button type="button" class="home-tab" data-home-tab="scraper" role="tab" aria-selected="false">B2B Lead Scraper</button>
+                <button type="button" class="home-tab" data-home-tab="scraper" role="tab" aria-selected="false">Lead Scraper Agent</button>
                 <button type="button" class="home-tab" data-home-tab="invoice" role="tab" aria-selected="false">Invoice OCR</button>
               </div>
 
@@ -362,7 +362,7 @@
           </div>
           <div class="cta-band-actions">
             <a class="btn btn-primary btn-lg" href="#agents">Explore Agents</a>
-            <a class="btn btn-ghost btn-lg" href="#plans">Top Up Credits</a>
+            <a class="btn btn-ghost btn-lg" href="#topup">Top Up Credits</a>
           </div>
         </div>
       </div>
@@ -465,18 +465,18 @@
               <button type="button" class="btn btn-subscribe is-disabled" id="subscribeBtn" disabled aria-disabled="true">Subscribe</button>
             </div>
             <p class="subscribe-caption" id="subscribeCaption">
-              Requires at least 5 credits for 7 days (1 stock). <a href="#plans">Top up in Manage My Plan</a>.
+              Requires at least 5 credits for 7 days (1 stock). <a href="#topup">Top up credits</a>.
             </p>
           </div>
         </article>
 
-        <!-- Second live agent: B2B Lead Scraper -->
+        <!-- Second live agent: Lead Scraper Agent -->
         <article class="agent-card agent-card-featured agent-card-scraper" id="leadScraperCard">
           <div class="agent-visual agent-visual-scraper">
             <div class="agent-visual-glow agent-visual-glow-green" aria-hidden="true"></div>
 
             <!-- Cute data-scout mascot: sweeping magnifier + floating XLS card -->
-            <svg class="mascot mascot-scraper" viewBox="0 0 230 160" role="img" aria-label="B2B Lead Scraper Agent mascot — a cute robot holding a sweeping magnifying glass next to an XLS card">
+            <svg class="mascot mascot-scraper" viewBox="0 0 230 160" role="img" aria-label="Lead Scraper Agent mascot — a cute robot holding a sweeping magnifying glass next to an XLS card">
               <g class="mascot-bob">
                 <!-- floating XLS card -->
                 <g class="mascot-xls" transform="rotate(-7 28 78)">
@@ -537,7 +537,7 @@
 
           <div class="agent-body">
             <div class="agent-title-row">
-              <h2>B2B Lead Scraper Agent</h2>
+              <h2>Lead Scraper Agent</h2>
               <span class="price-tag price-tag-green">3 Credits / Term · 50 Leads</span>
             </div>
             <p class="agent-desc">Extracts up to 500 verified B2B leads from up to 10 search terms into Excel.</p>
@@ -553,10 +553,10 @@
 
             <div class="agent-actions">
               <button type="button" class="btn btn-ghost" data-open-columns>View Excel Columns</button>
-              <button type="button" class="btn btn-subscribe is-disabled" id="scraperSubscribeBtn" disabled aria-disabled="true">Subscribe</button>
+              <button type="button" class="btn btn-subscribe is-disabled" id="scraperSubscribeBtn" disabled aria-disabled="true">Launch Lead Scraper</button>
             </div>
             <p class="subscribe-caption" id="scraperSubscribeCaption">
-              Needs at least 3 credits (1 term · 50 leads). <a href="#plans">Top up in Manage My Plan</a>.
+              Needs at least 3 credits (1 term · 50 leads). <a href="#topup">Top up credits</a>.
             </p>
           </div>
         </article>
@@ -644,7 +644,7 @@
               <button type="button" class="btn btn-subscribe" data-open-invoice>Launch Invoice OCR</button>
             </div>
             <p class="subscribe-caption">
-              5 credits for 1–5 files · 10 credits for 6–15 files. <a href="#plans">Top up in Manage My Plan</a>.
+              5 credits for 1–5 files · 10 credits for 6–15 files. <a href="#topup">Top up credits</a>.
             </p>
           </div>
         </article>
@@ -721,7 +721,7 @@
               Stock Market News Agent <span class="history-tab-count" data-hist-count="stock">0</span>
             </button>
             <button type="button" class="history-tab" data-history-tab="b2b" role="tab" aria-selected="false">
-              B2B Lead Scraper <span class="history-tab-count" data-hist-count="b2b">0</span>
+              Lead Scraper Agent <span class="history-tab-count" data-hist-count="b2b">0</span>
             </button>
             <button type="button" class="history-tab" data-history-tab="invoice" role="tab" aria-selected="false">
               Invoice OCR <span class="history-tab-count" data-hist-count="invoice">0</span>
@@ -741,11 +741,11 @@
 
             <section class="hist-group" data-hist-group="b2b">
               <div class="hist-group-head">
-                <h3>B2B Lead Scraper</h3>
+                <h3>Lead Scraper Agent</h3>
                 <span class="hist-count" data-hist-count-label="b2b">0 jobs</span>
               </div>
               <div id="historyB2B">
-                <p class="empty-note">Log in to load your B2B lead scraping jobs.</p>
+                <p class="empty-note">Log in to load your lead scraping jobs.</p>
               </div>
             </section>
 
@@ -762,10 +762,15 @@
         </div>
       </div>
 
-      <!-- 2. Credits & plans directly below -->
-      <div class="container page-head center plans-section-head">
+    </section>
+
+    <!-- ====================================================================
+         VIEW · TOP UP CREDITS
+         ==================================================================== -->
+    <section class="view" data-view="topup" id="view-topup">
+      <div class="container page-head center">
         <span class="eyebrow">Pay as you go · USD</span>
-        <h2 class="page-head-title">Manage My Plan</h2>
+        <h1>Top Up Credits</h1>
         <p>Credits never auto-renew. 5 credits = 1 stock for 7 days.</p>
       </div>
 
@@ -779,6 +784,14 @@
             Unused credits stay in your wallet. Spend them on any agent, anytime.
           </p>
           <a class="btn btn-ghost btn-sm" href="#agents">Browse agents</a>
+        </div>
+
+        <div class="topup-rules" aria-label="Credit rules">
+          <span class="topup-rule">Credits never auto-renew</span>
+          <span class="topup-rule">5 credits = 1 stock for 7 days</span>
+          <span class="topup-rule">Lead Scraper = 3 credits per 50-lead term</span>
+          <span class="topup-rule">Invoice OCR = 5 or 10 credits per batch</span>
+          <span class="topup-rule">Unused credits never expire</span>
         </div>
       </div>
 
@@ -956,7 +969,7 @@
         </a>
 
         <div class="page-head configure-head">
-          <span class="eyebrow">B2B Lead Scraper Agent</span>
+          <span class="eyebrow">Lead Scraper Agent</span>
           <h1>Your Excel is being built.</h1>
           <p>Live extraction progress · first 25 rows preview · .xlsx when the backend completes.</p>
         </div>
@@ -966,7 +979,7 @@
             <h2>No scrape running</h2>
             <p>Start a job to watch live progress and download your leads.</p>
           </div>
-          <a class="btn btn-primary" href="#agents">Open the Lead Scraper</a>
+          <a class="btn btn-primary" href="#agents">Launch Lead Scraper</a>
         </div>
 
         <div id="scraperMain" hidden>
@@ -1158,7 +1171,7 @@
 
           <div class="success-actions">
             <a class="btn btn-ghost" href="#agents">Return to AI Agents</a>
-            <a class="btn btn-primary" href="#plans">Top Up More Credits</a>
+            <a class="btn btn-primary" href="#topup">Top Up More Credits</a>
           </div>
 
           <p class="fine success-fine">First brief arrives tomorrow at 07:00 MYT.</p>
@@ -1169,7 +1182,7 @@
           <p>Activate the Stock Market News Agent to start receiving 07:00 MYT briefs.</p>
           <div class="success-actions">
             <a class="btn btn-primary" href="#agents">Browse AI Workers</a>
-            <a class="btn btn-ghost" href="#plans">Buy credits</a>
+            <a class="btn btn-ghost" href="#topup">Buy credits</a>
           </div>
         </div>
       </div>
@@ -1199,6 +1212,7 @@
         <a href="#home">Home</a>
         <a href="#agents">AI Agents</a>
         <a href="#plans">Manage My Plan</a>
+        <a href="#topup">Top Up Credits</a>
         <a href="#about">About Us</a>
       </div>
 
@@ -1232,7 +1246,7 @@
         <strong data-credit-count>0</strong>
         <span>credits available</span>
       </div>
-      <p class="wallet-hint">1 stock for 7 days = 5 credits. B2B scraping = 3 credits per term (50 leads). No auto-renewal.</p>
+      <p class="wallet-hint">1 stock for 7 days = 5 credits. Lead scraping = 3 credits per term (50 leads). No auto-renewal.</p>
       <div class="wallet-actions">
         <a class="btn btn-primary btn-sm" href="#plans">Manage My Plan</a>
         <button type="button" class="btn btn-ghost btn-sm" data-open-account>Account Settings</button>
@@ -1251,7 +1265,7 @@
         </span>
         <span class="pill-text">Credits: <strong data-credit-count>0</strong></span>
       </button>
-      <a class="pill-cta" href="#plans">+ Top Up</a>
+      <a class="pill-cta" href="#topup">+ Top Up</a>
     </div>
   </div>
 
@@ -1266,7 +1280,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=20"></script>
-  <script src="app.js?v=20"></script>
+  <script src="config.js?v=21"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

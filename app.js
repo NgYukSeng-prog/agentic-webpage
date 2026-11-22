@@ -60,7 +60,7 @@
   const LEAD_MAX_TERMS = toPositiveInt(CFG.LEAD_SCRAPER_MAX_TERMS, 10);
   const LEAD_MAX_TARGET = LEAD_LEADS_PER_TERM * LEAD_MAX_TERMS;
   const LEAD_AGENT_ID = CFG.LEAD_SCRAPER_AGENT_ID || 'b2b-lead-scraper';
-  const LEAD_AGENT_NAME = CFG.LEAD_SCRAPER_AGENT_NAME || 'B2B Lead Scraper Agent';
+  const LEAD_AGENT_NAME = CFG.LEAD_SCRAPER_AGENT_NAME || 'Lead Scraper Agent';
   const LEAD_POLL_MS = toPositiveInt(CFG.LEAD_SCRAPER_POLL_MS, 2500);
   const LEAD_START_URL = CFG.LEAD_SCRAPER_START_URL || '';
   const LEAD_STATUS_URL = CFG.LEAD_SCRAPER_STATUS_URL || '';
@@ -131,17 +131,58 @@
           {
             id: 'standard',
             label: 'Standard LiteWork Excel',
-            hint: '21-column Summary + Line Items sheets'
+            hint: '21-column Summary + Line Items sheets',
+            subtitle: '21 MY/SG Summary Fields + Line Items Sheet',
+            columns: INV_COLUMNS,
+            note: 'Sheet 2: Itemized Line Items (7 columns)'
           },
           {
             id: 'xero',
             label: 'Xero Bills Ready',
-            hint: 'Single-sheet Xero Bills import format — SG / Cloud SMEs'
+            hint: 'Single-sheet Xero Bills import format — SG / Cloud SMEs',
+            subtitle: '11 Xero Bills Import Columns · Single Sheet',
+            columns: [
+              '*ContactName',
+              '*InvoiceNumber',
+              '*InvoiceDate',
+              '*DueDate',
+              'Reference',
+              '*Description',
+              '*Quantity',
+              '*UnitAmount',
+              '*AccountCode',
+              '*TaxType',
+              'Currency'
+            ],
+            note: 'Single sheet ("Xero Bills") · Auto-includes Discount / Rounding lines'
           },
           {
             id: 'sql_autocount',
             label: 'SQL Account / AutoCount Ready',
-            hint: 'Single-sheet MY accounting import format'
+            hint: 'Single-sheet MY accounting import format',
+            subtitle: '19 Purchase-Invoice Columns · Single Sheet',
+            columns: [
+              'DocNo',
+              'DocDate',
+              'DueDate',
+              'SupplierName',
+              'SupplierTIN',
+              'SupplierBRN',
+              'SupplierSST',
+              'MyInvoisUUID',
+              'Currency',
+              'PONo',
+              'ItemDescription',
+              'Qty',
+              'UnitPrice',
+              'TaxType',
+              'TaxAmount',
+              'SubTotal',
+              'GrandTotal',
+              'PaymentTerms',
+              'Notes'
+            ],
+            note: 'Single sheet ("Purchase Invoices") · Ready for SQL Account, AutoCount & Bukku'
           }
         ];
   const INV_DEFAULT_EXPORT_FORMAT =
@@ -160,6 +201,32 @@
         label: 'Standard LiteWork Excel',
         hint: ''
       }
+    );
+  }
+
+  function invoiceExportColumnsSpec(id) {
+    const format = invoiceExportFormatMeta(id);
+    const columns =
+      Array.isArray(format.columns) && format.columns.length ? format.columns : INV_COLUMNS;
+    return {
+      columns: columns,
+      subtitle: String(format.subtitle || '21 MY/SG Summary Fields + Line Items Sheet'),
+      note: String(format.note || INV_SHEET2_NOTE)
+    };
+  }
+
+  function invoiceColumnsBlockHtml(id) {
+    const spec = invoiceExportColumnsSpec(id);
+    const chips = spec.columns
+      .map(function (label) {
+        return '<span class="inv-chip">' + escapeHtml(label) + '</span>';
+      })
+      .join('');
+    return (
+      '<p class="inv-cols-title">Fixed Excel Columns Extracted ' +
+      '<span>(' + escapeHtml(spec.subtitle) + ')</span></p>' +
+      '<div class="inv-chips">' + chips + '</div>' +
+      '<p class="inv-chip-note">' + escapeHtml(spec.note) + '</p>'
     );
   }
 
@@ -363,11 +430,12 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — Stock Brief, B2B Leads and Invoice OCR',
-    plans: 'Manage My Plan — Credits & History',
+    agents: 'AI Agents — Stock Brief, Lead Scraper and Invoice OCR',
+    plans: 'Manage My Plan — Subscriptions & History',
+    topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
     configure: 'Configure Your Worker — LiteWork',
-    'scraper-results': 'Scraper Results — LiteWork',
+    'scraper-results': 'Lead Scraper Results — LiteWork',
     'invoice-results': 'Invoice Results — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
@@ -1818,6 +1886,7 @@
     'home',
     'agents',
     'plans',
+    'topup',
     'about',
     'configure',
     'scraper-results',
@@ -1870,7 +1939,8 @@
       });
       enterConfigure();
     }
-    if (route === 'plans') renderPlans();
+    if (route === 'plans') renderHistory();
+    if (route === 'topup') renderTopup();
     if (route === 'success') renderSuccess();
     if (route === 'scraper-results') renderScraperResults();
     if (route === 'invoice-results') renderInvoiceResults();
@@ -1953,7 +2023,7 @@
     btn.classList.toggle('is-disabled', locked);
     btn.classList.toggle('is-ready', enough || !signedIn);
     btn.setAttribute('aria-disabled', locked ? 'true' : 'false');
-    btn.textContent = 'Subscribe';
+    btn.textContent = 'Launch Lead Scraper';
 
     if (caption) {
       caption.hidden = enough;
@@ -1965,7 +2035,7 @@
         caption.innerHTML =
           'Needs at least ' + LEAD_MIN_CREDITS +
           ' credits (1 term · ' + LEAD_LEADS_PER_TERM +
-          ' leads). <a href="#plans">Top up in Manage My Plan</a>.';
+          ' leads). <a href="#topup">Top up credits</a>.';
       } else {
         caption.innerHTML = '';
       }
@@ -2002,7 +2072,7 @@
       } else if (!enough) {
         caption.innerHTML =
           'Requires at least ' + CREDITS_PER_STOCK + ' credits for ' +
-          SUB_DAYS + ' days (1 stock). <a href="#plans">Top up in Manage My Plan</a>.';
+          SUB_DAYS + ' days (1 stock). <a href="#topup">Top up credits</a>.';
       } else {
         caption.innerHTML = '';
       }
@@ -2159,8 +2229,8 @@
     });
   }
 
-  /* ======================== G. MANAGE MY PLAN ============================ */
-  function renderPlans() {
+  /* ==================== G. TOP UP CREDITS + HISTORY ===================== */
+  function renderTopup() {
     const grid = $('#packGrid');
     if (!grid) return;
 
@@ -2190,7 +2260,6 @@
       });
     });
 
-    renderHistory();
     $$('[data-credit-count]').forEach(function (el) {
       el.textContent = String(state.credits);
     });
@@ -2459,7 +2528,7 @@
     return (
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
-      '<strong>B2B Lead Scraper Agent</strong>' +
+      '<strong>Lead Scraper Agent</strong>' +
       '<span class="hist-badge ' + tone + '">' + escapeHtml(label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(subtitle) + '</p>' +
@@ -2596,13 +2665,13 @@
 
     if (b2bPane) {
       b2bPane.innerHTML = b2bCount
-        ? renderHistoryPager('b2b', 'B2B jobs', b2bPage.page, b2bPage.pages, b2bCount) +
+        ? renderHistoryPager('b2b', 'Lead Scraper jobs', b2bPage.page, b2bPage.pages, b2bCount) +
           '<div class="hist-list">' +
           b2bPage.items.map(renderB2BHistoryCard).join('') +
           '</div>'
         : '<div class="hist-empty">' +
-          '<p class="empty-note">No B2B lead scraping jobs yet. Run the scraper and the .xlsx history will appear here.</p>' +
-          '<a class="btn btn-primary btn-sm" href="#agents">Run B2B Lead Scraper</a>' +
+          '<p class="empty-note">No lead scraping jobs yet. Run the scraper and the .xlsx history will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Launch Lead Scraper</a>' +
           '</div>';
     }
 
@@ -2667,7 +2736,7 @@
       historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, B2B lead runs and invoice batches are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, lead scraper runs and invoice batches are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
@@ -3012,7 +3081,7 @@
         '<strong>You need at least ' + CREDITS_PER_STOCK + ' credits for a 7-day subscription.</strong>' +
         '<p>Your balance is <span data-credit-count>' + state.credits +
         '</span> credits. A $5 top-up buys one stock for a week.</p>' +
-        '<a class="btn btn-primary btn-sm" href="#plans">Top up in Manage My Plan</a>' +
+        '<a class="btn btn-primary btn-sm" href="#topup">Top up credits</a>' +
         '</div>' +
         '<div id="configureBody">' +
         '<div class="calc-card modal-calc"><div class="calc-grid">' +
@@ -3268,7 +3337,7 @@
       valid = false;
     }
     if (cost > state.credits) {
-      toast('Not enough credits for this watchlist. Top up in Manage My Plan.', 'warn');
+      toast('Not enough credits for this watchlist. Top up credits.', 'warn');
       valid = false;
     }
     if (!valid) return;
@@ -3542,6 +3611,7 @@
     if (!root || !body) return;
 
     body.innerHTML = html;
+    body.scrollTop = 0;
     root.hidden = false;
     document.body.classList.add('modal-open');
     lastFocused = document.activeElement;
@@ -3618,7 +3688,8 @@
     saveState();
 
     clearAuthSession();
-    renderPlans();
+    renderTopup();
+    renderHistory();
     renderSuccess();
     renderScraperResults();
     closeWallet();
@@ -5020,7 +5091,7 @@
     }).join('');
 
     openModal(
-      '<h2 class="modal-title" id="modalTitle">B2B Lead Scraper</h2>' +
+      '<h2 class="modal-title" id="modalTitle">Lead Scraper Agent</h2>' +
       '<p class="modal-sub">1 term = ' + LEAD_LEADS_PER_TERM + ' leads = ' +
       LEAD_CREDITS_PER_TERM + ' credits · max ' + LEAD_MAX_TERMS + ' terms</p>' +
         '<form class="scraper-form" id="scraperForm" novalidate>' +
@@ -5039,7 +5110,7 @@
         '<label for="scraperCustomCountry">Custom country</label>' +
         '<input type="text" id="scraperCustomCountry" placeholder="e.g. New Zealand" /></div>' +
         '<div class="modal-section"><h3>10 search terms</h3>' +
-        '<button type="button" class="btn btn-ghost btn-sm" id="fillTermsBtn">Fill Sample B2B Terms</button></div>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="fillTermsBtn">Fill Sample Search Terms</button></div>' +
         '<div class="term-grid">' + terms.join('') + '</div>' +
         '<div class="scraper-quote">' +
         '<p class="pill-note" id="scraperQuotePill">Enter at least 1 search term (' +
@@ -5080,7 +5151,7 @@
           input.value = LEAD_SAMPLE_TERMS[index] || '';
         });
         updateScraperQuote();
-        toast('Sample B2B terms filled.', 'info');
+        toast('Sample search terms filled.', 'info');
       });
     }
 
@@ -6281,7 +6352,7 @@
         shortEl.hidden = false;
         shortEl.textContent =
           'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
-          '. Top up in Manage My Plan.';
+          '. Top up credits to continue.';
       } else {
         shortEl.hidden = true;
         shortEl.textContent = '';
@@ -6312,10 +6383,6 @@
     invoiceFiles = [];
     invoiceStarting = false;
     invoiceExportFormat = INV_DEFAULT_EXPORT_FORMAT;
-
-    const chips = INV_COLUMNS.map(function (label) {
-      return '<span class="inv-chip">' + escapeHtml(label) + '</span>';
-    }).join('');
 
     const formatPills = INV_EXPORT_FORMATS.map(function (format) {
       const active = format.id === invoiceExportFormat;
@@ -6371,11 +6438,8 @@
       formatPills +
       '</div>' +
       '</div>' +
-      '<div class="inv-cols-block">' +
-      '<p class="inv-cols-title">Fixed Excel Columns Extracted ' +
-      '<span>(21 MY/SG Summary Fields + Line Items Sheet)</span></p>' +
-      '<div class="inv-chips">' + chips + '</div>' +
-      '<p class="inv-chip-note">' + escapeHtml(INV_SHEET2_NOTE) + '</p>' +
+      '<div class="inv-cols-block" id="invColsBlock">' +
+      invoiceColumnsBlockHtml(invoiceExportFormat) +
       '</div>' +
       '<div class="modal-actions">' +
       '<div class="scraper-modal-error" id="invoiceFormError" role="alert"></div>' +
@@ -6443,6 +6507,8 @@
           btn.classList.toggle('is-active', active);
           btn.setAttribute('aria-checked', active ? 'true' : 'false');
         });
+        const colsBlock = $('#invColsBlock');
+        if (colsBlock) colsBlock.innerHTML = invoiceColumnsBlockHtml(invoiceExportFormat);
       });
     }
 
@@ -6473,7 +6539,7 @@
       if (errEl) {
         errEl.textContent =
           'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
-          ' for this batch. Top up in Manage My Plan.';
+          ' for this batch. Top up credits to continue.';
       }
       return;
     }
@@ -6529,7 +6595,7 @@
             if (errEl) {
               errEl.textContent =
                 (body && (body.error || body.message)) ||
-                'Not enough credits for this invoice batch. Top up in Manage My Plan.';
+                'Not enough credits for this invoice batch. Top up credits to continue.';
             }
             invoiceStarting = false;
             updateInvoiceQuote();
@@ -6610,7 +6676,7 @@
     }
 
     buildStockGrid();
-    renderPlans();
+    renderTopup();
     renderHomeBrief('NVDA');
     renderWalletSubs();
     syncCreditUI();
