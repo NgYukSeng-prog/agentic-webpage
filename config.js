@@ -195,7 +195,28 @@ window.CONFIG = {
   INVOICE_OCR_ACCEPT:
     '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.png,.jpg,.jpeg,.webp',
 
-  /* The 18 fixed summary fields written to Sheet 1 of the .xlsx.
+  /* Accounting export formats. The backend writes a different .xlsx shape for
+     each option, while the 21 MY/SG summary fields stay consistent. */
+  INVOICE_OCR_EXPORT_FORMATS: [
+    {
+      id: 'standard',
+      label: 'Standard LiteWork Excel',
+      hint: '21-column Summary + Line Items sheets'
+    },
+    {
+      id: 'xero',
+      label: 'Xero Bills Ready',
+      hint: 'Single-sheet Xero Bills import format — SG / Cloud SMEs'
+    },
+    {
+      id: 'sql_autocount',
+      label: 'SQL Account / AutoCount Ready',
+      hint: 'Single-sheet MY accounting import format'
+    }
+  ],
+  INVOICE_OCR_DEFAULT_EXPORT_FORMAT: 'standard',
+
+  /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
     'Source File',
@@ -205,7 +226,10 @@ window.CONFIG = {
     'Due Date',
     'Payment Terms',
     'Supplier Name',
-    'Supplier Tax/Reg ID',
+    'Supplier TIN',
+    'Supplier BRN / UEN',
+    'Supplier SST / GST Reg',
+    'MyInvois UUID / Status',
     'Buyer Name',
     'PO / Ref No.',
     'Currency',

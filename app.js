@@ -107,7 +107,10 @@
           'Due Date',
           'Payment Terms',
           'Supplier Name',
-          'Supplier Tax/Reg ID',
+          'Supplier TIN',
+          'Supplier BRN / UEN',
+          'Supplier SST / GST Reg',
+          'MyInvois UUID / Status',
           'Buyer Name',
           'PO / Ref No.',
           'Currency',
@@ -120,6 +123,45 @@
           'Confidence / Notes'
         ];
   const INV_SHEET2_NOTE = 'Sheet 2: Itemized Line Items';
+
+  const INV_EXPORT_FORMATS =
+    Array.isArray(CFG.INVOICE_OCR_EXPORT_FORMATS) && CFG.INVOICE_OCR_EXPORT_FORMATS.length
+      ? CFG.INVOICE_OCR_EXPORT_FORMATS
+      : [
+          {
+            id: 'standard',
+            label: 'Standard LiteWork Excel',
+            hint: '21-column Summary + Line Items sheets'
+          },
+          {
+            id: 'xero',
+            label: 'Xero Bills Ready',
+            hint: 'Single-sheet Xero Bills import format — SG / Cloud SMEs'
+          },
+          {
+            id: 'sql_autocount',
+            label: 'SQL Account / AutoCount Ready',
+            hint: 'Single-sheet MY accounting import format'
+          }
+        ];
+  const INV_DEFAULT_EXPORT_FORMAT =
+    String(CFG.INVOICE_OCR_DEFAULT_EXPORT_FORMAT || 'standard').toLowerCase() || 'standard';
+
+  function invoiceExportFormatMeta(id) {
+    const wanted = String(id || INV_DEFAULT_EXPORT_FORMAT).trim().toLowerCase();
+    for (let i = 0; i < INV_EXPORT_FORMATS.length; i += 1) {
+      if (String(INV_EXPORT_FORMATS[i].id || '').toLowerCase() === wanted) {
+        return INV_EXPORT_FORMATS[i];
+      }
+    }
+    return (
+      INV_EXPORT_FORMATS[0] || {
+        id: INV_DEFAULT_EXPORT_FORMAT,
+        label: 'Standard LiteWork Excel',
+        hint: ''
+      }
+    );
+  }
 
   function toPositiveInt(value, fallback) {
     const n = Number(value);
@@ -2343,6 +2385,7 @@
         Number(firstValue(job, ['files_processed', 'processed_files', 'completed_files'], 0)) || 0,
       credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
       status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
+      exportFormat: String(firstValue(job, ['export_format', 'exportFormat'], '')),
       created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
       downloadReady:
         job.download_ready === true ||
@@ -5430,6 +5473,7 @@
   let invoiceFiles = [];
   let invoicePollTimer = null;
   let invoiceStarting = false;
+  let invoiceExportFormat = INV_DEFAULT_EXPORT_FORMAT;
 
   /* Exact backend summary keys, in delivery order. */
   const INVOICE_PREVIEW_COLUMNS = [
@@ -5454,9 +5498,45 @@
       keys: ['supplier_name', 'supplierName', 'supplier', 'Supplier Name', 'Supplier']
     },
     {
-      id: 'supplier_tax_id',
-      label: 'Tax ID',
-      keys: ['supplier_tax_id', 'supplierTaxId', 'tax_id', 'Supplier Tax/Reg ID', 'Tax ID']
+      id: 'supplier_tax_ids',
+      label: 'TIN / BRN / UEN',
+      keys: ['supplier_tin', 'supplierTin', 'Supplier TIN'],
+      parts: [
+        {
+          tag: 'TIN',
+          keys: ['supplier_tin', 'supplierTin', 'Supplier TIN', 'supplier_tax_id']
+        },
+        {
+          tag: 'BRN/UEN',
+          keys: [
+            'supplier_brn_uen',
+            'supplierBrnUen',
+            'supplier_brn',
+            'supplier_uen',
+            'Supplier BRN / UEN'
+          ]
+        },
+        {
+          tag: 'SST/GST',
+          keys: [
+            'supplier_sst_gst_reg',
+            'supplierSstGstReg',
+            'supplier_sst_reg',
+            'supplier_gst_reg',
+            'Supplier SST / GST Reg'
+          ]
+        }
+      ]
+    },
+    {
+      id: 'myinvois_uuid_status',
+      label: 'MyInvois Status',
+      keys: [
+        'myinvois_uuid_status',
+        'myinvoisUuidStatus',
+        'MyInvois UUID / Status',
+        'myinvois_status'
+      ]
     },
     { id: 'currency', label: 'Currency', keys: ['currency', 'Currency', 'currency_code'] },
     { id: 'subtotal', label: 'Subtotal', keys: ['subtotal', 'Subtotal'], money: true },
@@ -5641,6 +5721,9 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
+        const liveFormat = data.export_format || data.exportFormat;
+        if (liveFormat && !job.export_format) job.export_format = String(liveFormat);
+
         const previewRows = extractInvoicePreview(data);
         if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
 
@@ -5745,6 +5828,7 @@
     const summary = $('#invoiceJobSummary');
     const files = Number(job.files_total) || 0;
     const credits = Number(job.credits_spent) || 0;
+    const exportMeta = invoiceExportFormatMeta(job.export_format);
 
     if (meta) {
       meta.textContent = files
@@ -5758,6 +5842,9 @@
         '<div class="summary-row"><dt>Processed</dt><dd>' +
         (Number(job.files_processed) || 0) + '</dd></div>' +
         '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + credits + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Export format</dt><dd>' +
+        '<span class="inv-export-badge" title="' + escapeHtml(exportMeta.hint || '') + '">' +
+        escapeHtml(exportMeta.label) + '</span></dd></div>' +
         '<div class="summary-row"><dt>Delivery email</dt><dd>' +
         escapeHtml(job.email || accountEmail() || '—') + '</dd></div>' +
         '<div class="summary-row"><dt>Started</dt><dd>' +
@@ -5847,7 +5934,7 @@
       const count = (job.preview_rows || []).length;
       tableMeta.textContent =
         'Live preview · ' + count + ' invoice' + (count === 1 ? '' : 's') +
-        ' ready · fixed accounting columns';
+        ' ready · fixed MY/SG accounting columns';
     }
 
     renderInvoiceJobSummary();
@@ -5874,19 +5961,30 @@
     return text;
   }
 
+  function invoiceFieldValue(row, keys) {
+    if (!row || typeof row !== 'object' || !Array.isArray(keys)) return '';
+    for (let i = 0; i < keys.length; i += 1) {
+      const raw = row[keys[i]];
+      if (raw === null || raw === undefined) continue;
+      const text = String(raw).trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
   function invoiceCellValue(row, col) {
     if (!row || typeof row !== 'object') return '—';
 
-    let value = '';
-    for (let i = 0; i < col.keys.length; i += 1) {
-      const raw = row[col.keys[i]];
-      if (raw === null || raw === undefined) continue;
-      const text = String(raw).trim();
-      if (text) {
-        value = text;
-        break;
-      }
+    if (Array.isArray(col.parts)) {
+      const parts = [];
+      col.parts.forEach(function (part) {
+        const partValue = invoiceFieldValue(row, part.keys);
+        if (partValue) parts.push((part.tag ? part.tag + ' ' : '') + partValue);
+      });
+      return parts.length ? parts.join(' · ') : '—';
     }
+
+    const value = invoiceFieldValue(row, col.keys);
     if (!value) return '—';
 
     if (col.id === 'invoice_date') {
@@ -6047,6 +6145,7 @@
         download_ready: false,
         preview_rows: [],
         credits_spent: known ? known.credits : 0,
+        export_format: known && known.exportFormat ? known.exportFormat : '',
         email: accountEmail(),
         created_at: new Date().toISOString(),
         poll_errors: 0
@@ -6212,14 +6311,27 @@
 
     invoiceFiles = [];
     invoiceStarting = false;
+    invoiceExportFormat = INV_DEFAULT_EXPORT_FORMAT;
 
     const chips = INV_COLUMNS.map(function (label) {
       return '<span class="inv-chip">' + escapeHtml(label) + '</span>';
     }).join('');
 
+    const formatPills = INV_EXPORT_FORMATS.map(function (format) {
+      const active = format.id === invoiceExportFormat;
+      return (
+        '<button type="button" class="inv-format-option' + (active ? ' is-active' : '') +
+        '" data-inv-format="' + escapeHtml(format.id) + '" role="radio" aria-checked="' +
+        (active ? 'true' : 'false') + '">' +
+        '<span class="inv-format-label">' + escapeHtml(format.label) + '</span>' +
+        '<span class="inv-format-hint">' + escapeHtml(format.hint || '') + '</span>' +
+        '</button>'
+      );
+    }).join('');
+
     openModal(
       '<h2 class="modal-title" id="modalTitle">Invoice OCR Agent</h2>' +
-      '<p class="modal-sub">5 credits for 1–5 files · 10 credits for 6–15 files · PDF, Word, Excel, images & TXT</p>' +
+      '<p class="modal-sub">Batch PDF, e-Invoice, Word/Excel & Clean Scan → Accounting Excel (MY & SG Ready) · 5 credits for 1–5 files · 10 credits for 6–15 files</p>' +
       '<div class="calc-card modal-calc"><div class="calc-grid">' +
       '<div class="calc-cell"><span class="calc-label">Available</span>' +
       '<span class="calc-value" id="invAvailable">' + state.credits + ' Credits</span></div>' +
@@ -6245,13 +6357,23 @@
       '<span class="inv-drop-sub">or click to browse · up to ' + INV_TIER_2_MAX +
       ' files · max ' + Math.round(INV_MAX_FILE_BYTES / 1048576) + ' MB each</span>' +
       '<span class="inv-drop-types">PDF · DOCX · XLSX · CSV · TXT · JPG · PNG · WEBP</span>' +
+      '<span class="inv-drop-tip">Best for digital PDFs, LHDN MyInvois / SG e-Invoices, Word/Excel, and clear scans. Blurry or crumpled smartphone thermal receipts may be flagged as Needs Review.</span>' +
       '</label>' +
       '<input type="file" id="invFileInput" class="inv-file-input" accept="' +
       escapeHtml(INV_ACCEPT) + '" multiple />' +
       '<ul class="inv-filelist" id="invFileList"></ul>' +
+      '<div class="inv-format-block">' +
+      '<div class="inv-format-head">' +
+      '<span class="inv-format-title">Export Format</span>' +
+      '<span class="inv-format-note">MY & SG accounting-ready .xlsx</span>' +
+      '</div>' +
+      '<div class="inv-format-group" id="invFormatGroup" role="radiogroup" aria-label="Accounting export format">' +
+      formatPills +
+      '</div>' +
+      '</div>' +
       '<div class="inv-cols-block">' +
       '<p class="inv-cols-title">Fixed Excel Columns Extracted ' +
-      '<span>(18 Summary Fields + Line Items Sheet)</span></p>' +
+      '<span>(21 MY/SG Summary Fields + Line Items Sheet)</span></p>' +
       '<div class="inv-chips">' + chips + '</div>' +
       '<p class="inv-chip-note">' + escapeHtml(INV_SHEET2_NOTE) + '</p>' +
       '</div>' +
@@ -6309,6 +6431,21 @@
     const form = $('#invoiceForm');
     if (form) form.addEventListener('submit', handleInvoiceStart);
 
+    const formatGroup = $('#invFormatGroup');
+    if (formatGroup) {
+      formatGroup.addEventListener('click', function (event) {
+        const option = event.target.closest('[data-inv-format]');
+        if (!option) return;
+        invoiceExportFormat =
+          option.getAttribute('data-inv-format') || INV_DEFAULT_EXPORT_FORMAT;
+        $$('#invFormatGroup [data-inv-format]').forEach(function (btn) {
+          const active = btn === option;
+          btn.classList.toggle('is-active', active);
+          btn.setAttribute('aria-checked', active ? 'true' : 'false');
+        });
+      });
+    }
+
     renderInvoiceFiles();
   }
 
@@ -6346,6 +6483,7 @@
     updateInvoiceQuote();
 
     const email = accountEmail();
+    const exportFormat = invoiceExportFormat || INV_DEFAULT_EXPORT_FORMAT;
     const batch = invoiceFiles.slice();
     const fileCount = batch.length;
 
@@ -6366,7 +6504,11 @@
           INV_START_URL,
           {
             method: 'POST',
-            body: JSON.stringify({ email: email, files: files })
+            body: JSON.stringify({
+              email: email,
+              export_format: exportFormat,
+              files: files
+            })
           },
           120000
         );
@@ -6423,6 +6565,7 @@
           download_ready: false,
           preview_rows: [],
           credits_spent: quote.credits,
+          export_format: String(payload.export_format || payload.exportFormat || exportFormat),
           email: email,
           created_at: new Date().toISOString(),
           poll_errors: 0
