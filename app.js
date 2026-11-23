@@ -3107,7 +3107,7 @@
         '  <div class="checkout-line"><span>Current live balance</span><span>' +
         state.credits + ' credits</span></div>' +
         '</div>' +
-        '<div class="notice notice-warn checkout-notice">' +
+        '<div class="checkout-notice">' +
         '  <strong>Prefer to top up right now?</strong>' +
         '  <p>Send us a manual top-up request with your Order ID and pack — we will reply with secure bank transfer or card instructions and credit your wallet once payment clears.</p>' +
         '</div>' +
@@ -4161,6 +4161,11 @@
     /* Lead Scraper: column reference */
     $$('[data-open-columns]').forEach(function (btn) {
       btn.addEventListener('click', openColumnsModal);
+    });
+
+    /* Invoice OCR: extracted-column reference */
+    $$('[data-open-invoice-columns]').forEach(function (btn) {
+      btn.addEventListener('click', openInvoiceColumnsModal);
     });
 
     /* Invoice OCR: launch modal, resume + download */
@@ -5632,6 +5637,19 @@
         startLivePolling(job);
       }
     });
+  }
+
+  /* Invoice OCR card: extracted-column reference (respects export formats) */
+  function openInvoiceColumnsModal() {
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Invoice Excel columns</h2>' +
+        '<p class="modal-sub">Every invoice lands in your accounting-ready .xlsx with these columns.</p>' +
+        '<div class="inv-cols-block">' +
+        invoiceColumnsBlockHtml(INV_DEFAULT_EXPORT_FORMAT) +
+        '</div>' +
+        '<div class="modal-actions"><button type="button" class="btn btn-primary" data-modal-close>Got it</button></div>',
+      true
+    );
   }
 
   function openColumnsModal() {

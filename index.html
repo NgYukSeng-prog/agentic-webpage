@@ -9,7 +9,7 @@
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
   <meta property="og:description" content="Three live AI workers: a 07:00 MYT stock brief, a 50–500 lead B2B Excel scraper and an Invoice OCR agent. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=24" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='0.52' stop-color='%236366F1'/%3E%3Cstop offset='1' stop-color='%23A855F7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Cpath d='M19.4 4.6 9.2 17.4h4.55L12 26.9 23 14.2h-4.7z' fill='%2307131F'/%3E%3Ccircle cx='24.9' cy='7.4' r='1.05' fill='%23E0F2FE'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -382,10 +382,10 @@
         <!-- Category filter pills (live counts) -->
         <div class="agent-filter" role="tablist" aria-label="Filter agents by category">
           <button type="button" class="agent-filter-pill is-active" data-agent-filter="all" role="tab" aria-selected="true">
-            All <span class="agent-filter-count">6</span>
+            All <span class="agent-filter-count">4</span>
           </button>
           <button type="button" class="agent-filter-pill" data-agent-filter="finance" role="tab" aria-selected="false">
-            Finance & Accounting <span class="agent-filter-count">2</span>
+            Finance & Accounting <span class="agent-filter-count">1</span>
           </button>
           <button type="button" class="agent-filter-pill" data-agent-filter="sales" role="tab" aria-selected="false">
             Sales & Leads <span class="agent-filter-count">1</span>
@@ -394,7 +394,7 @@
             Market Intelligence <span class="agent-filter-count">1</span>
           </button>
           <button type="button" class="agent-filter-pill" data-agent-filter="operations" role="tab" aria-selected="false">
-            Operations <span class="agent-filter-count">2</span>
+            Operations <span class="agent-filter-count">1</span>
           </button>
         </div>
 
@@ -484,12 +484,14 @@
               <button type="button" class="btn btn-ghost" data-open-sample>View Live Sample Output</button>
               <button type="button" class="btn btn-subscribe is-disabled" id="subscribeBtn" disabled aria-disabled="true">Subscribe</button>
             </div>
-            <p class="subscribe-caption" id="subscribeCaption">
-              Requires at least 5 credits for 5 trading days (1 stock · Mon–Fri). <a href="#topup">Top up credits</a>.
-            </p>
-            <p class="agent-delivery-note">
-              Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).
-            </p>
+            <div class="agent-card-note">
+              <p class="subscribe-caption" id="subscribeCaption">
+                Requires at least 5 credits for 5 trading days (1 stock · Mon–Fri). <a href="#topup">Top up credits</a>.
+              </p>
+              <p class="agent-delivery-note">
+                Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).
+              </p>
+            </div>
           </div>
         </article>
 
@@ -578,9 +580,11 @@
               <button type="button" class="btn btn-ghost" data-open-columns>View Excel Columns</button>
               <button type="button" class="btn btn-subscribe is-disabled" id="scraperSubscribeBtn" disabled aria-disabled="true">Launch Lead Scraper</button>
             </div>
-            <p class="subscribe-caption" id="scraperSubscribeCaption">
-              Needs at least 3 credits (1 term · 50 leads). <a href="#topup">Top up credits</a>.
-            </p>
+            <div class="agent-card-note">
+              <p class="subscribe-caption" id="scraperSubscribeCaption">
+                Needs at least 3 credits (1 term · 50 leads). <a href="#topup">Top up credits</a>.
+              </p>
+            </div>
           </div>
         </article>
 
@@ -635,40 +639,15 @@
               <span class="mini-pill">TXT</span>
             </div>
 
-            <details class="inv-columns">
-              <summary>What gets extracted into your Excel (.xlsx)</summary>
-              <div class="inv-chips">
-                <span class="inv-chip">Source File</span>
-                <span class="inv-chip">Document Type</span>
-                <span class="inv-chip">Invoice Number</span>
-                <span class="inv-chip">Invoice Date</span>
-                <span class="inv-chip">Due Date</span>
-                <span class="inv-chip">Payment Terms</span>
-                <span class="inv-chip">Supplier Name</span>
-                <span class="inv-chip">Supplier TIN</span>
-                <span class="inv-chip">Supplier BRN / UEN</span>
-                <span class="inv-chip">Supplier SST / GST Reg</span>
-                <span class="inv-chip">MyInvois UUID / Status</span>
-                <span class="inv-chip">Buyer Name</span>
-                <span class="inv-chip">PO / Ref No.</span>
-                <span class="inv-chip">Currency</span>
-                <span class="inv-chip">Subtotal</span>
-                <span class="inv-chip">Tax Type & Rate</span>
-                <span class="inv-chip">Tax Amount</span>
-                <span class="inv-chip">Discount / Rounding</span>
-                <span class="inv-chip">Grand Total</span>
-                <span class="inv-chip">Payment Status / Method</span>
-                <span class="inv-chip">Confidence / Notes</span>
-              </div>
-              <p class="inv-chip-note">Sheet 2: Itemized Line Items</p>
-            </details>
-
             <div class="agent-actions">
+              <button type="button" class="btn btn-ghost" data-open-invoice-columns>What gets extracted into your Excel (.xlsx)</button>
               <button type="button" class="btn btn-subscribe" data-open-invoice>Launch Invoice OCR</button>
             </div>
-            <p class="subscribe-caption">
-              5 credits for 1–5 files · 10 credits for 6–15 files. <a href="#topup">Top up credits</a>.
-            </p>
+            <div class="agent-card-note">
+              <p class="subscribe-caption">
+                5 credits for 1–5 files · 10 credits for 6–15 files. <a href="#topup">Top up credits</a>.
+              </p>
+            </div>
           </div>
         </article>
 
@@ -693,44 +672,6 @@
           </div>
         </article>
 
-        <article class="agent-card agent-card-upcoming" data-agent-cat="finance">
-          <div class="upcoming-top">
-            <span class="teaser-icon" aria-hidden="true">
-              <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="#818CF8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 9l13-6 13 6v8c0 7-5.6 12-13 14C8.6 29 3 24 3 17z" />
-                <path d="M10.5 16.5l4 4 7.5-7.5" />
-              </svg>
-            </span>
-            <span class="status-pill status-soon">Coming Soon</span>
-          </div>
-          <span class="agent-cat-label">Finance & Accounting</span>
-          <h3>Bank vs. Invoice Reconciler</h3>
-          <p>Match bank statements against your Invoice OCR Excel to flag missing receipts, mismatches, and duplicate charges.</p>
-          <div class="upcoming-cta">
-            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Bank vs. Invoice Reconciler">Notify Me</button>
-          </div>
-        </article>
-
-        <article class="agent-card agent-card-upcoming" data-agent-cat="operations">
-          <div class="upcoming-top">
-            <span class="teaser-icon" aria-hidden="true">
-              <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="#34D399" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="5" width="8" height="11" rx="1.6" />
-                <rect x="12" y="5" width="8" height="11" rx="1.6" />
-                <rect x="21" y="5" width="8" height="11" rx="1.6" />
-                <path d="M5 9h4M5 12h4M14 9h4M14 12h4M23 9h4M23 12h4" />
-                <path d="M16 19v3M9 25h14M9 22l7 3 7-3" />
-              </svg>
-            </span>
-            <span class="status-pill status-soon">Coming Soon</span>
-          </div>
-          <span class="agent-cat-label">Operations</span>
-          <h3>3-Way Match Auditor (PO / DO / Invoice)</h3>
-          <p>Cross-check Purchase Orders, Delivery Orders, and Supplier Invoices to catch quantity shortages & price hikes before paying.</p>
-          <div class="upcoming-cta">
-            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="3-Way Match Auditor (PO / DO / Invoice)">Notify Me</button>
-          </div>
-        </article>
         </div>
       </div>
     </section>
@@ -1335,7 +1276,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=23"></script>
-  <script src="app.js?v=23"></script>
+  <script src="config.js?v=24"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

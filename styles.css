@@ -6694,6 +6694,29 @@ table.leads-table {
    ========================================================================== */
 
 /* --- Credit pack refinements ---------------------------------------------- */
+/* Breathing room above the grid so the floating MOST POPULAR badge never
+   touches the notice banner above it. */
+.pack-grid {
+  padding-top: 16px;
+}
+
+/* Uniform pack cards → all 4 Buy Pack buttons on one line */
+.pack-blurb {
+  min-height: 2.6em;
+}
+
+.pack-credits {
+  min-height: 42px;
+}
+
+.pack-features {
+  flex: 1 1 auto;
+}
+
+.pack .btn {
+  margin-top: auto;
+}
+
 .pack-rate {
   margin: -8px 0 16px;
   font-size: 0.76rem;
@@ -6707,7 +6730,7 @@ table.leads-table {
 }
 
 .topup-delivery-note {
-  margin: -6px 0 28px;
+  margin: 0 0 40px;
   padding: 12px 16px;
   border-radius: 12px;
   background: rgba(34, 211, 238, 0.08);
@@ -6779,12 +6802,41 @@ table.leads-table {
   margin: 18px 0 12px;
 }
 
+/* Light, high-contrast callout inside the white checkout modal */
 .checkout-notice {
-  margin-top: 16px;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+}
+
+.checkout-notice strong {
+  display: block;
+  margin: 0 0 6px;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .checkout-notice p {
-  margin: 6px 0 0;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.checkout-actions .btn-primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 14px 26px -16px rgba(37, 99, 235, 0.9);
+}
+
+.checkout-actions .btn-primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #ffffff;
 }
 
 .checkout-summary .checkout-line code {
@@ -6863,28 +6915,40 @@ table.leads-table {
   flex-direction: column;
 }
 
+/* Fixed dark header height → all three headers end on the same line */
 .agent-grid .agent-visual {
-  padding: 20px 16px 16px;
-  gap: 12px;
+  height: 176px;
+  min-height: 176px;
+  padding: 12px 14px 10px;
+  gap: 10px;
+  justify-content: center;
   border-right: 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .agent-grid .agent-visual-glow {
-  width: 150px;
-  height: 150px;
+  width: 140px;
+  height: 140px;
 }
 
 .agent-grid .mascot,
 .agent-grid .inv-mascot {
-  width: 118px;
-  max-width: 62%;
+  height: 92px;
+  width: auto;
+  max-width: 74%;
+  max-height: 92px;
 }
 
+/* Identical pill box keeps "Ready & Online" aligned across the row */
 .agent-grid .agent-status {
-  font-size: 0.64rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
   padding: 5px 10px;
+  font-size: 0.62rem;
   line-height: 1.35;
+  text-align: center;
 }
 
 .agent-grid .agent-body {
@@ -6929,14 +6993,34 @@ table.leads-table {
   margin-bottom: 12px;
 }
 
+/* Stacked action area pinned above the note slot → red CTAs align */
 .agent-grid .agent-actions {
   margin-top: auto;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
 }
 
+.agent-grid .agent-card-note {
+  min-height: 136px;
+  margin-top: 10px;
+}
+
+.agent-grid .agent-card-note .subscribe-caption {
+  margin-top: 0;
+}
+
 .agent-grid .agent-actions .btn {
+  width: 100%;
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 0.8rem;
+  line-height: 1.25;
   padding: 10px 14px;
+  text-align: center;
+  white-space: normal;
 }
 
 .agent-grid .subscribe-caption {
@@ -7088,8 +7172,13 @@ table.leads-table {
 
   .agent-grid .mascot,
   .agent-grid .inv-mascot {
-    width: 140px;
-    max-width: 55%;
+    height: 104px;
+    max-height: 104px;
+    max-width: 62%;
+  }
+
+  .agent-grid .agent-card-note {
+    min-height: 0;
   }
 }
 
