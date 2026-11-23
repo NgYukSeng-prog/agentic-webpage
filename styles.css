@@ -6687,3 +6687,418 @@ table.leads-table {
     animation: none !important;
   }
 }
+
+/* ============================================================================
+   30. USD CREDIT PACKS · CATEGORY FILTERS · 3-COLUMN AGENT GRID
+       (v23: official packs, 5-trading-day stock brief, upcoming B2B workers)
+   ========================================================================== */
+
+/* --- Credit pack refinements ---------------------------------------------- */
+.pack-rate {
+  margin: -8px 0 16px;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: #0369a1;
+}
+
+.pack-footnote {
+  color: var(--slate-400);
+}
+
+.topup-delivery-note {
+  margin: -6px 0 28px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  color: var(--slate-300, #cbd5e1);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.topup-trust {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 44px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.07);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  color: var(--slate-300, #cbd5e1);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.topup-trust-item {
+  font-weight: 650;
+}
+
+.topup-trust-sep {
+  color: rgba(148, 163, 184, 0.5);
+}
+
+/* --- Checkout loading + onboarding fallback ------------------------------- */
+.checkout-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px;
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.checkout-spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2.5px solid rgba(148, 163, 184, 0.3);
+  border-top-color: #22d3ee;
+  animation: checkoutSpin 0.8s linear infinite;
+}
+
+@keyframes checkoutSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.checkout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 18px 0 12px;
+}
+
+.checkout-notice {
+  margin-top: 16px;
+}
+
+.checkout-notice p {
+  margin: 6px 0 0;
+}
+
+.checkout-summary .checkout-line code {
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+/* --- Category filter pills ------------------------------------------------ */
+.agent-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+
+.agent-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: var(--slate-300, #cbd5e1);
+  font-family: inherit;
+  font-size: 0.79rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.agent-filter-pill:hover {
+  background: rgba(148, 163, 184, 0.18);
+  border-color: rgba(148, 163, 184, 0.4);
+  color: #f8fafc;
+}
+
+.agent-filter-pill.is-active {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.24), rgba(99, 102, 241, 0.3));
+  border-color: rgba(129, 140, 248, 0.65);
+  color: #f8fafc;
+}
+
+.agent-filter-count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  font-size: 0.7rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #e2e8f0;
+}
+
+/* --- 3-column agent grid -------------------------------------------------- */
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.agent-grid > .agent-card {
+  margin-top: 0;
+  min-width: 0;
+}
+
+.agent-grid > [hidden] {
+  display: none !important;
+}
+
+/* Compact live cards so all 3 fit in Row 1 without scrolling */
+.agent-grid .agent-card-featured {
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-grid .agent-visual {
+  padding: 20px 16px 16px;
+  gap: 12px;
+  border-right: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.agent-grid .agent-visual-glow {
+  width: 150px;
+  height: 150px;
+}
+
+.agent-grid .mascot,
+.agent-grid .inv-mascot {
+  width: 118px;
+  max-width: 62%;
+}
+
+.agent-grid .agent-status {
+  font-size: 0.64rem;
+  padding: 5px 10px;
+  line-height: 1.35;
+}
+
+.agent-grid .agent-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 20px 18px;
+}
+
+.agent-grid .agent-title-row {
+  margin-bottom: 6px;
+  gap: 8px;
+}
+
+.agent-grid .agent-title-row h2 {
+  font-size: 1.12rem;
+}
+
+.agent-grid .price-tag {
+  font-size: 0.66rem;
+  padding: 4px 9px;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.agent-grid .agent-desc {
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.agent-grid .pill-row {
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.agent-grid .mini-pill {
+  padding: 5px 9px;
+  font-size: 0.68rem;
+}
+
+.agent-grid .inv-columns {
+  margin-bottom: 12px;
+}
+
+.agent-grid .agent-actions {
+  margin-top: auto;
+  gap: 8px;
+}
+
+.agent-grid .agent-actions .btn {
+  font-size: 0.8rem;
+  padding: 10px 14px;
+}
+
+.agent-grid .subscribe-caption {
+  margin-top: 10px;
+  font-size: 0.74rem;
+}
+
+.agent-delivery-note {
+  margin: 10px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid rgba(34, 211, 238, 0.55);
+  font-size: 0.73rem;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.stock-delivery-note {
+  margin: 10px 0 16px;
+  padding-left: 10px;
+  border-left: 3px solid #22d3ee;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: #475569;
+}
+
+/* --- Upcoming B2B cards --------------------------------------------------- */
+.agent-card-upcoming {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 22px 20px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025));
+  border: 1px solid var(--glass-border);
+  color: var(--slate-200);
+  transition: transform 0.25s ease, border-color 0.25s ease;
+}
+
+.agent-card-upcoming:hover {
+  transform: translateY(-4px);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.upcoming-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.agent-cat-label {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #67e8f9;
+}
+
+.agent-card-upcoming h3 {
+  margin: 0 0 8px;
+  font-size: 1.02rem;
+  line-height: 1.3;
+  color: #f1f5f9;
+}
+
+.agent-card-upcoming p {
+  margin: 0 0 18px;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--slate-400);
+}
+
+.upcoming-cta {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.upcoming-cta .btn {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.1);
+  color: #e2e8f0;
+}
+
+.upcoming-cta .btn:hover {
+  background: rgba(148, 163, 184, 0.2);
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+/* --- Stock history: 5 trading day countdown ------------------------------- */
+.hist-trading {
+  margin-top: 12px;
+}
+
+.hist-trading-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: #475569;
+}
+
+.hist-trading-label strong {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-steps {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+  margin-top: 7px;
+}
+
+.hist-steps span {
+  height: 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.hist-steps span.is-on {
+  background: linear-gradient(90deg, #14b8a6, #22d3ee);
+}
+
+.hist-trading-note {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+/* --- Responsive: 3 → 2 → 1 columns --------------------------------------- */
+@media (max-width: 1023px) {
+  .agent-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .agent-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .agent-grid .agent-visual {
+    padding: 22px 18px 18px;
+  }
+
+  .agent-grid .mascot,
+  .agent-grid .inv-mascot {
+    width: 140px;
+    max-width: 55%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-spinner {
+    animation: none !important;
+  }
+
+  .agent-card-upcoming:hover {
+    transform: none;
+  }
+}

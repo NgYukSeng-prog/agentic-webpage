@@ -49,6 +49,21 @@
   const RESET_PASSWORD_URL = API_BASE + '/auth/reset-password';
   const ACCOUNT_AVATAR_URL = API_BASE + '/account/avatar';
   const ACCOUNT_HISTORY_URL = API_BASE + '/account/history';
+
+  /* --- Billing (USD credit packs) ---------------------------------------- */
+  const BILLING_CHECKOUT_URL = String(
+    CFG.BILLING_CHECKOUT_URL || API_BASE + '/billing/create-checkout'
+  );
+  const CHECKOUT_MANUAL_EMAIL = String(
+    CFG.CHECKOUT_MANUAL_EMAIL || 'group.litework@gmail.com'
+  );
+
+  /* --- Stock brief delivery: 5 trading days, weekends skipped ------------ */
+  const TRADING_DAYS = toPositiveInt(CFG.STOCK_TRADING_DAYS, 5);
+  const DELIVERY_NOTE = String(
+    CFG.STOCK_DELIVERY_NOTE ||
+      'Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).'
+  );
   const FREE_SIGNUP_CREDITS = toPositiveInt(CFG.FREE_SIGNUP_CREDITS, 5);
   const GOOGLE_CLIENT_ID = String(CFG.GOOGLE_CLIENT_ID || '').trim();
   const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
@@ -123,6 +138,9 @@
           'Confidence / Notes'
         ];
   const INV_SHEET2_NOTE = 'Sheet 2: Itemized Line Items';
+  /* Both cloud workers can legitimately run for a long time (multi-term
+     scraping / large invoice batches). Keep auto-polling for 30 minutes. */
+  const STATUS_POLL_WINDOW_MS = 30 * 60 * 1000;
 
   const INV_EXPORT_FORMATS =
     Array.isArray(CFG.INVOICE_OCR_EXPORT_FORMATS) && CFG.INVOICE_OCR_EXPORT_FORMATS.length
@@ -289,66 +307,88 @@
 
   /* =========================== B. STATIC CONTENT ========================== */
 
-  const PACKS = [
+  /* The 4 official LiteWork USD credit packs. config.js is the source of
+     truth; this local copy keeps the page working if config.js is stale. */
+  const FALLBACK_PACKS = [
     {
       id: 'starter',
-      name: 'Starter Top-Up',
+      name: 'Starter',
+      credits: 25,
       price: 5,
-      credits: 5,
-      blurb: 'Covers 1 stock for 7 days',
-      note: '$5.00/wk effective rate',
+      rate: '$0.20 / credit',
+      blurb: 'Best for trying your first batches',
+      note: 'Pay once · credits never expire',
       features: [
-        '1 stock monitored for 7 days',
-        'Daily brief at 07:00 MYT',
-        'MACD bias + news synthesis',
+        '25 credits · $5.00 USD',
+        '$0.20 per credit',
+        'Try any agent before scaling',
         'No auto-renewal'
       ]
     },
     {
-      id: 'standard',
-      name: 'Standard Trader Pack',
+      id: 'growth',
+      name: 'Growth',
+      credits: 60,
       price: 10,
-      credits: 10,
-      blurb: 'Covers 2 stocks for 7 days',
-      note: 'Most traders start here',
+      rate: '$0.167 / credit',
+      bonus: '17% bonus',
+      badge: 'Most Popular',
       popular: true,
+      blurb: 'For solo founders & bookkeepers',
+      note: 'Pay once · credits never expire',
       features: [
-        '2 stocks monitored for 7 days',
-        'Everything in Starter',
-        'Swap watchlist on each activation',
-        'Delivery + receipt email'
+        '60 credits · $10.00 USD',
+        '$0.167 per credit · 17% bonus',
+        'Ideal for weekly agent runs',
+        'No auto-renewal'
       ]
     },
     {
-      id: 'pro',
-      name: 'Pro Watchlist Pack',
-      price: 15,
-      credits: 15,
-      blurb: 'Covers 3 stocks for 7 days',
-      note: 'Ideal for sector rotation',
-      features: [
-        '3 stocks monitored for 7 days',
-        'Everything in Standard',
-        'Priority data verification pass',
-        'Great for comparing peers'
-      ]
-    },
-    {
-      id: 'power',
-      name: 'Power Portfolio Pack',
+      id: 'business',
+      name: 'Business',
+      credits: 160,
       price: 25,
-      credits: 30,
-      bonus: 5,
-      blurb: 'Covers up to 6 stocks for 7 days',
-      note: 'Best value per credit ($0.83)',
+      rate: '$0.156 / credit',
+      bonus: '22% bonus',
+      blurb: 'For SME teams running monthly ops',
+      note: 'Pay once · credits never expire',
       features: [
-        '6 stocks monitored for 7 days',
-        'Includes 5 bonus credits',
-        'Everything in Pro',
-        'Best value per credit'
+        '160 credits · $25.00 USD',
+        '$0.156 per credit · 22% bonus',
+        'Shared credit wallet for your team',
+        'No auto-renewal'
+      ]
+    },
+    {
+      id: 'agency',
+      name: 'Agency',
+      credits: 350,
+      price: 50,
+      rate: '$0.143 / credit',
+      bonus: '29% bonus',
+      blurb: 'Best value for accounting firms & agencies',
+      note: 'Pay once · credits never expire',
+      features: [
+        '350 credits · $50.00 USD',
+        '$0.143 per credit · 29% bonus',
+        'Best value per credit',
+        'No auto-renewal'
       ]
     }
   ];
+
+  const PACKS =
+    Array.isArray(CFG.CREDIT_PACKS) && CFG.CREDIT_PACKS.length
+      ? CFG.CREDIT_PACKS
+      : FALLBACK_PACKS;
+
+  function packById(packId) {
+    const wanted = String(packId || '').trim();
+    for (let i = 0; i < PACKS.length; i += 1) {
+      if (String(PACKS[i].id) === wanted) return PACKS[i];
+    }
+    return null;
+  }
 
   /* Realistic sample briefs used by the home preview + "live sample" modal.
      They mirror the delivered email: ticker + close, a 4-metric strip, both
@@ -2072,7 +2112,8 @@
       } else if (!enough) {
         caption.innerHTML =
           'Requires at least ' + CREDITS_PER_STOCK + ' credits for ' +
-          SUB_DAYS + ' days (1 stock). <a href="#topup">Top up credits</a>.';
+          TRADING_DAYS + ' trading days (1 stock · Mon–Fri). ' +
+          '<a href="#topup">Top up credits</a>.';
       } else {
         caption.innerHTML = '';
       }
@@ -2198,7 +2239,8 @@
     const symbols = Object.keys(BRIEFS);
     openModal(
       '<h2 class="modal-title" id="modalTitle">View Live Sample Output</h2>' +
-        '<p class="modal-sub">This is exactly what lands in your inbox at 07:00 MYT — every day of your 7-day window. Switch ticker to preview another brief.</p>' +
+        '<p class="modal-sub">This is exactly what lands in your inbox at 07:00 MYT — every market morning of your ' +
+        TRADING_DAYS + '-trading-day window (Mon–Fri). Switch ticker to preview another brief.</p>' +
         '<div class="tab-row" role="tablist" aria-label="Sample ticker">' +
         symbols
           .map(function (s, i) {
@@ -2235,21 +2277,29 @@
     if (!grid) return;
 
     grid.innerHTML = PACKS.map(function (p) {
-      const bonus = p.bonus ? ' <span class="pack-bonus">(+' + p.bonus + ' bonus)</span>' : '';
+      const badgeLabel = p.badge || (p.popular ? 'Most Popular' : '');
+      const bonus = p.bonus ? ' <span class="pack-bonus">(+' + escapeHtml(p.bonus) + ')</span>' : '';
+      const rateLine = p.rate
+        ? '<p class="pack-rate">' + escapeHtml(p.rate) + (p.bonus ? ' · +' + escapeHtml(p.bonus) : '') + '</p>'
+        : '';
       return (
         '<article class="pack' + (p.popular ? ' is-popular' : '') + '">' +
-        (p.popular ? '<span class="pack-badge">Most Popular</span>' : '') +
+        (badgeLabel ? '<span class="pack-badge">' + escapeHtml(badgeLabel) + '</span>' : '') +
         '<h2>' + escapeHtml(p.name) + '</h2>' +
-        '<div class="pack-price"><span class="pack-currency">$</span>' + p.price +
+        '<div class="pack-price"><span class="pack-currency">$</span>' +
+        Number(p.price).toFixed(2) +
         '<span class="pack-unit">USD</span></div>' +
         '<p class="pack-blurb">' + escapeHtml(p.blurb) + '</p>' +
         '<div class="pack-credits"><strong>' + p.credits + '</strong> credits' + bonus + '</div>' +
+        rateLine +
         '<ul class="pack-features">' +
-        p.features.map(function (f) { return '<li>' + escapeHtml(f) + '</li>'; }).join('') +
+        (Array.isArray(p.features) ? p.features : [])
+          .map(function (f) { return '<li>' + escapeHtml(f) + '</li>'; })
+          .join('') +
         '</ul>' +
         '<button type="button" class="btn ' + (p.popular ? 'btn-primary' : 'btn-ghost') +
-        ' btn-block" data-buy="' + p.id + '">Purchase Credits (USD)</button>' +
-        '<p class="pack-note">' + escapeHtml(p.note) + '</p>' +
+        ' btn-block" data-buy="' + escapeHtml(p.id) + '">Buy Pack</button>' +
+        '<p class="pack-note">' + escapeHtml(p.note || '') + '</p>' +
         '</article>'
       );
     }).join('');
@@ -2334,6 +2384,11 @@
       ),
       startedAt: startedAt,
       expiresAt: expiresAt,
+      tradingDaysRemaining: firstValue(
+        sub,
+        ['trading_days_remaining', 'tradingDaysRemaining', 'trading_days_left', 'tradingDaysLeft'],
+        ''
+      ),
       credits: Number(
         firstValue(sub, ['credits_spent', 'creditsSpent', 'credits', 'credits_used'], 0)
       ) || 0
@@ -2432,6 +2487,47 @@
     return Number.isFinite(ms) ? ms : 0;
   }
 
+  /* Remaining market weekdays (Mon–Fri) until expiry, in MYT.
+     Prefers the server value `trading_days_remaining` when present.      */
+  function tradingDaysRemaining(expiresAt, explicitValue) {
+    if (
+      explicitValue !== null &&
+      explicitValue !== undefined &&
+      String(explicitValue).trim() !== ''
+    ) {
+      const n = Number(explicitValue);
+      if (Number.isFinite(n) && n >= 0) return clamp(Math.floor(n), 0, TRADING_DAYS);
+    }
+
+    const expiresMs = new Date(expiresAt).getTime();
+    if (!expiresAt || !Number.isFinite(expiresMs)) return TRADING_DAYS;
+    if (expiresMs <= Date.now()) return 0;
+
+    const offsetMs = (Number(CFG.TIMEZONE_OFFSET_HOURS) || 8) * 3600000;
+    const startDay = Math.floor((Date.now() + offsetMs) / 86400000);
+    const endDay = Math.floor((expiresMs + offsetMs) / 86400000);
+    let count = 0;
+
+    /* Today is excluded — briefs arrive on future market mornings. */
+    for (let day = startDay + 1; day <= endDay; day += 1) {
+      const dow = new Date(day * 86400000).getUTCDay(); /* 0 Sun … 6 Sat */
+      if (dow >= 1 && dow <= 5) count += 1;
+    }
+    return clamp(count, 0, TRADING_DAYS);
+  }
+
+  function tradingStepsHtml(remaining) {
+    const filled = clamp(Number(remaining) || 0, 0, TRADING_DAYS);
+    let steps = '';
+    for (let i = 0; i < TRADING_DAYS; i += 1) {
+      steps += '<span class="' + (i < filled ? 'is-on' : '') + '"></span>';
+    }
+    return (
+      '<div class="hist-steps" role="img" aria-label="' + filled + ' of ' + TRADING_DAYS +
+      ' trading days remaining">' + steps + '</div>'
+    );
+  }
+
   function sortNewestFirst(list, key) {
     return list.slice().sort(function (a, b) {
       return historyTime(b[key]) - historyTime(a[key]);
@@ -2465,28 +2561,34 @@
 
   function renderStockHistoryCard(sub) {
     const validity = subscriptionValidity(sub.expiresAt, sub.startedAt);
-    const badgeClass =
-      validity.tone === 'ok' ? 'hist-badge ok' : validity.tone === 'warn' ? 'hist-badge warn' : 'hist-badge muted';
+    const remaining = validity.expired
+      ? 0
+      : tradingDaysRemaining(sub.expiresAt, sub.tradingDaysRemaining);
+    const badgeClass = validity.expired
+      ? 'hist-badge muted'
+      : remaining <= 2
+      ? 'hist-badge warn'
+      : 'hist-badge ok';
+    const badgeLabel = validity.expired ? 'Expired' : 'Active (Mon–Fri)';
     const tickers = sub.tickers.length
       ? sub.tickers
           .map(function (t) { return '<span class="pill-ticker">' + escapeHtml(t) + '</span>'; })
           .join('')
       : '<span class="pill-ticker">—</span>';
 
-    const progress = validity.expired
-      ? ''
-      : '<div class="hist-validity" role="img" aria-label="' +
-        Math.round(validity.percent) + '% of the validity window remaining">' +
-        '<span style="width:' + validity.percent.toFixed(1) + '%"></span></div>';
-
     return (
       '<article class="hist-card' + (validity.expired ? ' is-expired' : '') + '">' +
       '<div class="hist-card-top">' +
       '<strong>' + escapeHtml(AGENT_NAME) + '</strong>' +
-      '<span class="' + badgeClass + '">' + escapeHtml(validity.label) + '</span>' +
+      '<span class="' + badgeClass + '">' + escapeHtml(badgeLabel) + '</span>' +
       '</div>' +
       '<div class="hist-pill-row">' + tickers + '</div>' +
-      progress +
+      '<div class="hist-trading">' +
+      '<span class="hist-trading-label"><strong>' + remaining + ' / ' + TRADING_DAYS +
+      '</strong> trading days left</span>' +
+      tradingStepsHtml(remaining) +
+      '</div>' +
+      '<p class="hist-trading-note">' + escapeHtml(DELIVERY_NOTE) + '</p>' +
       '<dl class="hist-meta">' +
       '<div><dt>Purchase date</dt><dd>' +
       escapeHtml(sub.startedAt ? fmtMYT(sub.startedAt) : '—') + '</dd></div>' +
@@ -2956,70 +3058,136 @@
       });
   }
 
+  function manualTopUpLink(pack, orderId) {
+    const title = 'Manual Credit Top-Up — ' + pack.name;
+    const lines = [
+      'Hi LiteWork team,',
+      '',
+      'I would like to request a manual credit top-up.',
+      '',
+      'Order ID: ' + (orderId || '(not issued yet)'),
+      'Pack: ' + pack.name + ' — ' + pack.credits + ' credits · $' +
+        Number(pack.price).toFixed(2) + ' USD',
+      'Account email: ' + (state.email || '(please add my account email)'),
+      '',
+      'Please send me the payment instructions. Thank you!'
+    ];
+    return (
+      'mailto:' + CHECKOUT_MANUAL_EMAIL +
+      '?subject=' + encodeURIComponent(title) +
+      '&body=' + encodeURIComponent(lines.join('\n'))
+    );
+  }
+
+  function showCheckoutOnboarding(pack, payload) {
+    const orderId = String(
+      firstValue(payload || {}, ['order_id', 'orderId', 'reference', 'id'], '') || ''
+    );
+    const orderRow = orderId
+      ? '<div class="checkout-line"><span>Order ID</span><span><code>' +
+        escapeHtml(orderId) + '</code></span></div>'
+      : '';
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Checkout is finalising</h2>' +
+        '<p class="modal-sub">Your pack is reserved. Online card & bank checkout is currently finalizing bank verification — nothing has been charged and no credits were added yet.</p>' +
+        '<div class="checkout-summary">' +
+        '  <div class="checkout-pack">' +
+        '    <span class="checkout-pack-name">' + escapeHtml(pack.name) + ' Pack</span>' +
+        '    <span class="checkout-pack-credits">+' + pack.credits + ' credits</span>' +
+        '  </div>' +
+        '  <p>' + escapeHtml(pack.blurb) + '</p>' +
+        '  <div class="checkout-line"><span>Credits</span><span>' + pack.credits + ' credits</span></div>' +
+        '  <div class="checkout-line"><span>Amount</span><span>$' +
+        Number(pack.price).toFixed(2) + ' USD</span></div>' +
+        '  <div class="checkout-line"><span>Rate</span><span>' +
+        escapeHtml(pack.rate || '') + (pack.bonus ? ' · +' + escapeHtml(pack.bonus) : '') +
+        '</span></div>' +
+        orderRow +
+        '  <div class="checkout-line"><span>Current live balance</span><span>' +
+        state.credits + ' credits</span></div>' +
+        '</div>' +
+        '<div class="notice notice-warn checkout-notice">' +
+        '  <strong>Prefer to top up right now?</strong>' +
+        '  <p>Send us a manual top-up request with your Order ID and pack — we will reply with secure bank transfer or card instructions and credit your wallet once payment clears.</p>' +
+        '</div>' +
+        '<div class="checkout-actions">' +
+        '  <a class="btn btn-primary btn-lg" href="' + manualTopUpLink(pack, orderId) + '">Request Instant Manual Top-Up</a>' +
+        '  <button type="button" class="btn btn-ghost btn-lg" data-modal-close>Maybe later</button>' +
+        '</div>' +
+        '<p class="fine">Manual requests go to ' + escapeHtml(CHECKOUT_MANUAL_EMAIL) +
+        '. Credits are only ever added server-side after payment is verified.</p>'
+    );
+  }
+
   function openCheckout(packId) {
-    const pack = PACKS.filter(function (p) { return p.id === packId; })[0];
+    const pack = packById(packId);
     if (!pack) return;
 
     if (!requireAuth({ action: 'checkout', packId: packId })) return;
 
-    const currentBalance = state.credits;
-
     openModal(
-      '<h2 class="modal-title" id="modalTitle">Purchase Credits (USD)</h2>' +
-        '<p class="modal-sub">Billing is not connected yet. This preview does not change your live credit balance.</p>' +
-        '<div class="checkout">' +
-        '  <div class="checkout-summary">' +
-        '    <div class="checkout-pack">' +
-        '      <span class="checkout-pack-name">' + escapeHtml(pack.name) + '</span>' +
-        '      <span class="checkout-pack-credits">+' + pack.credits + ' credits</span>' +
-        '    </div>' +
-        '    <p>' + escapeHtml(pack.blurb) + (pack.bonus ? ' · includes ' + pack.bonus + ' bonus credits' : '') + '</p>' +
-        '    <div class="checkout-line"><span>Subtotal</span><span>' + money(pack.price) + '</span></div>' +
-        '    <div class="checkout-line"><span>Processing fee</span><span>$0.00</span></div>' +
-        '    <div class="checkout-line total"><span>Total due today</span><span>' + money(pack.price) + ' USD</span></div>' +
-        '    <div class="checkout-line"><span>Current live balance</span><span>' + currentBalance + ' credits</span></div>' +
-        '  </div>' +
-        '  <form class="checkout-form" id="checkoutForm" novalidate>' +
-        '    <label class="field"><span>Email for receipt (optional)</span>' +
-        '      <input type="email" id="checkoutEmail" placeholder="you@example.com" autocomplete="email" value="' +
-        escapeHtml(state.email) + '"></label>' +
-        '    <label class="field"><span>Card number</span>' +
-        '      <input type="text" class="is-readonly" value="4242 4242 4242 4242" readonly aria-readonly="true"></label>' +
-        '    <div class="field-row">' +
-        '      <label class="field"><span>Expiry</span>' +
-        '        <input type="text" class="is-readonly" value="12 / 29" readonly aria-readonly="true"></label>' +
-        '      <label class="field"><span>CVC</span>' +
-        '        <input type="text" class="is-readonly" value="•••" readonly aria-readonly="true"></label>' +
-        '    </div>' +
-        '    <p class="demo-note">Demo checkout — no payment is processed and no credits are added. Live credits are managed by your account.</p>' +
-        '    <button type="submit" class="btn btn-primary btn-lg btn-block">Continue (Demo)</button>' +
-        '  </form>' +
+      '<h2 class="modal-title" id="modalTitle">Starting secure checkout…</h2>' +
+        '<p class="modal-sub">Connecting to the LiteWork payment gateway for the ' +
+        escapeHtml(pack.name) + ' pack (' + pack.credits + ' credits · $' +
+        Number(pack.price).toFixed(2) + ' USD).</p>' +
+        '<div class="checkout-loading" role="status" aria-live="polite">' +
+        '<span class="checkout-spinner" aria-hidden="true"></span>' +
+        '<span>Please wait — you will be redirected if the gateway is live.</span>' +
         '</div>'
     );
 
-    const form = $('#checkoutForm');
-    if (!form) return;
+    if (!BILLING_CHECKOUT_URL) {
+      showCheckoutOnboarding(pack, null);
+      return;
+    }
 
-    form.addEventListener('submit', function (event) {
-      event.preventDefault();
-      const emailEl = $('#checkoutEmail');
-      const email = emailEl ? emailEl.value.trim() : '';
+    apiFetch(
+      BILLING_CHECKOUT_URL,
+      { method: 'POST', body: JSON.stringify({ pack_id: pack.id }) },
+      20000
+    )
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (response.status === 401) {
+            handleAuthExpired(
+              'Your session expired. Log in again to top up credits.',
+              { action: 'checkout', packId: pack.id }
+            );
+            return null;
+          }
+          return { ok: response.ok, status: response.status, body: body || {} };
+        });
+      })
+      .then(function (result) {
+        if (!result) return;
 
-      if (email && !isValidEmail(email)) {
-        toast('Enter a valid email address, or leave the receipt field blank.', 'warn');
-        if (emailEl) emailEl.focus();
-        return;
-      }
+        const body = result.body && typeof result.body === 'object' ? result.body : {};
+        const data =
+          body.data && typeof body.data === 'object' ? body.data : body;
+        const mode = String(
+          firstValue(data, ['mode', 'checkout_mode'], body.mode || '') || ''
+        ).toLowerCase();
+        const checkoutUrl = String(
+          firstValue(
+            data,
+            ['checkout_url', 'checkoutUrl', 'payment_url', 'url'],
+            body.checkout_url || ''
+          ) || ''
+        ).trim();
 
-      if (email) state.email = email;
+        if (mode === 'live' && checkoutUrl) {
+          toast('Redirecting to secure checkout…', 'info');
+          window.location.href = checkoutUrl;
+          return;
+        }
 
-      closeModal();
-      toast(
-        'Billing is not connected yet — no credits were added. Your live balance is unchanged.',
-        'info'
-      );
-      refreshSession();
-    });
+        showCheckoutOnboarding(pack, data);
+      })
+      .catch(function (err) {
+        console.warn('[LiteWork] Checkout request failed.', err);
+        showCheckoutOnboarding(pack, null);
+      });
   }
 
   /* =========================== H. CONFIGURE ============================== */
@@ -3076,11 +3244,13 @@
     openModal(
       '<h2 class="modal-title" id="modalTitle">Stock Market News Agent</h2>' +
         '<p class="modal-sub">07:00 MYT delivery · ' + CREDITS_PER_STOCK + ' credits per stock · ' +
-        SUB_DAYS + '-day access</p>' +
+        TRADING_DAYS + ' trading days (Mon–Fri)</p>' +
+        '<p class="stock-delivery-note">' + escapeHtml(DELIVERY_NOTE) + '</p>' +
         '<div class="notice notice-warn" id="configureLocked" hidden>' +
-        '<strong>You need at least ' + CREDITS_PER_STOCK + ' credits for a 7-day subscription.</strong>' +
+        '<strong>You need at least ' + CREDITS_PER_STOCK + ' credits for a ' +
+        TRADING_DAYS + '-trading-day subscription.</strong>' +
         '<p>Your balance is <span data-credit-count>' + state.credits +
-        '</span> credits. A $5 top-up buys one stock for a week.</p>' +
+        '</span> credits. A $5 Starter pack (25 credits) covers 5 stocks for a full market week.</p>' +
         '<a class="btn btn-primary btn-sm" href="#topup">Top up credits</a>' +
         '</div>' +
         '<div id="configureBody">' +
@@ -3090,7 +3260,7 @@
         '<div class="calc-cell"><span class="calc-label">Selected</span>' +
         '<span class="calc-value" id="calcSelected">0</span></div>' +
         '<div class="calc-cell"><span class="calc-label">Duration</span>' +
-        '<span class="calc-value" id="calcDuration">' + SUB_DAYS + ' Days</span></div>' +
+        '<span class="calc-value" id="calcDuration">' + TRADING_DAYS + ' Trading Days</span></div>' +
         '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
         '<span class="calc-value" id="calcCost">' + CREDITS_PER_STOCK + ' Credits</span>' +
         '<span class="calc-sub" id="calcRemaining"></span></div>' +
@@ -3113,8 +3283,8 @@
         '</div>' +
         '<div class="config-summary" id="configSummary"></div>' +
         '<button type="submit" class="btn btn-activate" id="activateBtn">Confirm & Spend ' +
-        CREDITS_PER_STOCK + ' Credits (' + SUB_DAYS + ' Days)</button>' +
-        '<p class="fine">First brief arrives tomorrow at 07:00 MYT.</p>' +
+        CREDITS_PER_STOCK + ' Credits (' + TRADING_DAYS + ' Trading Days)</button>' +
+        '<p class="fine">First brief arrives on the next market morning at 07:00 MYT.</p>' +
         '</form>' +
         '</div>',
       true
@@ -3198,7 +3368,7 @@
 
     setText('#calcAvailable', state.credits + ' Credits');
     setText('#calcSelected', String(selectedStocks.length));
-    setText('#calcDuration', SUB_DAYS + ' Days / 1 Week');
+    setText('#calcDuration', TRADING_DAYS + ' Trading Days (Mon–Fri)');
     setText('#calcRemaining', 'Remaining after activation: ' + remaining + ' credits');
 
     /* Pulse the total when the user adds/removes a ticker. */
@@ -3267,7 +3437,7 @@
         '<div class="config-summary-row"><span>Watchlist</span>' +
         '<span class="config-summary-tickers">' + tickers + '</span></div>' +
         '<div class="config-summary-row"><span>Activation cost</span>' +
-        '<span>' + cost + ' credits · ' + SUB_DAYS + ' days</span></div>' +
+        '<span>' + cost + ' credits · ' + TRADING_DAYS + ' trading days</span></div>' +
         '<div class="config-summary-row"><span>Balance after activation</span>' +
         '<span>' + remaining + ' credits</span></div>';
     }
@@ -3276,7 +3446,7 @@
     if (activateBtn) {
       activateBtn.classList.remove('is-busy');
       activateBtn.textContent =
-        'Confirm & Spend ' + cost + ' Credits (' + SUB_DAYS + ' Days)';
+        'Confirm & Spend ' + cost + ' Credits (' + TRADING_DAYS + ' Trading Days)';
       activateBtn.disabled = selectedStocks.length === 0 || cost > state.credits;
     }
   }
@@ -3525,7 +3695,8 @@
     if (windowEl) {
       windowEl.innerHTML =
         'Active from <strong>' + escapeHtml(fmtMYT(sub.startedAt)) + '</strong> until <strong>' +
-        escapeHtml(fmtMYT(sub.expiresAt)) + '</strong> · ' + SUB_DAYS + ' days';
+        escapeHtml(fmtMYT(sub.expiresAt)) + '</strong> · ' + TRADING_DAYS +
+        ' trading days (Mon–Fri)';
     }
 
     const summary = $('#successSummary');
@@ -3924,6 +4095,30 @@
       });
     }
 
+    /* Category filter pills on #agents (live client-side filtering) */
+    (function bindAgentFilters() {
+      const pills = $$('[data-agent-filter]');
+      const cards = $$('#agentGrid [data-agent-cat]');
+      if (!pills.length || !cards.length) return;
+
+      pills.forEach(function (pill) {
+        pill.addEventListener('click', function () {
+          const filter = pill.getAttribute('data-agent-filter') || 'all';
+          pills.forEach(function (other) {
+            const on = other === pill;
+            other.classList.toggle('is-active', on);
+            other.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+          cards.forEach(function (card) {
+            const cats = String(card.getAttribute('data-agent-cat') || '')
+              .split(/\s+/)
+              .filter(function (c) { return !!c; });
+            card.hidden = filter !== 'all' && cats.indexOf(filter) === -1;
+          });
+        });
+      });
+    })();
+
     /* Coming-soon waitlist buttons */
     $$('[data-waitlist]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -4081,6 +4276,10 @@
   ];
 
   let scraperPollTimer = null;
+  let scraperPollInFlight = false;
+  let scraperPollController = null;
+  let scraperPollEpoch = 0;
+  let scraperPollStartedAt = 0;
 
   /* ----- state helpers ----- */
   function getSelectedColumns(job) {
@@ -4094,11 +4293,36 @@
   let emailTrailTimer = null;
   let emailTrailTries = 0;
 
+  function scraperJobFailed(job) {
+    const status = String((job && job.status) || '').toLowerCase();
+    return (
+      status === 'failed' ||
+      status === 'error' ||
+      status === 'cancelled' ||
+      status === 'canceled'
+    );
+  }
+
+  function scraperPollActive(job) {
+    return !!job && !scraperJobFailed(job) && !scraperIsComplete(job);
+  }
+
   function stopScraperTimers() {
+    scraperPollEpoch += 1;
     if (scraperPollTimer) {
-      window.clearInterval(scraperPollTimer);
+      window.clearTimeout(scraperPollTimer);
       scraperPollTimer = null;
     }
+    scraperPollStartedAt = 0;
+    if (scraperPollController) {
+      try {
+        scraperPollController.abort();
+      } catch (err) {
+        /* already settled */
+      }
+      scraperPollController = null;
+    }
+    scraperPollInFlight = false;
   }
 
   function scraperPageActive() {
@@ -4108,20 +4332,22 @@
 
   function stopEmailTrail() {
     if (emailTrailTimer) {
-      window.clearInterval(emailTrailTimer);
+      window.clearTimeout(emailTrailTimer);
       emailTrailTimer = null;
     }
     emailTrailTries = 0;
   }
 
-  /* After completion, poll up to 3× more (3s apart) for the SMTP flag. */
+  /* After completion, poll up to 3× more (3s apart) for the SMTP flag.
+     A setTimeout chain avoids overlapping requests. */
   function startEmailTrail() {
     if (emailTrailTimer) return;
     const job = state.scraperJob;
     if (!job || job.mode === 'demo' || job.email_sent === true) return;
 
     emailTrailTries = 0;
-    emailTrailTimer = window.setInterval(function () {
+    const tick = function () {
+      emailTrailTimer = null;
       const current = state.scraperJob;
       if (!current || current.email_sent === true || emailTrailTries >= 3) {
         stopEmailTrail();
@@ -4129,7 +4355,13 @@
       }
       emailTrailTries += 1;
       pollScraperStatus(true);
-    }, 3000);
+      if (emailTrailTries < 3 && current.email_sent !== true) {
+        emailTrailTimer = window.setTimeout(tick, 3000);
+      } else {
+        stopEmailTrail();
+      }
+    };
+    emailTrailTimer = window.setTimeout(tick, 3000);
   }
 
   /* Compact live/finished status on the B2B agent card in #agents. */
@@ -4222,6 +4454,12 @@
 
     const resume = $('#resumeJobId');
     if (resume) resume.value = job.job_id || '';
+    const resumeBtn = $('#resumeBtn');
+    if (resumeBtn) {
+      resumeBtn.disabled = false;
+      resumeBtn.removeAttribute('disabled');
+      resumeBtn.setAttribute('aria-disabled', 'false');
+    }
 
     renderJobSummary();
     renderLeadsTable();
@@ -4231,8 +4469,8 @@
       completeScraperJob(true);
       return;
     }
-    if (job.status === 'failed') {
-      const message = job.error || 'start a new scrape';
+    if (scraperJobFailed(job)) {
+      const message = job.error || job.status || 'start a new scrape';
       setScraperBadge('fail', 'Job failed · ' + message);
       const rule = $('#ringRule');
       if (rule) rule.textContent = 'Failed · ' + message;
@@ -4552,8 +4790,16 @@
   /* ----- live backend: POST start, then poll every 2.5s ----- */
   function ensureScraperRunning() {
     const job = state.scraperJob;
-    if (!job || job.status === 'failed' || scraperIsComplete(job) || job.starting) return;
+    if (!job || scraperJobFailed(job) || scraperIsComplete(job)) return;
     if (!isLoggedIn()) return;
+
+    if (job.starting) {
+      /* Do not let a stale "starting" flag freeze the status loop forever. */
+      const startedMs = new Date(job.started_at || 0).getTime();
+      if (Number.isFinite(startedMs) && Date.now() - startedMs < 20000) return;
+      job.starting = false;
+      saveState();
+    }
 
     if (!job.posted) {
       job.posted = true;
@@ -4709,31 +4955,63 @@
     renderScraperResults();
   }
 
-  function startLivePolling(job) {
-    if (scraperPollTimer) return;
+  function startLivePolling(job, force) {
+    if (!job || !LEAD_STATUS_URL) return;
     if (!scraperPageActive()) return;
-    setScraperBadge('pending', 'Starting cloud scraper…');
-    pollScraperStatus();
-    scraperPollTimer = window.setInterval(pollScraperStatus, LEAD_POLL_MS);
+    if (scraperPollTimer || scraperPollInFlight) return;
+    if (!force && !scraperPollActive(job)) return;
+
+    scraperPollStartedAt = Date.now();
+    scraperPollEpoch += 1;
+    const epoch = scraperPollEpoch;
+    setScraperBadge('pending', force ? 'Refreshing status…' : 'Starting cloud scraper…');
+    pollScraperStatus(!!force, epoch);
   }
 
-  function pollScraperStatus(force) {
+  /* Used by tab-focus resume and the Check button. */
+  function forceScraperPollNow() {
     const job = state.scraperJob;
     if (!job || !LEAD_STATUS_URL) return;
-    if (job.status === 'failed') return;
-    if (scraperIsComplete(job) && !force) return;
+    if (scraperPollTimer) {
+      window.clearTimeout(scraperPollTimer);
+      scraperPollTimer = null;
+    }
+    if (scraperPollInFlight) return;
+    if (!scraperPollStartedAt) scraperPollStartedAt = Date.now();
+    pollScraperStatus(true, scraperPollEpoch);
+  }
 
+  function scheduleNextScraperPoll(delay, epoch) {
+    if (epoch !== scraperPollEpoch) return;
+    if (scraperPollTimer) window.clearTimeout(scraperPollTimer);
+    scraperPollTimer = window.setTimeout(function () {
+      scraperPollTimer = null;
+      pollScraperStatus(false, epoch);
+    }, Math.max(0, delay));
+  }
+
+  function pollScraperStatus(force, expectedEpoch) {
+    const job = state.scraperJob;
+    if (!job || !LEAD_STATUS_URL) return;
+    const epoch = expectedEpoch == null ? scraperPollEpoch : expectedEpoch;
+    if (epoch !== scraperPollEpoch) return;
+    if (scraperPollInFlight) return;
+    if (!force && !scraperPollActive(job)) return;
+    if (!scraperPollStartedAt) scraperPollStartedAt = Date.now();
+
+    scraperPollInFlight = true;
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    scraperPollController = controller;
     /* 12s: brief VPS CPU spikes must not abort a perfectly good poll. */
     const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
 
-    fetch(LEAD_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
+    const request = fetch(LEAD_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
       mode: 'cors',
       headers: authHeaders(),
       signal: controller ? controller.signal : undefined
     })
       .then(function (response) {
-        if (timer) window.clearTimeout(timer);
+        if (epoch !== scraperPollEpoch) return null;
         if (response.status === 401) {
           stopScraperTimers();
           handleAuthExpired(
@@ -4751,6 +5029,7 @@
       })
       .then(function (data) {
         if (!data) return;
+        if (epoch !== scraperPollEpoch) return;
         if (typeof data !== 'object') throw new Error('Empty status response');
 
         if (setLiveCredits(extractRemaining(data))) {
@@ -4864,7 +5143,7 @@
         renderLeadsTable();
       })
       .catch(function (err) {
-        if (timer) window.clearTimeout(timer);
+        if (epoch !== scraperPollEpoch) return;
 
         /* Transient spikes are normal. Keep the last good status on the first
            two failures and only surface "Reconnecting…" after three. */
@@ -4889,12 +5168,32 @@
         }
         updateScraperProgress();
       });
+
+    /* ALWAYS release the in-flight guard and, while the job is still active,
+       schedule the next poll — including after network / abort / 5xx errors. */
+    request.finally(function () {
+      if (timer) window.clearTimeout(timer);
+      if (scraperPollController === controller) scraperPollController = null;
+      if (epoch !== scraperPollEpoch) return;
+
+      scraperPollInFlight = false;
+      const activeJob = state.scraperJob;
+      if (!activeJob || !scraperPollActive(activeJob)) return;
+
+      if (!scraperPollStartedAt) scraperPollStartedAt = Date.now();
+      if (Date.now() - scraperPollStartedAt >= STATUS_POLL_WINDOW_MS) {
+        setScraperBadge('pending', 'Still running — click Check to refresh');
+        saveState();
+        updateScraperProgress();
+        return;
+      }
+      scheduleNextScraperPoll(LEAD_POLL_MS, epoch);
+    });
   }
 
   /* ----- resume / check job ----- */
   function handleResume() {
     const input = $('#resumeJobId');
-    const job = state.scraperJob;
     if (!input) return;
 
     const value = input.value.trim();
@@ -4903,28 +5202,63 @@
       input.focus();
       return;
     }
-    if (!job) {
-      toast('No job stored in this browser.', 'warn');
-      return;
+
+    const resumeBtn = $('#resumeBtn');
+    if (resumeBtn) {
+      resumeBtn.disabled = false;
+      resumeBtn.removeAttribute('disabled');
+      resumeBtn.setAttribute('aria-disabled', 'false');
     }
 
-    stopScraperTimers();
-    job.job_id = value;
-    job.mode = 'live';
-    job.status = 'running';
-    job.starting = false;
-    job.posted = true;
-    job.scraped_rows = 0;
-    job.filled_rows = 0;
-    job.percent = 0;
-    job.download_ready = false;
-    job.collected_count = 0;
-    job.status_warned = false;
-    saveState();
+    const current = state.scraperJob;
+    const sameJob = !!current && String(current.job_id || '') === value;
 
+    stopScraperTimers();
+
+    let job = current;
+    if (!sameJob) {
+      job = {
+        job_id: value,
+        name: state.name || '',
+        email: accountEmail(),
+        country: '',
+        search_terms: [],
+        selected_columns: LEAD_REQUIRED_COLUMNS.map(function (col) { return col.id; }),
+        target_rows: LEAD_MAX_TARGET,
+        target_count: LEAD_MAX_TARGET,
+        scraped_rows: 0,
+        filled_rows: 0,
+        percent: 0,
+        download_ready: false,
+        credits_spent: 0,
+        started_at: new Date().toISOString(),
+        status: 'running',
+        mode: 'live',
+        posted: true,
+        starting: false,
+        collected_count: 0,
+        email_sent: false,
+        poll_errors: 0
+      };
+      state.scraperJob = job;
+    } else {
+      job.job_id = value;
+      job.mode = 'live';
+      job.starting = false;
+      job.posted = true;
+      job.poll_errors = 0;
+      job.error = '';
+      if (scraperJobFailed(job)) job.status = 'running';
+    }
+
+    saveState();
     renderJobSummary();
     updateScraperProgress();
-    startLivePolling(job);
+    renderLeadsTable();
+
+    /* Force a fresh GET immediately; if the backend is still working, the
+       setTimeout chain resumes automatically from the response. */
+    startLivePolling(job, true);
     toast('Checking job ' + value + '…', 'info');
   }
 
@@ -5543,6 +5877,10 @@
   /* ========================= L. INVOICE OCR AGENT ======================== */
   let invoiceFiles = [];
   let invoicePollTimer = null;
+  let invoicePollInFlight = false;
+  let invoicePollController = null;
+  let invoicePollEpoch = 0;
+  let invoicePollStartedAt = 0;
   let invoiceStarting = false;
   let invoiceExportFormat = INV_DEFAULT_EXPORT_FORMAT;
 
@@ -5685,11 +6023,36 @@
     return currentRoute() === 'invoice-results';
   }
 
+  function invoiceJobFailed(job) {
+    const status = String((job && job.status) || '').toLowerCase();
+    return (
+      status === 'failed' ||
+      status === 'error' ||
+      status === 'cancelled' ||
+      status === 'canceled'
+    );
+  }
+
+  function invoicePollActive(job) {
+    return !!job && !invoiceJobFailed(job) && !invoiceIsComplete(job);
+  }
+
   function stopInvoiceTimer() {
+    invoicePollEpoch += 1;
     if (invoicePollTimer) {
-      window.clearInterval(invoicePollTimer);
+      window.clearTimeout(invoicePollTimer);
       invoicePollTimer = null;
     }
+    invoicePollStartedAt = 0;
+    if (invoicePollController) {
+      try {
+        invoicePollController.abort();
+      } catch (err) {
+        /* already settled */
+      }
+      invoicePollController = null;
+    }
+    invoicePollInFlight = false;
   }
 
   function setInvoiceBadge(kind, text) {
@@ -5701,38 +6064,70 @@
     if (label) label.textContent = text;
   }
 
-  function startInvoicePolling(job) {
-    if (invoicePollTimer) return;
-    if (!invoicePageActive() || !job || !INV_STATUS_URL) return;
-    setInvoiceBadge('pending', 'Starting invoice OCR…');
-    pollInvoiceStatus();
-    invoicePollTimer = window.setInterval(pollInvoiceStatus, INV_POLL_MS);
+  function startInvoicePolling(job, force) {
+    if (!job || !INV_STATUS_URL) return;
+    if (!invoicePageActive()) return;
+    if (invoicePollTimer || invoicePollInFlight) return;
+    if (!force && !invoicePollActive(job)) return;
+
+    invoicePollStartedAt = Date.now();
+    invoicePollEpoch += 1;
+    const epoch = invoicePollEpoch;
+    setInvoiceBadge('pending', force ? 'Refreshing status…' : 'Starting invoice OCR…');
+    pollInvoiceStatus(!!force, epoch);
+  }
+
+  /* Used by tab-focus resume and the Check button. */
+  function forceInvoicePollNow() {
+    const job = state.invoiceJob;
+    if (!job || !INV_STATUS_URL) return;
+    if (invoicePollTimer) {
+      window.clearTimeout(invoicePollTimer);
+      invoicePollTimer = null;
+    }
+    if (invoicePollInFlight) return;
+    if (!invoicePollStartedAt) invoicePollStartedAt = Date.now();
+    pollInvoiceStatus(true, invoicePollEpoch);
+  }
+
+  function scheduleNextInvoicePoll(delay, epoch) {
+    if (epoch !== invoicePollEpoch) return;
+    if (invoicePollTimer) window.clearTimeout(invoicePollTimer);
+    invoicePollTimer = window.setTimeout(function () {
+      invoicePollTimer = null;
+      pollInvoiceStatus(false, epoch);
+    }, Math.max(0, delay));
   }
 
   function ensureInvoiceRunning() {
     const job = state.invoiceJob;
-    if (!job || job.status === 'failed' || invoiceIsComplete(job)) return;
+    if (!job || invoiceJobFailed(job) || invoiceIsComplete(job)) return;
     if (!isLoggedIn()) return;
     startInvoicePolling(job);
   }
 
-  function pollInvoiceStatus() {
+  function pollInvoiceStatus(force, expectedEpoch) {
     const job = state.invoiceJob;
     if (!job || !INV_STATUS_URL) return;
-    if (job.status === 'failed') return;
-    if (invoiceIsComplete(job)) return;
+    const epoch = expectedEpoch == null ? invoicePollEpoch : expectedEpoch;
+    if (epoch !== invoicePollEpoch) return;
+    if (invoicePollInFlight) return;
+    if (!force && !invoicePollActive(job)) return;
+    if (!invoicePollStartedAt) invoicePollStartedAt = Date.now();
 
+    invoicePollInFlight = true;
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    /* 12s timeout + 3-strike tolerance, same policy as the B2B scraper. */
+    invoicePollController = controller;
+    /* 12s timeout + 3-strike tolerance, same policy as the scraper. */
     const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
 
-    fetch(INV_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
+    const request = fetch(INV_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
       mode: 'cors',
       headers: authHeaders(),
       signal: controller ? controller.signal : undefined
     })
       .then(function (response) {
-        if (timer) window.clearTimeout(timer);
+        if (epoch !== invoicePollEpoch) return null;
         if (response.status === 401) {
           stopInvoiceTimer();
           handleAuthExpired(
@@ -5750,6 +6145,7 @@
       })
       .then(function (data) {
         if (!data) return;
+        if (epoch !== invoicePollEpoch) return;
         if (typeof data !== 'object') throw new Error('Empty status response');
 
         if (setLiveCredits(extractRemaining(data))) syncCreditUI();
@@ -5834,7 +6230,7 @@
         renderInvoiceTable();
       })
       .catch(function (err) {
-        if (timer) window.clearTimeout(timer);
+        if (epoch !== invoicePollEpoch) return;
 
         const failures = (Number(job && job.poll_errors) || 0) + 1;
         if (job) job.poll_errors = failures;
@@ -5857,6 +6253,27 @@
         }
         updateInvoiceProgress();
       });
+
+    /* ALWAYS release the in-flight guard and, while the job is still active,
+       schedule the next poll — including after network / abort / 5xx errors. */
+    request.finally(function () {
+      if (timer) window.clearTimeout(timer);
+      if (invoicePollController === controller) invoicePollController = null;
+      if (epoch !== invoicePollEpoch) return;
+
+      invoicePollInFlight = false;
+      const activeJob = state.invoiceJob;
+      if (!activeJob || !invoicePollActive(activeJob)) return;
+
+      if (!invoicePollStartedAt) invoicePollStartedAt = Date.now();
+      if (Date.now() - invoicePollStartedAt >= STATUS_POLL_WINDOW_MS) {
+        setInvoiceBadge('pending', 'Still running — click Check to refresh');
+        saveState();
+        updateInvoiceProgress();
+        return;
+      }
+      scheduleNextInvoicePoll(INV_POLL_MS, epoch);
+    });
   }
 
   function renderInvoiceResults() {
@@ -5876,6 +6293,12 @@
 
     const resume = $('#invoiceResumeId');
     if (resume) resume.value = job.job_id || '';
+    const resumeBtn = $('#invoiceResumeBtn');
+    if (resumeBtn) {
+      resumeBtn.disabled = false;
+      resumeBtn.removeAttribute('disabled');
+      resumeBtn.setAttribute('aria-disabled', 'false');
+    }
 
     renderInvoiceJobSummary();
     renderInvoiceTable();
@@ -5885,8 +6308,8 @@
       completeInvoiceJob(true);
       return;
     }
-    if (String(job.status || '').toLowerCase() === 'failed') {
-      setInvoiceBadge('fail', 'Job failed · ' + (job.error || 'upload a new batch'));
+    if (invoiceJobFailed(job)) {
+      setInvoiceBadge('fail', 'Job failed · ' + (job.error || job.status || 'upload a new batch'));
       return;
     }
     ensureInvoiceRunning();
@@ -6205,7 +6628,9 @@
       return String(entry.job_id || '') === id;
     })[0];
     const current = state.invoiceJob;
-    if (!current || String(current.job_id || '') !== id) {
+    const sameJob = !!current && String(current.job_id || '') === id;
+
+    if (!sameJob) {
       state.invoiceJob = {
         job_id: id,
         status: 'processing',
@@ -6221,11 +6646,19 @@
         created_at: new Date().toISOString(),
         poll_errors: 0
       };
-      saveState();
+    } else {
+      current.poll_errors = 0;
+      current.error = '';
+      if (invoiceJobFailed(current)) current.status = 'processing';
     }
+    saveState();
 
-    if (currentRoute() === 'invoice-results') renderInvoiceResults();
-    else window.location.hash = '#invoice-results';
+    if (currentRoute() === 'invoice-results') {
+      renderInvoiceResults();
+      startInvoicePolling(state.invoiceJob, true);
+    } else {
+      window.location.hash = '#invoice-results';
+    }
   }
 
   /* ----- invoice upload helpers ----- */
@@ -6666,6 +7099,21 @@
       });
   }
 
+  /* Returning to the tab should never wait for the next 2.5s tick. */
+  function resumePollingOnFocus() {
+    if (document.visibilityState === 'hidden') return;
+    const route = currentRoute();
+    if (
+      (route === 'scraper-results' || route === 'agents') &&
+      scraperPollActive(state.scraperJob)
+    ) {
+      forceScraperPollNow();
+    }
+    if (route === 'invoice-results' && invoicePollActive(state.invoiceJob)) {
+      forceInvoicePollNow();
+    }
+  }
+
   /* ============================== INIT =================================== */
   function init() {
     const year = $('#year');
@@ -6683,6 +7131,10 @@
     updateNextBrief();
     bindEvents();
     renderAuthUI();
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) resumePollingOnFocus();
+    });
 
     /* Live profile + credits from GET /auth/me when a token exists. */
     refreshSession();

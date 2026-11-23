@@ -12,15 +12,24 @@
       console + shown as a status badge on the success page.
 
    2. CREDITS_PER_STOCK_WEEK
-      Business rule: 5 credits buys 1 stock for 7 days.
+      Business rule: 5 credits buys 1 stock for 5 trading days (Mon–Fri).
 
    3. SUBSCRIPTION_DAYS
-      Length of an activation window.
+      Length of an activation window in calendar days.
 
    4. API_BASE
       Neon-backed authentication + account service. The browser stores only
       the session token (AUTH_TOKEN_KEY) and fetches live profile/credits from
       GET /auth/me on every page load.
+
+   5. BILLING_CHECKOUT_URL
+      Payment gateway endpoint. POST { pack_id } with the session bearer token.
+      Returns { mode: 'live', checkout_url } when the gateway is live, or
+      { mode: 'onboarding' } while bank/Airwallex verification is finalising.
+      Credits are ALWAYS granted server-side — never in the browser.
+
+   6. CREDIT_PACKS
+      The 4 official USD credit packs shown on #topup.
    ========================================================================== */
 
 window.CONFIG = {
@@ -32,6 +41,11 @@ window.CONFIG = {
   AUTH_TOKEN_KEY: 'aaas_token',
   FREE_SIGNUP_CREDITS: 5,
 
+  /* --- Billing / credit checkout ---------------------------------------- */
+  BILLING_CHECKOUT_URL: 'https://n8n.20.205.96.122.sslip.io/webhook/billing/create-checkout',
+  /* Manual top-up fallback while online card/bank checkout is onboarding. */
+  CHECKOUT_MANUAL_EMAIL: 'group.litework@gmail.com',
+
   /* Google Identity Services client ID. Paste your OAuth Web client ID here.
      Leave blank to show a disabled "Continue with Google" control. */
   GOOGLE_CLIENT_ID: '87470842640-0bvtq39i9h3pg5om9ephb6sumnob6mlk.apps.googleusercontent.com',
@@ -39,6 +53,80 @@ window.CONFIG = {
   /* --- Pricing / credit rules ------------------------------------------- */
   CREDITS_PER_STOCK_WEEK: 5,
   SUBSCRIPTION_DAYS: 7,
+  /* One stock brief = 5 market-day deliveries (Mon–Fri, weekends skipped). */
+  STOCK_TRADING_DAYS: 5,
+  STOCK_DELIVERY_NOTE:
+    'Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).',
+
+  /* --- Official USD credit packs ----------------------------------------
+     Clicking "Buy Pack" posts { pack_id } to BILLING_CHECKOUT_URL. */
+  CREDIT_PACKS: [
+    {
+      id: 'starter',
+      name: 'Starter',
+      credits: 25,
+      price: 5,
+      rate: '$0.20 / credit',
+      blurb: 'Best for trying your first batches',
+      note: 'Pay once · credits never expire',
+      features: [
+        '25 credits · $5.00 USD',
+        '$0.20 per credit',
+        'Try any agent before scaling',
+        'No auto-renewal'
+      ]
+    },
+    {
+      id: 'growth',
+      name: 'Growth',
+      credits: 60,
+      price: 10,
+      rate: '$0.167 / credit',
+      bonus: '17% bonus',
+      badge: 'Most Popular',
+      popular: true,
+      blurb: 'For solo founders & bookkeepers',
+      note: 'Pay once · credits never expire',
+      features: [
+        '60 credits · $10.00 USD',
+        '$0.167 per credit · 17% bonus',
+        'Ideal for weekly agent runs',
+        'No auto-renewal'
+      ]
+    },
+    {
+      id: 'business',
+      name: 'Business',
+      credits: 160,
+      price: 25,
+      rate: '$0.156 / credit',
+      bonus: '22% bonus',
+      blurb: 'For SME teams running monthly ops',
+      note: 'Pay once · credits never expire',
+      features: [
+        '160 credits · $25.00 USD',
+        '$0.156 per credit · 22% bonus',
+        'Shared credit wallet for your team',
+        'No auto-renewal'
+      ]
+    },
+    {
+      id: 'agency',
+      name: 'Agency',
+      credits: 350,
+      price: 50,
+      rate: '$0.143 / credit',
+      bonus: '29% bonus',
+      blurb: 'Best value for accounting firms & agencies',
+      note: 'Pay once · credits never expire',
+      features: [
+        '350 credits · $50.00 USD',
+        '$0.143 per credit · 29% bonus',
+        'Best value per credit',
+        'No auto-renewal'
+      ]
+    }
+  ],
 
   /* --- Delivery ---------------------------------------------------------- */
   TIMEZONE: 'Asia/Kuala_Lumpur',

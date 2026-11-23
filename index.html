@@ -9,7 +9,7 @@
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
   <meta property="og:description" content="Three live AI workers: a 07:00 MYT stock brief, a 50–500 lead B2B Excel scraper and an Invoice OCR agent. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=23" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='0.52' stop-color='%236366F1'/%3E%3Cstop offset='1' stop-color='%23A855F7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Cpath d='M19.4 4.6 9.2 17.4h4.55L12 26.9 23 14.2h-4.7z' fill='%2307131F'/%3E%3Ccircle cx='24.9' cy='7.4' r='1.05' fill='%23E0F2FE'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -374,13 +374,33 @@
     <section class="view" data-view="agents" id="view-agents">
       <div class="container page-head">
         <span class="eyebrow">LiteWork AI workers</span>
-        <h1>Three live workers. Zero busywork.</h1>
+        <h1>Three live workers. Three shipping next.</h1>
         <p>Pay per run with credits. No seats, no contracts.</p>
       </div>
 
       <div class="container agent-layout">
-        <!-- Flagship: Stock Market News Agent -->
-        <article class="agent-card agent-card-featured" id="stockAgentCard">
+        <!-- Category filter pills (live counts) -->
+        <div class="agent-filter" role="tablist" aria-label="Filter agents by category">
+          <button type="button" class="agent-filter-pill is-active" data-agent-filter="all" role="tab" aria-selected="true">
+            All <span class="agent-filter-count">6</span>
+          </button>
+          <button type="button" class="agent-filter-pill" data-agent-filter="finance" role="tab" aria-selected="false">
+            Finance & Accounting <span class="agent-filter-count">2</span>
+          </button>
+          <button type="button" class="agent-filter-pill" data-agent-filter="sales" role="tab" aria-selected="false">
+            Sales & Leads <span class="agent-filter-count">1</span>
+          </button>
+          <button type="button" class="agent-filter-pill" data-agent-filter="market" role="tab" aria-selected="false">
+            Market Intelligence <span class="agent-filter-count">1</span>
+          </button>
+          <button type="button" class="agent-filter-pill" data-agent-filter="operations" role="tab" aria-selected="false">
+            Operations <span class="agent-filter-count">2</span>
+          </button>
+        </div>
+
+        <div class="agent-grid" id="agentGrid">
+        <!-- Row 1 · Flagship: Stock Market News Agent -->
+        <article class="agent-card agent-card-featured agent-card-grid" id="stockAgentCard" data-agent-cat="market">
           <div class="agent-visual">
             <div class="agent-visual-glow" aria-hidden="true"></div>
 
@@ -449,15 +469,15 @@
           <div class="agent-body">
             <div class="agent-title-row">
               <h2>Stock Market News Agent</h2>
-              <span class="price-tag">5 Credits / Stock · 7-Day Access</span>
+              <span class="price-tag">5 Credits / Stock · 5 Trading Days</span>
             </div>
             <p class="agent-desc">Verified candles, MACD bias and curated news — one pre-market brief.</p>
 
             <div class="pill-row">
-              <span class="mini-pill">07:00 MYT Daily</span>
+              <span class="mini-pill">07:00 MYT · Mon–Fri</span>
               <span class="mini-pill">MACD + News</span>
               <span class="mini-pill">52-Week Range</span>
-              <span class="mini-pill">7-Day Access</span>
+              <span class="mini-pill">5 Trading Days</span>
             </div>
 
             <div class="agent-actions">
@@ -465,13 +485,16 @@
               <button type="button" class="btn btn-subscribe is-disabled" id="subscribeBtn" disabled aria-disabled="true">Subscribe</button>
             </div>
             <p class="subscribe-caption" id="subscribeCaption">
-              Requires at least 5 credits for 7 days (1 stock). <a href="#topup">Top up credits</a>.
+              Requires at least 5 credits for 5 trading days (1 stock · Mon–Fri). <a href="#topup">Top up credits</a>.
+            </p>
+            <p class="agent-delivery-note">
+              Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).
             </p>
           </div>
         </article>
 
-        <!-- Second live agent: Lead Scraper Agent -->
-        <article class="agent-card agent-card-featured agent-card-scraper" id="leadScraperCard">
+        <!-- Row 1 · Second live agent: Lead Scraper Agent -->
+        <article class="agent-card agent-card-featured agent-card-scraper agent-card-grid" id="leadScraperCard" data-agent-cat="sales">
           <div class="agent-visual agent-visual-scraper">
             <div class="agent-visual-glow agent-visual-glow-green" aria-hidden="true"></div>
 
@@ -561,8 +584,8 @@
           </div>
         </article>
 
-        <!-- 3rd live worker: Invoice OCR -->
-        <article class="agent-card agent-card-featured agent-card-invoice" id="invoiceAgentCard">
+        <!-- Row 1 · 3rd live worker: Invoice OCR -->
+        <article class="agent-card agent-card-featured agent-card-invoice agent-card-grid" id="invoiceAgentCard" data-agent-cat="finance">
           <div class="agent-visual agent-visual-invoice">
             <div class="agent-visual-glow agent-visual-glow-invoice" aria-hidden="true"></div>
 
@@ -649,45 +672,65 @@
           </div>
         </article>
 
-        <!-- Coming soon -->
-        <div class="teaser-grid">
-          <article class="agent-card agent-card-teaser">
-            <div class="teaser-top">
-              <span class="teaser-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="#F472B6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 24c3-2 5-6 8-6s4 3 7 1 5-8 9-10" />
-                  <circle cx="10" cy="9" r="4" /><path d="M10 5v8M6 9h8" />
-                </svg>
-              </span>
-              <span class="status-pill status-soon">Coming Soon</span>
-            </div>
-            <h3>Crypto Whale Alert Agent</h3>
-            <p>Tracks on-chain whale moves and exchange netflows.</p>
-            <div class="pill-row">
-              <span class="mini-pill">On-chain</span>
-              <span class="mini-pill">24/7 Triggers</span>
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Crypto Whale Alert Agent">Join the waitlist</button>
-          </article>
+        <!-- Row 2 · Upcoming B2B workers -->
+        <article class="agent-card agent-card-upcoming" data-agent-cat="operations">
+          <div class="upcoming-top">
+            <span class="teaser-icon" aria-hidden="true">
+              <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="6" width="7" height="20" rx="2" />
+                <rect x="13" y="11" width="7" height="15" rx="2" />
+                <rect x="22" y="8" width="7" height="18" rx="2" />
+                <path d="M4 30h25" />
+              </svg>
+            </span>
+            <span class="status-pill status-soon">Coming Soon</span>
+          </div>
+          <span class="agent-cat-label">Operations</span>
+          <h3>Supplier Quote Comparator</h3>
+          <p>Upload 3–10 messy vendor quotes (PDF/Excel) → side-by-side comparison Excel highlighting hidden fees & lowest unit cost.</p>
+          <div class="upcoming-cta">
+            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Supplier Quote Comparator">Notify Me</button>
+          </div>
+        </article>
 
-          <article class="agent-card agent-card-teaser">
-            <div class="teaser-top">
-              <span class="teaser-icon" aria-hidden="true">
-                <svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="#818CF8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="6" y="4" width="20" height="24" rx="3" /><path d="M11 10h10M11 15h10M11 20h6" />
-                  <circle cx="23" cy="23" r="4.2" fill="#0F172A" /><path d="M24.5 21.5l2 2-2 2" />
-                </svg>
-              </span>
-              <span class="status-pill status-soon">Coming Soon</span>
-            </div>
-            <h3>Earnings Call Summarizer</h3>
-            <p>Turns 60-minute calls into three bullet takeaways.</p>
-            <div class="pill-row">
-              <span class="mini-pill">Transcripts</span>
-              <span class="mini-pill">Guidance Delta</span>
-            </div>
-            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Earnings Call Summarizer">Join the waitlist</button>
-          </article>
+        <article class="agent-card agent-card-upcoming" data-agent-cat="finance">
+          <div class="upcoming-top">
+            <span class="teaser-icon" aria-hidden="true">
+              <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="#818CF8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9l13-6 13 6v8c0 7-5.6 12-13 14C8.6 29 3 24 3 17z" />
+                <path d="M10.5 16.5l4 4 7.5-7.5" />
+              </svg>
+            </span>
+            <span class="status-pill status-soon">Coming Soon</span>
+          </div>
+          <span class="agent-cat-label">Finance & Accounting</span>
+          <h3>Bank vs. Invoice Reconciler</h3>
+          <p>Match bank statements against your Invoice OCR Excel to flag missing receipts, mismatches, and duplicate charges.</p>
+          <div class="upcoming-cta">
+            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="Bank vs. Invoice Reconciler">Notify Me</button>
+          </div>
+        </article>
+
+        <article class="agent-card agent-card-upcoming" data-agent-cat="operations">
+          <div class="upcoming-top">
+            <span class="teaser-icon" aria-hidden="true">
+              <svg viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="#34D399" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="5" width="8" height="11" rx="1.6" />
+                <rect x="12" y="5" width="8" height="11" rx="1.6" />
+                <rect x="21" y="5" width="8" height="11" rx="1.6" />
+                <path d="M5 9h4M5 12h4M14 9h4M14 12h4M23 9h4M23 12h4" />
+                <path d="M16 19v3M9 25h14M9 22l7 3 7-3" />
+              </svg>
+            </span>
+            <span class="status-pill status-soon">Coming Soon</span>
+          </div>
+          <span class="agent-cat-label">Operations</span>
+          <h3>3-Way Match Auditor (PO / DO / Invoice)</h3>
+          <p>Cross-check Purchase Orders, Delivery Orders, and Supplier Invoices to catch quantity shortages & price hikes before paying.</p>
+          <div class="upcoming-cta">
+            <button type="button" class="btn btn-ghost btn-sm" data-waitlist="3-Way Match Auditor (PO / DO / Invoice)">Notify Me</button>
+          </div>
+        </article>
         </div>
       </div>
     </section>
@@ -771,7 +814,7 @@
       <div class="container page-head center">
         <span class="eyebrow">Pay as you go · USD</span>
         <h1>Top Up Credits</h1>
-        <p>Credits never auto-renew. 5 credits = 1 stock for 7 days.</p>
+        <p>Credits never auto-renew. 5 credits = 1 stock for 5 trading days (Mon–Fri).</p>
       </div>
 
       <div class="container">
@@ -787,19 +830,31 @@
         </div>
 
         <div class="topup-rules" aria-label="Credit rules">
-          <span class="topup-rule">Credits never auto-renew</span>
-          <span class="topup-rule">5 credits = 1 stock for 7 days</span>
+          <span class="topup-rule">Credits never expire</span>
+          <span class="topup-rule">No auto-renewal</span>
+          <span class="topup-rule">5 credits = 1 stock for 5 trading days</span>
+          <span class="topup-rule">Briefs at 07:00 MYT · Mon–Fri only</span>
           <span class="topup-rule">Lead Scraper = 3 credits per 50-lead term</span>
           <span class="topup-rule">Invoice OCR = 5 or 10 credits per batch</span>
-          <span class="topup-rule">Unused credits never expire</span>
         </div>
+
+        <p class="topup-delivery-note">
+          Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).
+        </p>
       </div>
 
       <div class="container">
         <div class="pack-grid" id="packGrid"><!-- rendered by app.js --></div>
         <p class="fine center pack-footnote">
-          Prices in USD. Demo checkout — credits are added instantly for testing.
+          Prices in USD · Checkout opens our secure payment gateway and credits are added only after payment is verified.
         </p>
+        <div class="topup-trust">
+          <span class="topup-trust-item">Credits never expire</span>
+          <span class="topup-trust-sep" aria-hidden="true">·</span>
+          <span class="topup-trust-item">No auto-renewal</span>
+          <span class="topup-trust-sep" aria-hidden="true">·</span>
+          <span class="topup-trust-item">Secure USD checkout via Visa / Mastercard / Bank Transfer (onboarding in progress)</span>
+        </div>
       </div>
     </section>
 
@@ -831,7 +886,7 @@
           <h2 class="mt">How LiteWork helps</h2>
           <p>
             Everything runs on <strong>simple credits that never expire</strong>. You only pay for the
-            exact work you need — whether that is a 7-day morning stock briefing for one ticker, or a
+            exact work you need — whether that is a five-trading-day morning stock briefing for one ticker, or a
             50–500 lead B2B Excel list pulled from your own search terms. No minimum term, no
             auto-renewal, and no credits burned on months you don't use us.
           </p>
@@ -864,7 +919,7 @@
           </div>
           <div class="aside-card aside-card-accent">
             <h3>Delivery promise</h3>
-            <p><strong>07:00 MYT</strong>, every day of your brief window — and your .xlsx lands in your inbox the moment it is ready. Late feed? The worker waits for verified candles instead of guessing.</p>
+            <p><strong>07:00 MYT</strong> every market morning (Mon–Fri) of your brief window — and your .xlsx lands in your inbox the moment it is ready. Late feed? The worker waits for verified candles instead of guessing.</p>
           </div>
         </aside>
       </div>
@@ -908,13 +963,13 @@
             <details class="faq-item">
               <summary>How do credits work?</summary>
               <div class="faq-body">
-                <p>One stock for seven days costs 5 credits. The Lead Scraper costs 3 credits per 50-lead term (max 10 terms). Credits never expire and never auto-renew.</p>
+                <p>One stock for five trading days (Mon–Fri) costs 5 credits. The Lead Scraper costs 3 credits per 50-lead term (max 10 terms). Credits never expire and never auto-renew.</p>
               </div>
             </details>
             <details class="faq-item">
               <summary>When does the brief arrive?</summary>
               <div class="faq-body">
-                <p>Every day at <strong>07:00 MYT</strong> for the length of your 7-day window. Mobile-first, no zooming.</p>
+                <p>Every market morning at <strong>07:00 MYT</strong> for 5 trading days (Mon–Fri). Weekends are skipped while US markets are closed, so you always receive 5 full market-day briefs. Mobile-first, no zooming.</p>
               </div>
             </details>
             <details class="faq-item">
@@ -932,7 +987,7 @@
             <details class="faq-item">
               <summary>What if I have fewer than 5 credits?</summary>
               <div class="faq-body">
-                <p>The Subscribe buttons stay locked. A $5 Starter Top-Up is exactly one stock for one week.</p>
+                <p>The Subscribe buttons stay locked. The $5 Starter pack (25 credits) covers five stocks for a full market week.</p>
               </div>
             </details>
             <details class="faq-item">
@@ -1159,7 +1214,7 @@
             </svg>
           </div>
 
-          <h1 class="success-title">You have successfully subscribed for a week!</h1>
+          <h1 class="success-title">You have successfully subscribed for 5 trading days!</h1>
           <p class="success-window" id="successWindow"></p>
 
           <span class="webhook-badge" id="webhookStatus">
@@ -1246,7 +1301,7 @@
         <strong data-credit-count>0</strong>
         <span>credits available</span>
       </div>
-      <p class="wallet-hint">1 stock for 7 days = 5 credits. Lead scraping = 3 credits per term (50 leads). No auto-renewal.</p>
+      <p class="wallet-hint">1 stock for 5 trading days (Mon–Fri) = 5 credits. Lead scraping = 3 credits per term (50 leads). No auto-renewal.</p>
       <div class="wallet-actions">
         <a class="btn btn-primary btn-sm" href="#plans">Manage My Plan</a>
         <button type="button" class="btn btn-ghost btn-sm" data-open-account>Account Settings</button>
@@ -1280,7 +1335,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=21"></script>
-  <script src="app.js?v=21"></script>
+  <script src="config.js?v=23"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
