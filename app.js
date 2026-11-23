@@ -2066,18 +2066,20 @@
     btn.textContent = 'Launch Lead Scraper';
 
     if (caption) {
-      caption.hidden = enough;
+      /* Always visible: for signed-in users with credits the note is the
+         product summary; otherwise it explains what is needed. */
+      caption.hidden = false;
       if (!signedIn) {
         caption.innerHTML =
-          'Log in or sign up to get <strong>' + FREE_SIGNUP_CREDITS +
-          ' free credits</strong> and launch this agent.';
+          'Log in for <strong>' + FREE_SIGNUP_CREDITS + ' free credits</strong> to launch this agent.';
       } else if (!enough) {
         caption.innerHTML =
-          'Needs at least ' + LEAD_MIN_CREDITS +
-          ' credits (1 term · ' + LEAD_LEADS_PER_TERM +
+          'Need ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM +
           ' leads). <a href="#topup">Top up credits</a>.';
       } else {
-        caption.innerHTML = '';
+        caption.innerHTML =
+          LEAD_CREDITS_PER_TERM + ' credits per ' + LEAD_LEADS_PER_TERM +
+          '-lead term · Finished .xlsx emailed & downloadable.';
       }
     }
   }
@@ -2104,18 +2106,20 @@
     btn.textContent = 'Subscribe';
 
     if (caption) {
-      caption.hidden = enough;
+      /* Always visible: product summary when funded, prompt when not. */
+      caption.hidden = false;
       if (!signedIn) {
         caption.innerHTML =
-          'Log in or sign up to get <strong>' + FREE_SIGNUP_CREDITS +
-          ' free credits</strong> and subscribe.';
+          'Log in for <strong>' + FREE_SIGNUP_CREDITS + ' free credits</strong> to subscribe.';
       } else if (!enough) {
         caption.innerHTML =
-          'Requires at least ' + CREDITS_PER_STOCK + ' credits for ' +
+          'Need ' + CREDITS_PER_STOCK + ' credits for ' +
           TRADING_DAYS + ' trading days (1 stock · Mon–Fri). ' +
           '<a href="#topup">Top up credits</a>.';
       } else {
-        caption.innerHTML = '';
+        caption.innerHTML =
+          '07:00 MYT Mon–Fri · Skips US market weekends (' +
+          TRADING_DAYS + ' full market briefs).';
       }
     }
   }
