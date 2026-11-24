@@ -7571,7 +7571,8 @@
   let leEstimateRows = 0;
   let leRowsExact = true;
   let leHistoryRows = 0;
-  let leSourceTab = 'history';
+  /* Backend contract: 'lead_job' = a finished Lead Scraper run, 'upload' = file. */
+  let leSourceType = 'lead_job';
   let leStarting = false;
   let leJobsLoading = false;
   let lePollTimer = null;
@@ -7724,7 +7725,7 @@
   }
 
   function leRawSites() {
-    if (leSourceTab === 'upload') return Math.max(0, Number(leEstimateRows) || 0);
+    if (leSourceType === 'upload') return Math.max(0, Number(leEstimateRows) || 0);
     return Math.max(0, Number(leHistoryRows) || 0);
   }
 
@@ -7734,7 +7735,7 @@
 
   /* History lead counts are exact; uploaded .xlsx counts are only estimated. */
   function leCountIsExact() {
-    return leSourceTab === 'history' ? true : leRowsExact === true;
+    return leSourceType === 'lead_job' ? true : leRowsExact === true;
   }
 
   function lePageActive() {
@@ -8553,7 +8554,7 @@
     leFiles = [];
     leEstimateRows = 0;
     leHistoryRows = 0;
-    leSourceTab = 'history';
+    leSourceType = 'lead_job';
     leStarting = false;
 
     openModal(
@@ -8636,7 +8637,8 @@
 
     $$('[data-le-source]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        leSourceTab = btn.getAttribute('data-le-source') === 'upload' ? 'upload' : 'history';
+        leSourceType =
+          btn.getAttribute('data-le-source') === 'upload' ? 'upload' : 'lead_job';
         $$('[data-le-source]').forEach(function (b) {
           const on = b === btn;
           b.classList.toggle('is-active', on);
@@ -8644,8 +8646,8 @@
         });
         const historyPane = $('#lePaneHistory');
         const uploadPane = $('#lePaneUpload');
-        if (historyPane) historyPane.hidden = leSourceTab !== 'history';
-        if (uploadPane) uploadPane.hidden = leSourceTab !== 'upload';
+        if (historyPane) historyPane.hidden = leSourceType !== 'lead_job';
+        if (uploadPane) uploadPane.hidden = leSourceType !== 'upload';
         updateLeQuote();
       });
     });
@@ -8726,15 +8728,15 @@
     const jobSelect = $('#leJobSelect');
     const file = leFiles[0] || null;
     const jobId =
-      leSourceTab === 'history' && jobSelect ? String(jobSelect.value || '').trim() : '';
+      leSourceType === 'lead_job' && jobSelect ? String(jobSelect.value || '').trim() : '';
     const sites = leSelectedSites();
     const quote = leQuote(sites);
 
-    if (leSourceTab === 'history' && !jobId) {
+    if (leSourceType === 'lead_job' && !jobId) {
       if (errEl) errEl.textContent = 'Choose a completed Lead Scraper job, or switch to upload.';
       return;
     }
-    if (leSourceTab === 'upload' && !file) {
+    if (leSourceType === 'upload' && !file) {
       if (errEl) errEl.textContent = 'Upload an .xlsx or .csv website list to continue.';
       return;
     }
@@ -8771,31 +8773,39 @@
     const aiOn = !!(aiEl && aiEl.checked);
     const selectedOption = jobSelect ? jobSelect.options[jobSelect.selectedIndex] : null;
 
+    /* Backend contract: source_type MUST be exactly 'lead_job' or 'upload'. */
+    const includeSocials = !!(socialEl && socialEl.checked);
+    const includeAiOpener = aiOn;
+    const userOffer = aiOn && offerEl ? String(offerEl.value || '').trim() : '';
+    const uploadFile = leSourceType === 'upload' ? file : null;
+
     const payload = {
+      source_type: leSourceType,
       email: email,
-      source: leSourceTab,
+      include_socials: includeSocials,
+      include_ai_opener: includeAiOpener,
+      user_offer: userOffer,
       sites: sites,
       row_count: sites,
-      credits: quote.credits,
-      extract_social: !!(socialEl && socialEl.checked),
-      ai_summary: aiOn,
-      offer: aiOn && offerEl ? String(offerEl.value || '').trim() : ''
+      credits: quote.credits
     };
 
-    if (leSourceTab === 'history') {
-      payload.job_id = jobId;
+    if (leSourceType === 'lead_job') {
       payload.source_job_id = jobId;
+      payload.job_id = jobId;
       payload.country = selectedOption
         ? String(selectedOption.getAttribute('data-country') || '')
         : '';
     }
 
-    const ready = file
-      ? readFileAsBase64(file).then(function (base64) {
-          payload.file_name = file.name;
-          payload.file_type = file.type || '';
-          payload.file_size = file.size;
-          payload.file_base64 = base64;
+    const ready = uploadFile
+      ? readFileAsBase64(uploadFile).then(function (base64) {
+          payload.file = {
+            name: uploadFile.name,
+            type: uploadFile.type || '',
+            size: uploadFile.size,
+            data_base64: base64
+          };
           return payload;
         })
       : Promise.resolve(payload);
@@ -8859,7 +8869,7 @@
           download_ready: false,
           preview_rows: [],
           credits_spent: quote.credits,
-          source: leSourceTab,
+          source: leSourceType,
           email: email,
           created_at: new Date().toISOString(),
           poll_errors: 0
