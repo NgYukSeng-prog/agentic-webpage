@@ -7356,6 +7356,147 @@ table.leads-table {
   color: #94a3b8;
 }
 
+/* --- Searchable fixed-height job picker ---------------------------------- */
+.le-combo {
+  position: relative;
+}
+
+.le-combo-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: #334155;
+}
+
+.le-combo-field {
+  position: relative;
+}
+
+.le-combo-input {
+  width: 100%;
+  padding: 11px 34px 11px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+}
+
+.le-combo-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+.le-combo-input:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.le-combo-caret {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.le-combo-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 6px;
+  padding: 5px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 22px 44px -18px rgba(15, 23, 42, 0.45);
+  -webkit-overflow-scrolling: touch;
+}
+
+.le-combo-panel[hidden] {
+  display: none !important;
+}
+
+.le-combo-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.le-combo-option:hover {
+  background: #f1f5f9;
+}
+
+.le-combo-option.is-selected {
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
+}
+
+.le-combo-option-main {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.le-combo-option-main strong {
+  font-weight: 800;
+}
+
+.le-combo-option-meta {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.le-combo-flag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.le-combo-empty {
+  margin: 0;
+  padding: 12px 10px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
 .le-hint {
   margin: 8px 0 0;
   font-size: 0.72rem;

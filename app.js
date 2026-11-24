@@ -2517,6 +2517,25 @@
       completed: firstValue(job, ['completed_at', 'completedAt'], ''),
       credits:
         Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits', 'credits_used'], 0)) || 0,
+      /* Recorded Excel columns — used to flag jobs with no Website column. */
+      columns: (function () {
+        const raw = firstValue(
+          job,
+          ['selected_columns', 'columns', 'column_ids', 'column_keys', 'fields'],
+          null
+        );
+        if (Array.isArray(raw)) {
+          return raw.map(function (value) { return String(value); });
+        }
+        if (typeof raw === 'string' && raw.trim()) {
+          return raw
+            .replace(/^\[|\]$/g, '')
+            .split(',')
+            .map(function (value) { return value.replace(/["'\s]/g, ''); })
+            .filter(function (value) { return !!value; });
+        }
+        return [];
+      })(),
       downloadReady:
         job.download_ready === true ||
         job.download_ready === 'true' ||
@@ -4257,13 +4276,16 @@
       });
     }
 
-    /* Click-away for the nav + wallet */
+    /* Click-away for the nav, wallet and the Lead Enricher job picker */
     document.addEventListener('click', function (event) {
       const nav = $('#navbar');
       if (nav && !nav.contains(event.target)) closeMobileNav();
 
       const wallet = $('#wallet');
       if (wallet && !wallet.contains(event.target)) closeWallet();
+
+      const jobCombo = $('#leJobCombo');
+      if (jobCombo && !jobCombo.contains(event.target)) closeLeJobPanel(true);
     });
 
     /* Wallet popover */
@@ -4316,13 +4338,13 @@
       });
     }
 
-    /* Escape closes overlays */
+    /* Escape closes the job dropdown first, then the overlays */
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') {
-        closeModal();
-        closeWallet();
-        closeMobileNav();
-      }
+      if (event.key !== 'Escape') return;
+      if (closeLeJobPanel(true)) return;
+      closeModal();
+      closeWallet();
+      closeMobileNav();
     });
 
     /* Modal close targets (backdrop + buttons) */
@@ -7571,6 +7593,8 @@
   let leEstimateRows = 0;
   let leRowsExact = true;
   let leHistoryRows = 0;
+  let leSelectedJobId = '';
+  let leJobData = [];
   /* Backend contract: 'lead_job' = a finished Lead Scraper run, 'upload' = file. */
   let leSourceType = 'lead_job';
   let leStarting = false;
@@ -8331,42 +8355,189 @@
     );
   }
 
-  function leRenderJobOptions(jobs) {
-    const select = $('#leJobSelect');
-    if (!select) return;
-    const list = Array.isArray(jobs) ? jobs : [];
+  /* null = columns were never recorded (unknown), true/false = known result. */
+  function leJobHasWebsiteColumn(job) {
+    const columns = Array.isArray(job && job.columns) ? job.columns : [];
+    if (!columns.length) return null;
+    return columns.some(function (value) {
+      const key = String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+      return key === 'website' || key === 'websiteurl' || key === 'url' || key === 'domain';
+    });
+  }
+
+  function leJobLeads(job) {
+    return Number(job && job.target) || Number(job && job.scraped) || 0;
+  }
+
+  function leJobLabel(job) {
+    if (!job) return '';
+    const leads = leJobLeads(job);
+    const terms = job.terms && job.terms.length ? job.terms.slice(0, 2).join(', ') : '—';
+    return (
+      (job.country || '—') + ' · ' + terms + ' · ' + (leads || '—') + ' leads · ' + job.job_id
+    );
+  }
+
+  function leJobMatches(job, query) {
+    const needle = String(query || '').trim().toLowerCase();
+    if (!needle) return true;
+    const haystack = [
+      job.country || '',
+      job.job_id || '',
+      (job.terms || []).join(' ')
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.indexOf(needle) !== -1;
+  }
+
+  function leSelectedJob() {
+    if (!leSelectedJobId) return null;
+    for (let i = 0; i < leJobData.length; i += 1) {
+      if (leJobData[i].job_id === leSelectedJobId) return leJobData[i];
+    }
+    return null;
+  }
+
+  function leRestoreJobLabel() {
+    const input = $('#leJobSearch');
+    if (!input) return;
+    const job = leSelectedJob();
+    input.value = job ? leJobLabel(job) : '';
+  }
+
+  /* Returns true when a dropdown was actually open (so Escape can stop there). */
+  function closeLeJobPanel(restoreLabel) {
+    const panel = $('#leJobList');
+    const input = $('#leJobSearch');
+    const wasOpen = !!panel && !panel.hidden;
+    if (panel) panel.hidden = true;
+    if (input) input.setAttribute('aria-expanded', 'false');
+    if (restoreLabel) leRestoreJobLabel();
+    return wasOpen;
+  }
+
+  function leRenderJobList(query) {
+    const panel = $('#leJobList');
+    if (!panel) return;
+
+    if (!leJobData.length) {
+      panel.innerHTML =
+        '<p class="le-combo-empty">No completed Lead Scraper jobs yet — upload a file instead.</p>';
+      return;
+    }
+
+    const list = leJobData.filter(function (job) {
+      return leJobMatches(job, query);
+    });
+
     if (!list.length) {
+      panel.innerHTML =
+        '<p class="le-combo-empty">No jobs match "' + escapeHtml(String(query || '')) + '".</p>';
+      return;
+    }
+
+    panel.innerHTML = list
+      .map(function (job) {
+        const leads = leJobLeads(job);
+        const terms = job.terms && job.terms.length ? job.terms.slice(0, 3).join(', ') : '—';
+        const hasWebsite = leJobHasWebsiteColumn(job);
+        const flag =
+          hasWebsite === false ? '<span class="le-combo-flag">No Website col</span>' : '';
+        const active = job.job_id === leSelectedJobId;
+        return (
+          '<button type="button" class="le-combo-option' + (active ? ' is-selected' : '') + '"' +
+          ' role="option" aria-selected="' + (active ? 'true' : 'false') + '"' +
+          ' data-job-id="' + escapeHtml(job.job_id) + '">' +
+          '<span class="le-combo-option-main"><strong>' +
+          escapeHtml(job.country || '—') + '</strong> · ' + escapeHtml(terms) + flag + '</span>' +
+          '<span class="le-combo-option-meta">' +
+          (leads ? leads + ' leads' : 'Lead count unknown') +
+          ' · ' + escapeHtml(job.job_id) + '</span>' +
+          '</button>'
+        );
+      })
+      .join('');
+  }
+
+  function openLeJobPanel() {
+    const panel = $('#leJobList');
+    const input = $('#leJobSearch');
+    if (!panel) return;
+    leRenderJobList(input ? input.value : '');
+    panel.hidden = false;
+    if (input) input.setAttribute('aria-expanded', 'true');
+  }
+
+  function selectLeJob(jobId) {
+    const wanted = String(jobId || '');
+    const job = leJobData.filter(function (entry) { return entry.job_id === wanted; })[0] || null;
+    if (job) {
+      leSelectedJobId = job.job_id;
+      leHistoryRows = leJobLeads(job) || LE_TIER_1_MAX;
+    } else {
+      leSelectedJobId = '';
       leHistoryRows = 0;
-      select.innerHTML =
-        '<option value="">No completed Lead Scraper jobs — upload a file instead</option>';
+    }
+    closeLeJobPanel(true);
+    updateLeQuote();
+  }
+
+  function leRenderJobOptions(jobs) {
+    leJobData = Array.isArray(jobs) ? jobs.slice() : [];
+    const input = $('#leJobSearch');
+    const panel = $('#leJobList');
+
+    if (!leJobData.length) {
+      leSelectedJobId = '';
+      leHistoryRows = 0;
+      if (input) {
+        input.value = '';
+        input.disabled = true;
+        input.placeholder = 'No completed Lead Scraper jobs — upload a file instead';
+      }
+      if (panel) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+      }
       updateLeQuote();
       return;
     }
 
-    select.innerHTML = list
-      .map(function (job, index) {
-        const leads = Number(job.target) || Number(job.scraped) || 0;
-        const terms = job.terms && job.terms.length ? job.terms.slice(0, 2).join(', ') : '—';
-        const label =
-          (job.country || '—') + ' · ' + terms + ' · ' + (leads || '—') + ' leads · ' + job.job_id;
-        return (
-          '<option value="' + escapeHtml(job.job_id) + '" data-rows="' +
-          (leads || LE_TIER_1_MAX) + '" data-country="' + escapeHtml(job.country || '') + '"' +
-          (index === 0 ? ' selected' : '') + '>' +
-          escapeHtml(label) + '</option>'
-        );
-      })
-      .join('');
+    if (input) {
+      input.disabled = false;
+      input.placeholder = 'Search by country, keyword, or Job ID…';
+    }
 
-    const first = select.options[select.selectedIndex];
-    leHistoryRows = first ? Number(first.getAttribute('data-rows')) || 0 : 0;
+    /* Keep the current selection when it still exists, else default to the newest job. */
+    const stillThere = leJobData.some(function (job) {
+      return job.job_id === leSelectedJobId;
+    });
+    if (!stillThere) {
+      const first = leJobData[0];
+      leSelectedJobId = first.job_id;
+      leHistoryRows = leJobLeads(first) || LE_TIER_1_MAX;
+    }
+
+    leRestoreJobLabel();
+    leRenderJobList('');
+    if (panel) panel.hidden = true;
+    if (input) input.setAttribute('aria-expanded', 'false');
     updateLeQuote();
   }
 
   function loadLeJobs() {
-    const select = $('#leJobSelect');
-    if (!select || leJobsLoading) return;
+    if (!$('#leJobSearch') || leJobsLoading) return;
     leJobsLoading = true;
+
+    /* Transient loading state until the first render lands. */
+    if (!leJobData.length) {
+      const input = $('#leJobSearch');
+      if (input) {
+        input.disabled = true;
+        input.placeholder = 'Loading your Lead Scraper jobs…';
+      }
+    }
 
     const local = (historyState.b2b || []).filter(function (job) {
       const status = String((job && job.status) || '').toLowerCase();
@@ -8554,6 +8725,8 @@
     leFiles = [];
     leEstimateRows = 0;
     leHistoryRows = 0;
+    leSelectedJobId = '';
+    leJobData = [];
     leSourceType = 'lead_job';
     leStarting = false;
 
@@ -8579,11 +8752,17 @@
       '<button type="button" class="src-tab" data-le-source="upload" role="tab" aria-selected="false">Upload Excel / CSV</button>' +
       '</div>' +
       '<div class="src-pane" id="lePaneHistory">' +
-      '<label class="le-hint" for="leJobSelect">Completed Lead Scraper job</label>' +
-      '<select class="le-select" id="leJobSelect">' +
-      '<option value="">Loading your Lead Scraper jobs…</option>' +
-      '</select>' +
-      '<p class="le-hint">Shows Country · search terms · lead count · Job ID. Only completed runs are listed.</p>' +
+      '<div class="le-combo" id="leJobCombo">' +
+      '<label class="le-combo-label" for="leJobSearch">Completed Lead Scraper job</label>' +
+      '<div class="le-combo-field">' +
+      '<input type="text" id="leJobSearch" class="le-combo-input" autocomplete="off" spellcheck="false" ' +
+      'placeholder="Search by country, keyword, or Job ID…" role="combobox" aria-expanded="false" ' +
+      'aria-controls="leJobList" aria-autocomplete="list" />' +
+      '<span class="le-combo-caret" aria-hidden="true">⌄</span>' +
+      '</div>' +
+      '<div class="le-combo-panel" id="leJobList" role="listbox" aria-label="Completed Lead Scraper jobs" hidden></div>' +
+      '</div>' +
+      '<p class="le-hint">Only completed Lead Scraper jobs that include a <strong>Website</strong> column can be enriched (50–500 leads).</p>' +
       '</div>' +
       '<div class="src-pane" id="lePaneUpload" hidden>' +
       '<label class="inv-drop" id="leDrop" for="leFileInput">' +
@@ -8644,6 +8823,11 @@
           b.classList.toggle('is-active', on);
           b.setAttribute('aria-selected', on ? 'true' : 'false');
         });
+        if (leSourceType !== 'lead_job') {
+          closeLeJobPanel(false);
+        } else {
+          closeLeJobPanel(true);
+        }
         const historyPane = $('#lePaneHistory');
         const uploadPane = $('#lePaneUpload');
         if (historyPane) historyPane.hidden = leSourceType !== 'lead_job';
@@ -8652,12 +8836,44 @@
       });
     });
 
-    const jobSelect = $('#leJobSelect');
-    if (jobSelect) {
-      jobSelect.addEventListener('change', function () {
-        const opt = jobSelect.options[jobSelect.selectedIndex];
-        leHistoryRows = opt ? Number(opt.getAttribute('data-rows')) || 0 : 0;
-        updateLeQuote();
+    const jobSearch = $('#leJobSearch');
+    if (jobSearch) {
+      jobSearch.addEventListener('focus', function () {
+        if (jobSearch.disabled) return;
+        /* Clear the selected label so typing filters from the full list. */
+        jobSearch.value = '';
+        openLeJobPanel();
+      });
+      jobSearch.addEventListener('click', function () {
+        if (jobSearch.disabled) return;
+        const panel = $('#leJobList');
+        if (panel && panel.hidden) {
+          jobSearch.value = '';
+          openLeJobPanel();
+        }
+      });
+      jobSearch.addEventListener('input', function () {
+        const panel = $('#leJobList');
+        if (panel && panel.hidden) openLeJobPanel();
+        else leRenderJobList(jobSearch.value);
+      });
+      jobSearch.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          closeLeJobPanel(true);
+        } else if (event.key === 'ArrowDown') {
+          event.preventDefault();
+          openLeJobPanel();
+        }
+      });
+    }
+
+    const jobList = $('#leJobList');
+    if (jobList) {
+      jobList.addEventListener('click', function (event) {
+        const option = event.target.closest('[data-job-id]');
+        if (!option) return;
+        selectLeJob(String(option.getAttribute('data-job-id') || ''));
       });
     }
 
@@ -8725,10 +8941,9 @@
     }
 
     const errEl = $('#enricherFormError');
-    const jobSelect = $('#leJobSelect');
     const file = leFiles[0] || null;
-    const jobId =
-      leSourceType === 'lead_job' && jobSelect ? String(jobSelect.value || '').trim() : '';
+    const selectedJob = leSelectedJob();
+    const jobId = leSourceType === 'lead_job' && selectedJob ? selectedJob.job_id : '';
     const sites = leSelectedSites();
     const quote = leQuote(sites);
 
@@ -8771,7 +8986,6 @@
     const socialEl = $('#leSocial');
     const offerEl = $('#leOffer');
     const aiOn = !!(aiEl && aiEl.checked);
-    const selectedOption = jobSelect ? jobSelect.options[jobSelect.selectedIndex] : null;
 
     /* Backend contract: source_type MUST be exactly 'lead_job' or 'upload'. */
     const includeSocials = !!(socialEl && socialEl.checked);
@@ -8793,9 +9007,7 @@
     if (leSourceType === 'lead_job') {
       payload.source_job_id = jobId;
       payload.job_id = jobId;
-      payload.country = selectedOption
-        ? String(selectedOption.getAttribute('data-country') || '')
-        : '';
+      payload.country = selectedJob ? String(selectedJob.country || '') : '';
     }
 
     const ready = uploadFile
