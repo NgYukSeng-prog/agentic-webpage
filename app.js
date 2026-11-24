@@ -2503,6 +2503,53 @@
       terms = termsRaw.split(',').map(function (t) { return t.trim(); }).filter(function (t) { return !!t; });
     }
 
+    /* Recorded Excel columns — used to block jobs with no Website column. */
+    const columns = (function () {
+      const raw = firstValue(
+        job,
+        ['selected_columns', 'columns', 'column_ids', 'column_keys', 'fields'],
+        null
+      );
+      if (Array.isArray(raw)) {
+        return raw.map(function (value) { return String(value); });
+      }
+      if (typeof raw === 'string' && raw.trim()) {
+        return raw
+          .replace(/^\[|\]$/g, '')
+          .split(',')
+          .map(function (value) { return value.replace(/["'\s]/g, ''); })
+          .filter(function (value) { return !!value; });
+      }
+      return [];
+    })();
+
+    const websiteFromColumns = columns.length
+      ? columns.some(function (value) {
+          const key = String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return (
+            key === 'website' ||
+            key === 'websiteurl' ||
+            key === 'url' ||
+            key === 'domain' ||
+            key === 'mapsurl'
+          );
+        })
+      : null;
+
+    const explicitWebsite = (function () {
+      const raw = firstValue(
+        job,
+        ['has_website', 'hasWebsite', 'website_included', 'includes_website'],
+        null
+      );
+      if (raw === null) return null;
+      if (typeof raw === 'boolean') return raw;
+      const text = String(raw).trim().toLowerCase();
+      if (['true', '1', 'yes', 'y'].indexOf(text) !== -1) return true;
+      if (['false', '0', 'no', 'n'].indexOf(text) !== -1) return false;
+      return null;
+    })();
+
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
       country: String(firstValue(job, ['country', 'location', 'region'], '—')),
@@ -2517,25 +2564,9 @@
       completed: firstValue(job, ['completed_at', 'completedAt'], ''),
       credits:
         Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits', 'credits_used'], 0)) || 0,
-      /* Recorded Excel columns — used to flag jobs with no Website column. */
-      columns: (function () {
-        const raw = firstValue(
-          job,
-          ['selected_columns', 'columns', 'column_ids', 'column_keys', 'fields'],
-          null
-        );
-        if (Array.isArray(raw)) {
-          return raw.map(function (value) { return String(value); });
-        }
-        if (typeof raw === 'string' && raw.trim()) {
-          return raw
-            .replace(/^\[|\]$/g, '')
-            .split(',')
-            .map(function (value) { return value.replace(/["'\s]/g, ''); })
-            .filter(function (value) { return !!value; });
-        }
-        return [];
-      })(),
+      columns: columns,
+      /* true/false when known, null when the backend never recorded it. */
+      hasWebsite: explicitWebsite !== null ? explicitWebsite : websiteFromColumns,
       downloadReady:
         job.download_ready === true ||
         job.download_ready === 'true' ||
@@ -8355,14 +8386,34 @@
     );
   }
 
-  /* null = columns were never recorded (unknown), true/false = known result. */
+  /* null = not recorded (unknown), true/false = known compatibility. */
   function leJobHasWebsiteColumn(job) {
-    const columns = Array.isArray(job && job.columns) ? job.columns : [];
+    if (!job) return null;
+    if (job.hasWebsite === true || job.hasWebsite === false) return job.hasWebsite;
+    const columns = Array.isArray(job.columns) ? job.columns : [];
     if (!columns.length) return null;
     return columns.some(function (value) {
       const key = String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
-      return key === 'website' || key === 'websiteurl' || key === 'url' || key === 'domain';
+      return (
+        key === 'website' ||
+        key === 'websiteurl' ||
+        key === 'url' ||
+        key === 'domain' ||
+        key === 'mapsurl'
+      );
     });
+  }
+
+  /* Unknown columns stay selectable — only an explicit "no website" blocks. */
+  function leJobCompatible(job) {
+    return leJobHasWebsiteColumn(job) !== false;
+  }
+
+  function leFirstCompatibleJob() {
+    for (let i = 0; i < leJobData.length; i += 1) {
+      if (leJobCompatible(leJobData[i])) return leJobData[i];
+    }
+    return null;
   }
 
   function leJobLeads(job) {
@@ -8441,13 +8492,17 @@
       .map(function (job) {
         const leads = leJobLeads(job);
         const terms = job.terms && job.terms.length ? job.terms.slice(0, 3).join(', ') : '—';
-        const hasWebsite = leJobHasWebsiteColumn(job);
-        const flag =
-          hasWebsite === false ? '<span class="le-combo-flag">No Website col</span>' : '';
-        const active = job.job_id === leSelectedJobId;
+        const incompatible = !leJobCompatible(job);
+        const flag = incompatible
+          ? '<span class="le-combo-flag is-block">No Website col — cannot enrich</span>'
+          : '';
+        const active = !incompatible && job.job_id === leSelectedJobId;
         return (
-          '<button type="button" class="le-combo-option' + (active ? ' is-selected' : '') + '"' +
+          '<button type="button" class="le-combo-option' +
+          (active ? ' is-selected' : '') +
+          (incompatible ? ' is-disabled' : '') + '"' +
           ' role="option" aria-selected="' + (active ? 'true' : 'false') + '"' +
+          (incompatible ? ' disabled aria-disabled="true"' : '') +
           ' data-job-id="' + escapeHtml(job.job_id) + '">' +
           '<span class="le-combo-option-main"><strong>' +
           escapeHtml(job.country || '—') + '</strong> · ' + escapeHtml(terms) + flag + '</span>' +
@@ -8472,6 +8527,16 @@
   function selectLeJob(jobId) {
     const wanted = String(jobId || '');
     const job = leJobData.filter(function (entry) { return entry.job_id === wanted; })[0] || null;
+
+    if (job && !leJobCompatible(job)) {
+      toast(
+        'That Lead Scraper job has no Website column — run it again with Website checked, or upload a file.',
+        'warn'
+      );
+      closeLeJobPanel(true);
+      return;
+    }
+
     if (job) {
       leSelectedJobId = job.job_id;
       leHistoryRows = leJobLeads(job) || LE_TIER_1_MAX;
@@ -8500,24 +8565,32 @@
         panel.hidden = true;
         panel.innerHTML = '';
       }
+      const emptyNotice = $('#leNoWebsiteNotice');
+      if (emptyNotice) emptyNotice.hidden = false;
       updateLeQuote();
       return;
     }
 
+    const anyCompatible = !!leFirstCompatibleJob();
     if (input) {
       input.disabled = false;
-      input.placeholder = 'Search by country, keyword, or Job ID…';
+      input.placeholder = anyCompatible
+        ? 'Search by country, keyword, or Job ID…'
+        : 'No completed job includes a Website column';
     }
 
-    /* Keep the current selection when it still exists, else default to the newest job. */
+    /* Keep the current selection when still valid, else auto-pick the newest compatible job. */
     const stillThere = leJobData.some(function (job) {
-      return job.job_id === leSelectedJobId;
+      return job.job_id === leSelectedJobId && leJobCompatible(job);
     });
     if (!stillThere) {
-      const first = leJobData[0];
-      leSelectedJobId = first.job_id;
-      leHistoryRows = leJobLeads(first) || LE_TIER_1_MAX;
+      const first = leFirstCompatibleJob();
+      leSelectedJobId = first ? first.job_id : '';
+      leHistoryRows = first ? leJobLeads(first) || LE_TIER_1_MAX : 0;
     }
+
+    const notice = $('#leNoWebsiteNotice');
+    if (notice) notice.hidden = anyCompatible;
 
     leRestoreJobLabel();
     leRenderJobList('');
@@ -8548,6 +8621,9 @@
           ['completed', 'complete', 'success', 'done'].indexOf(status) !== -1)
       );
     });
+    local.sort(function (a, b) {
+      return historyTime(b.created) - historyTime(a.created);
+    });
     if (local.length) leRenderJobOptions(local);
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
@@ -8576,6 +8652,9 @@
             (job.downloadReady ||
               ['completed', 'complete', 'success', 'done'].indexOf(status) !== -1)
           );
+        });
+        jobs.sort(function (a, b) {
+          return historyTime(b.created) - historyTime(a.created);
         });
         leRenderJobOptions(jobs.length ? jobs : local);
       })
@@ -8763,6 +8842,7 @@
       '<div class="le-combo-panel" id="leJobList" role="listbox" aria-label="Completed Lead Scraper jobs" hidden></div>' +
       '</div>' +
       '<p class="le-hint">Only completed Lead Scraper jobs that include a <strong>Website</strong> column can be enriched (50–500 leads).</p>' +
+      '<p class="le-combo-notice" id="leNoWebsiteNotice" hidden>None of your completed Lead Scraper jobs include a Website column. Run Lead Scraper with <strong>Website</strong> checked, or switch to <strong>Upload Excel / CSV</strong>.</p>' +
       '</div>' +
       '<div class="src-pane" id="lePaneUpload" hidden>' +
       '<label class="inv-drop" id="leDrop" for="leFileInput">' +
@@ -8949,6 +9029,17 @@
 
     if (leSourceType === 'lead_job' && !jobId) {
       if (errEl) errEl.textContent = 'Choose a completed Lead Scraper job, or switch to upload.';
+      return;
+    }
+    if (
+      leSourceType === 'lead_job' &&
+      selectedJob &&
+      leJobHasWebsiteColumn(selectedJob) === false
+    ) {
+      if (errEl) {
+        errEl.textContent =
+          'This Lead Scraper job has no Website column — run Lead Scraper with Website checked, or upload a file.';
+      }
       return;
     }
     if (leSourceType === 'upload' && !file) {

@@ -7489,12 +7489,56 @@ table.leads-table {
   white-space: nowrap;
 }
 
+.le-combo-flag.is-block {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Incompatible jobs stay visible but cannot be picked */
+.le-combo-option:disabled,
+.le-combo-option.is-disabled {
+  cursor: not-allowed;
+  background: #f8fafc;
+  color: #94a3b8;
+  opacity: 0.9;
+}
+
+.le-combo-option:disabled:hover,
+.le-combo-option.is-disabled:hover {
+  background: #f8fafc;
+}
+
+.le-combo-option.is-disabled .le-combo-option-main,
+.le-combo-option.is-disabled .le-combo-option-main strong {
+  color: #64748b;
+}
+
+.le-combo-option.is-disabled .le-combo-option-meta {
+  color: #94a3b8;
+}
+
 .le-combo-empty {
   margin: 0;
   padding: 12px 10px;
   font-size: 0.76rem;
   line-height: 1.45;
   color: #64748b;
+}
+
+.le-combo-notice {
+  margin: 9px 0 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.le-combo-notice[hidden] {
+  display: none !important;
 }
 
 .le-hint {
