@@ -7198,4 +7198,405 @@ table.leads-table {
   .agent-card-upcoming:hover {
     transform: none;
   }
+
+  .mascot-enricher .mascot-scan,
+  .mascot-review .mascot-scan {
+    animation: none !important;
+  }
+}
+
+/* ============ 28. WORKER #4 (LEAD ENRICHER) & #5 (REVIEW MINER) ======== */
+
+/* --- Card headers: same 176px dark illustration band ---------------------- */
+.agent-card-enricher .agent-visual,
+.agent-visual-enricher {
+  background:
+    radial-gradient(circle at 50% 34%, rgba(34, 211, 238, 0.24), transparent 62%),
+    linear-gradient(165deg, #16283d, #0a1120 70%);
+}
+
+.agent-visual-glow-enricher {
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.4), transparent 68%);
+}
+
+.agent-card-review .agent-visual,
+.agent-visual-review {
+  background:
+    radial-gradient(circle at 50% 34%, rgba(245, 158, 11, 0.22), transparent 62%),
+    linear-gradient(165deg, #2a2130, #0d1018 70%);
+}
+
+.agent-visual-glow-review {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.36), transparent 68%);
+}
+
+.price-tag-enricher {
+  background: #ecfeff;
+  border-color: #a5f3fc;
+  color: #0e7490;
+  white-space: normal;
+  text-align: right;
+}
+
+.price-tag-review {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+  white-space: normal;
+  text-align: right;
+}
+
+/* --- Modal close stays visually pinned above long, scrolling bodies ------ */
+.modal-close {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+  font-weight: 800;
+  box-shadow: 0 8px 20px -10px rgba(15, 23, 42, 0.55);
+}
+
+.modal-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* --- High-contrast calculator strip (new modals only) -------------------- */
+.modal-calc.modal-calc-dark {
+  border-radius: 14px;
+  border: 1px solid #1e293b;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.modal-calc-dark .calc-cell {
+  border-right: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.modal-calc-dark .calc-cell:last-child {
+  border-right: 0;
+}
+
+.modal-calc-dark .calc-label,
+.modal-calc-dark .calc-sub {
+  color: #94a3b8;
+}
+
+.modal-calc-dark .calc-value {
+  color: #f8fafc;
+}
+
+.modal-calc-dark .calc-value.is-zero {
+  color: #94a3b8;
+}
+
+.modal-calc-dark .calc-cell-total {
+  background: rgba(34, 211, 238, 0.16);
+}
+
+.modal-calc-dark .calc-cell-total .calc-value {
+  color: #a5f3fc;
+}
+
+/* --- 2-tab source selector ---------------------------------------------- */
+.src-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  margin: 0 0 14px;
+  border-radius: 14px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.src-tab {
+  flex: 1 1 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.src-tab:hover {
+  color: #0f172a;
+}
+
+.src-tab.is-active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
+}
+
+.src-pane {
+  margin-bottom: 4px;
+}
+
+.src-pane[hidden] {
+  display: none !important;
+}
+
+.le-select {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.le-select:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.le-hint {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.le-uploaded {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #bbf7d0;
+  background: #ecfdf5;
+}
+
+.le-uploaded strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #065f46;
+  word-break: break-all;
+}
+
+.le-uploaded span {
+  font-size: 0.72rem;
+  color: #047857;
+}
+
+.le-uploaded[hidden] {
+  display: none !important;
+}
+
+/* --- Enrichment option rows --------------------------------------------- */
+.le-opt {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.le-opt.is-locked {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  cursor: default;
+}
+
+.le-opt input[type="checkbox"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: #6366f1;
+  flex: 0 0 auto;
+}
+
+.le-opt-title {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.3;
+  color: #0f172a;
+}
+
+.le-opt-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+
+.le-opt-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.le-offer {
+  margin: 4px 0 10px;
+}
+
+.le-offer[hidden] {
+  display: none !important;
+}
+
+/* --- Competitor input rows ---------------------------------------------- */
+.rw-rows {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.rw-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rw-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.rw-row input:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+}
+
+.rw-remove {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rw-remove:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.rw-remove:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rw-add-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.rw-add-row .fine {
+  margin: 0;
+}
+
+/* --- Review focus pills -------------------------------------------------- */
+.rw-focus {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.rw-focus-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.rw-focus-option strong {
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.rw-focus-option span {
+  font-size: 0.68rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.rw-focus-option.is-active {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16);
+}
+
+/* --- Result tables ------------------------------------------------------- */
+.le-preview-table {
+  min-width: 1080px;
+}
+
+.rw-preview-table {
+  min-width: 1020px;
+}
+
+/* Five hero preview tabs: wrap cleanly instead of overflowing the shell */
+.home-tabs {
+  flex-wrap: wrap;
+  border-radius: 16px;
+}
+
+.home-tab {
+  flex: 1 1 30%;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+@media (max-width: 640px) {
+  .src-tabs {
+    flex-direction: column;
+  }
+
+  .rw-focus {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .price-tag-enricher,
+  .price-tag-review {
+    text-align: left;
+  }
 }

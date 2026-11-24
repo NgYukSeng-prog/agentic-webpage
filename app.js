@@ -142,6 +142,55 @@
      scraping / large invoice batches). Keep auto-polling for 30 minutes. */
   const STATUS_POLL_WINDOW_MS = 30 * 60 * 1000;
 
+  /* --- Lead Enricher agent (4th live worker) ------------------------------
+     1–50 sites = 5 cr · 51–150 = 10 cr · 151–300 = 15 cr. */
+  const LE_AGENT_ID = CFG.LEAD_ENRICHER_AGENT_ID || 'website-email-lead-enricher';
+  const LE_AGENT_NAME = CFG.LEAD_ENRICHER_AGENT_NAME || 'Website & Email Lead Enricher';
+  const LE_TIER_1_MAX = toPositiveInt(CFG.LEAD_ENRICHER_TIER_1_MAX, 50);
+  const LE_TIER_1_CREDITS = toPositiveInt(CFG.LEAD_ENRICHER_TIER_1_CREDITS, 5);
+  const LE_TIER_2_MAX = toPositiveInt(CFG.LEAD_ENRICHER_TIER_2_MAX, 150);
+  const LE_TIER_2_CREDITS = toPositiveInt(CFG.LEAD_ENRICHER_TIER_2_CREDITS, 10);
+  const LE_TIER_3_MAX = toPositiveInt(CFG.LEAD_ENRICHER_TIER_3_MAX, 300);
+  const LE_TIER_3_CREDITS = toPositiveInt(CFG.LEAD_ENRICHER_TIER_3_CREDITS, 15);
+  const LE_MAX_FILE_BYTES = (Number(CFG.LEAD_ENRICHER_MAX_FILE_MB) || 10) * 1024 * 1024;
+  const LE_POLL_MS = toPositiveInt(CFG.LEAD_ENRICHER_POLL_MS, 2500);
+  const LE_START_URL = CFG.LEAD_ENRICHER_START_URL || '';
+  const LE_STATUS_URL = CFG.LEAD_ENRICHER_STATUS_URL || '';
+  const LE_DOWNLOAD_URL = CFG.LEAD_ENRICHER_DOWNLOAD_URL || '';
+  const LE_ACCEPT = CFG.LEAD_ENRICHER_ACCEPT || '.xlsx,.xls,.csv';
+  const LE_COLUMNS =
+    Array.isArray(CFG.LEAD_ENRICHER_COLUMNS) && CFG.LEAD_ENRICHER_COLUMNS.length
+      ? CFG.LEAD_ENRICHER_COLUMNS
+      : [
+          'Public Email 1',
+          'Public Email 2',
+          'Email Source Page',
+          'MX / DNS Status',
+          'Website Status',
+          'WhatsApp Number',
+          'Facebook URL',
+          'Instagram URL',
+          'LinkedIn URL',
+          'AI Outreach Opener'
+        ];
+
+  /* --- Review Miner agent (5th live worker) ------------------------------
+     1–3 competitors = 5 cr · 4–5 competitors = 8 cr. */
+  const RW_AGENT_ID = CFG.REVIEW_MINER_AGENT_ID || 'competitor-review-miner';
+  const RW_AGENT_NAME = CFG.REVIEW_MINER_AGENT_NAME || 'Competitor Review Miner';
+  const RW_TIER_1_MAX = toPositiveInt(CFG.REVIEW_MINER_TIER_1_MAX, 3);
+  const RW_TIER_1_CREDITS = toPositiveInt(CFG.REVIEW_MINER_TIER_1_CREDITS, 5);
+  const RW_TIER_2_MAX = toPositiveInt(CFG.REVIEW_MINER_TIER_2_MAX, 5);
+  const RW_TIER_2_CREDITS = toPositiveInt(CFG.REVIEW_MINER_TIER_2_CREDITS, 8);
+  const RW_POLL_MS = toPositiveInt(CFG.REVIEW_MINER_POLL_MS, 2500);
+  const RW_START_URL = CFG.REVIEW_MINER_START_URL || '';
+  const RW_STATUS_URL = CFG.REVIEW_MINER_STATUS_URL || '';
+  const RW_DOWNLOAD_URL = CFG.REVIEW_MINER_DOWNLOAD_URL || '';
+  const RW_SHEETS =
+    Array.isArray(CFG.REVIEW_MINER_SHEETS) && CFG.REVIEW_MINER_SHEETS.length
+      ? CFG.REVIEW_MINER_SHEETS
+      : ['Executive Battlecard', 'Complaint Breakdown', 'Raw Reviews'];
+
   const INV_EXPORT_FORMATS =
     Array.isArray(CFG.INVOICE_OCR_EXPORT_FORMATS) && CFG.INVOICE_OCR_EXPORT_FORMATS.length
       ? CFG.INVOICE_OCR_EXPORT_FORMATS
@@ -477,6 +526,8 @@
     configure: 'Configure Your Worker — LiteWork',
     'scraper-results': 'Lead Scraper Results — LiteWork',
     'invoice-results': 'Invoice Results — LiteWork',
+    'enricher-results': 'Lead Enricher Results — LiteWork',
+    'review-results': 'Review Miner Results — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -490,7 +541,9 @@
       subscriptions: [],
       lastSubscription: null,
       scraperJob: null,
-      invoiceJob: null
+      invoiceJob: null,
+      enricherJob: null,
+      reviewJob: null
     };
   }
 
@@ -522,6 +575,14 @@
         invoiceJob:
           parsed.invoiceJob && typeof parsed.invoiceJob === 'object'
             ? parsed.invoiceJob
+            : null,
+        enricherJob:
+          parsed.enricherJob && typeof parsed.enricherJob === 'object'
+            ? parsed.enricherJob
+            : null,
+        reviewJob:
+          parsed.reviewJob && typeof parsed.reviewJob === 'object'
+            ? parsed.reviewJob
             : null
       };
     } catch (err) {
@@ -537,7 +598,9 @@
           subscriptions: state.subscriptions || [],
           lastSubscription: state.lastSubscription || null,
           scraperJob: state.scraperJob || null,
-          invoiceJob: state.invoiceJob || null
+          invoiceJob: state.invoiceJob || null,
+          enricherJob: state.enricherJob || null,
+          reviewJob: state.reviewJob || null
         })
       );
     } catch (err) {
@@ -856,9 +919,19 @@
     state.credits = 0;
     state.email = '';
     state.name = '';
-    historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
-    historyPages = { stock: 1, b2b: 1, invoice: 1 };
+    historyState = {
+      loaded: false,
+      loading: false,
+      stock: [],
+      b2b: [],
+      invoice: [],
+      enricher: [],
+      review: []
+    };
+    historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
     stopScraperTimers();
+    stopLeTimer();
+    stopRwTimer();
     renderAuthUI();
     syncCreditUI();
     pendingGate = gate || null;
@@ -884,6 +957,8 @@
       if (gate.action === 'stock') openStockModal();
       else if (gate.action === 'scraper') openScraperModal();
       else if (gate.action === 'invoice') openInvoiceModal();
+      else if (gate.action === 'enricher') openLeadEnricherModal();
+      else if (gate.action === 'review') openReviewMinerModal();
       else if (gate.action === 'checkout') openCheckout(gate.packId);
       else if (gate.action === 'account') openAccountModal();
     }, 180);
@@ -1931,6 +2006,8 @@
     'configure',
     'scraper-results',
     'invoice-results',
+    'enricher-results',
+    'review-results',
     'success'
   ];
 
@@ -1953,7 +2030,9 @@
         route === 'configure' ||
         route === 'success' ||
         route === 'scraper-results' ||
-        route === 'invoice-results';
+        route === 'invoice-results' ||
+        route === 'enricher-results' ||
+        route === 'review-results';
       const active = r === route || (agentRoutes && r === 'agents');
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
@@ -1971,6 +2050,8 @@
     /* Keep the live job poller running between #scraper-results and #agents. */
     if (route !== 'agents' && route !== 'scraper-results') stopScraperTimers();
     if (route !== 'invoice-results') stopInvoiceTimer();
+    if (route !== 'enricher-results') stopLeTimer();
+    if (route !== 'review-results') stopRwTimer();
 
     if (route === 'configure') {
       /* #configure is now a modal: show #agents underneath, then open it. */
@@ -1984,6 +2065,8 @@
     if (route === 'success') renderSuccess();
     if (route === 'scraper-results') renderScraperResults();
     if (route === 'invoice-results') renderInvoiceResults();
+    if (route === 'enricher-results') renderLeResults();
+    if (route === 'review-results') renderRwResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -2323,8 +2406,16 @@
      Loaded from GET /webhook/account/history with the session bearer token.
      Both agents are kept in separate lists so the UI can render clean tabs. */
   const HISTORY_PAGE_SIZE = 5;
-  let historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
-  let historyPages = { stock: 1, b2b: 1, invoice: 1 };
+  let historyState = {
+    loaded: false,
+    loading: false,
+    stock: [],
+    b2b: [],
+    invoice: [],
+    enricher: [],
+    review: []
+  };
+  let historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
 
   function historySource(body) {
     if (body && typeof body === 'object' && body.data && typeof body.data === 'object') {
@@ -2563,6 +2654,60 @@
     };
   }
 
+  function normalizeEnricherJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const sitesRaw = firstValue(
+      job,
+      ['sites_total', 'total_sites', 'sites_count', 'input_rows', 'row_count', 'websites', 'sites'],
+      0
+    );
+    const sites = Array.isArray(sitesRaw) ? sitesRaw.length : Number(sitesRaw) || 0;
+    return {
+      job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      sites: sites,
+      checked:
+        Number(firstValue(job, ['sites_checked', 'checked_sites', 'websites_checked'], 0)) || 0,
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
+      status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
+      source: String(firstValue(job, ['source', 'source_type', 'input_source'], '')),
+      created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
+      downloadReady:
+        job.download_ready === true ||
+        job.download_ready === 'true' ||
+        job.download_ready === 1
+    };
+  }
+
+  function normalizeReviewJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const competitorsRaw = firstValue(
+      job,
+      ['competitors_total', 'total_competitors', 'competitor_count', 'competitors'],
+      0
+    );
+    const competitors = Array.isArray(competitorsRaw)
+      ? competitorsRaw.length
+      : Number(competitorsRaw) || 0;
+    const reviewsRaw = firstValue(
+      job,
+      ['reviews_count', 'total_reviews', 'review_count', 'reviews'],
+      0
+    );
+    const reviews = Array.isArray(reviewsRaw) ? reviewsRaw.length : Number(reviewsRaw) || 0;
+    return {
+      job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      competitors: competitors,
+      reviews: reviews,
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
+      status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
+      created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
+      downloadReady:
+        job.download_ready === true ||
+        job.download_ready === 'true' ||
+        job.download_ready === 1
+    };
+  }
+
   function renderStockHistoryCard(sub) {
     const validity = subscriptionValidity(sub.expiresAt, sub.startedAt);
     const remaining = validity.expired
@@ -2746,16 +2891,121 @@
     );
   }
 
+  /* Shared status badge tone mapping for the two newest workers. */
+  function historyBadgeInfo(status) {
+    const labels = {
+      completed: 'Completed',
+      complete: 'Completed',
+      success: 'Completed',
+      done: 'Completed',
+      running: 'Running',
+      processing: 'Running',
+      enricher: 'Running',
+      mining: 'Running',
+      queued: 'Queued',
+      pending: 'Queued',
+      starting: 'Queued',
+      failed: 'Failed',
+      error: 'Failed',
+      cancelled: 'Cancelled',
+      canceled: 'Cancelled'
+    };
+    const label = labels[status] || (status ? status : 'Unknown');
+    const tone =
+      label === 'Completed'
+        ? 'ok'
+        : label === 'Failed' || label === 'Cancelled'
+        ? 'bad'
+        : label === 'Running' || label === 'Queued'
+        ? 'warn'
+        : 'muted';
+    return { label: label, tone: tone, ok: label === 'Completed' };
+  }
+
+  function renderEnricherHistoryCard(job) {
+    const badge = historyBadgeInfo(job.status);
+    const siteText = job.sites
+      ? job.sites + ' website' + (job.sites === 1 ? '' : 's')
+      : '—';
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Lead Enricher</strong>' +
+      '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(siteText) + ' · ' + escapeHtml(creditText) + '</p>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Websites</dt><dd>' + escapeHtml(siteText) + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Created</dt><dd>' +
+      escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
+      '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-enricher-resume="' +
+      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') +
+      '>View Results</button>' +
+      (job.downloadReady && job.job_id
+        ? '<button type="button" class="btn btn-primary btn-sm" data-enricher-download="' +
+          escapeHtml(job.job_id) + '">Download .xlsx</button>'
+        : '') +
+      '</div>' +
+      '</article>'
+    );
+  }
+
+  function renderReviewHistoryCard(job) {
+    const badge = historyBadgeInfo(job.status);
+    const competitorText = job.competitors
+      ? job.competitors + ' competitor' + (job.competitors === 1 ? '' : 's')
+      : '—';
+    const reviewText = job.reviews ? job.reviews + ' reviews' : '—';
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Review Miner</strong>' +
+      '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(competitorText) + ' · ' + escapeHtml(reviewText) +
+      ' · ' + escapeHtml(creditText) + '</p>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Competitors</dt><dd>' + escapeHtml(competitorText) + '</dd></div>' +
+      '<div><dt>Reviews</dt><dd>' + escapeHtml(reviewText) + '</dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Created</dt><dd>' +
+      escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
+      '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-review-resume="' +
+      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') +
+      '>View Results</button>' +
+      (job.downloadReady && job.job_id
+        ? '<button type="button" class="btn btn-primary btn-sm" data-review-download="' +
+          escapeHtml(job.job_id) + '">Download .xlsx</button>'
+        : '') +
+      '</div>' +
+      '</article>'
+    );
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
     const invoicePane = $('#historyInvoice');
+    const enricherPane = $('#historyEnricher');
+    const reviewPane = $('#historyReview');
     const stockCount = historyState.stock.length;
     const b2bCount = historyState.b2b.length;
     const invoiceCount = historyState.invoice.length;
+    const enricherCount = historyState.enricher.length;
+    const reviewCount = historyState.review.length;
     const stockPage = historyPageSlice('stock', historyState.stock);
     const b2bPage = historyPageSlice('b2b', historyState.b2b);
     const invoicePage = historyPageSlice('invoice', historyState.invoice);
+    const enricherPage = historyPageSlice('enricher', historyState.enricher);
+    const reviewPage = historyPageSlice('review', historyState.review);
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
@@ -2793,28 +3043,59 @@
           '</div>';
     }
 
+    if (enricherPane) {
+      enricherPane.innerHTML = enricherCount
+        ? renderHistoryPager('enricher', 'Lead Enricher jobs', enricherPage.page, enricherPage.pages, enricherCount) +
+          '<div class="hist-list">' +
+          enricherPage.items.map(renderEnricherHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No lead enrichment jobs yet. Enrich a website list and the .xlsx history will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Launch Lead Enricher</a>' +
+          '</div>';
+    }
+
+    if (reviewPane) {
+      reviewPane.innerHTML = reviewCount
+        ? renderHistoryPager('review', 'Review Miner jobs', reviewPage.page, reviewPage.pages, reviewCount) +
+          '<div class="hist-list">' +
+          reviewPage.items.map(renderReviewHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No review mining jobs yet. Mine 1–5 competitors and the battlecard history will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Launch Review Miner</a>' +
+          '</div>';
+    }
+
     /* Keep tab + section counters in sync. */
+    const counts = {
+      stock: stockCount,
+      b2b: b2bCount,
+      invoice: invoiceCount,
+      enricher: enricherCount,
+      review: reviewCount
+    };
     $$('[data-hist-count]').forEach(function (el) {
       const key = el.getAttribute('data-hist-count');
-      el.textContent = String(
-        key === 'stock' ? stockCount : key === 'b2b' ? b2bCount : invoiceCount
-      );
+      el.textContent = String(counts[key] == null ? 0 : counts[key]);
     });
     $$('[data-hist-count-label="stock"]').forEach(function (el) {
       el.textContent = stockCount + ' subscription' + (stockCount === 1 ? '' : 's');
     });
-    $$('[data-hist-count-label="b2b"]').forEach(function (el) {
-      el.textContent = b2bCount + ' job' + (b2bCount === 1 ? '' : 's');
-    });
-    $$('[data-hist-count-label="invoice"]').forEach(function (el) {
-      el.textContent = invoiceCount + ' job' + (invoiceCount === 1 ? '' : 's');
+    ['b2b', 'invoice', 'enricher', 'review'].forEach(function (key) {
+      $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
+        el.textContent = counts[key] + ' job' + (counts[key] === 1 ? '' : 's');
+      });
     });
   }
 
-  /* All / stock / b2b / invoice filter for the history panel. */
+  /* All / stock / b2b / invoice / enricher / review filter for the panel. */
   function applyHistoryFilter(name) {
     const filter =
-      name === 'stock' || name === 'b2b' || name === 'invoice' ? name : 'all';
+      name === 'stock' || name === 'b2b' || name === 'invoice' ||
+      name === 'enricher' || name === 'review'
+        ? name
+        : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
       const on = btn.getAttribute('data-history-tab') === filter;
       btn.classList.toggle('is-active', on);
@@ -2825,7 +3106,7 @@
     });
 
     /* Switching agent filters always returns every list to page 1. */
-    historyPages = { stock: 1, b2b: 1, invoice: 1 };
+    historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
     if (isLoggedIn() && !historyState.loading) paintHistory();
   }
 
@@ -2833,25 +3114,40 @@
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
     const invoicePane = $('#historyInvoice');
-    if (!stockPane && !b2bPane && !invoicePane) return;
+    const enricherPane = $('#historyEnricher');
+    const reviewPane = $('#historyReview');
+    if (!stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane) return;
 
     /* Refresh (and every fresh fetch) starts from page 1. */
-    if (force) historyPages = { stock: 1, b2b: 1, invoice: 1 };
+    if (force) historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
 
     if (!isLoggedIn()) {
-      historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
+      historyState = {
+        loaded: false,
+        loading: false,
+        stock: [],
+        b2b: [],
+        invoice: [],
+        enricher: [],
+        review: []
+      };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, lead scraper runs and invoice batches are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, lead scraper runs, invoice batches, lead enrichment runs and review battlecards are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
       if (b2bPane) b2bPane.innerHTML = loginCard;
       if (invoicePane) invoicePane.innerHTML = loginCard;
+      if (enricherPane) enricherPane.innerHTML = loginCard;
+      if (reviewPane) reviewPane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
-      $$('[data-hist-count-label="b2b"]').forEach(function (el) { el.textContent = '0 jobs'; });
-      $$('[data-hist-count-label="invoice"]').forEach(function (el) { el.textContent = '0 jobs'; });
+      ['b2b', 'invoice', 'enricher', 'review'].forEach(function (key) {
+        $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
+          el.textContent = '0 jobs';
+        });
+      });
       return;
     }
 
@@ -2865,6 +3161,8 @@
     if (stockPane) stockPane.innerHTML = '<p class="empty-note">Loading your subscriptions…</p>';
     if (b2bPane) b2bPane.innerHTML = '<p class="empty-note">Loading your scraping jobs…</p>';
     if (invoicePane) invoicePane.innerHTML = '<p class="empty-note">Loading your invoice jobs…</p>';
+    if (enricherPane) enricherPane.innerHTML = '<p class="empty-note">Loading your enrichment jobs…</p>';
+    if (reviewPane) reviewPane.innerHTML = '<p class="empty-note">Loading your review mining jobs…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -2910,16 +3208,36 @@
           'invoices',
           'invoice'
         ]);
+        const enricherRaw = pickArray(source, [
+          'lead_enricher',
+          'lead_enricher_jobs',
+          'enricher_jobs',
+          'enricher',
+          'enrichment_jobs'
+        ]);
+        const reviewRaw = pickArray(source, [
+          'review_miner',
+          'review_miner_jobs',
+          'review_jobs',
+          'review',
+          'battlecards'
+        ]);
         const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
         const stockExtra = [];
         const b2bExtra = [];
         const invoiceExtra = [];
+        const enricherExtra = [];
+        const reviewExtra = [];
 
         combined.forEach(function (item) {
           const kind = String(
             (item && (item.agent || item.agent_id || item.type || item.kind)) || ''
           ).toLowerCase();
-          if (kind.indexOf('invoice') !== -1 || kind.indexOf('ocr') !== -1) {
+          if (kind.indexOf('enrich') !== -1) {
+            enricherExtra.push(item);
+          } else if (kind.indexOf('review') !== -1 || kind.indexOf('competitor') !== -1) {
+            reviewExtra.push(item);
+          } else if (kind.indexOf('invoice') !== -1 || kind.indexOf('ocr') !== -1) {
             invoiceExtra.push(item);
           } else if (
             kind.indexOf('lead') !== -1 ||
@@ -2935,6 +3253,8 @@
         historyState.stock = stockRaw.concat(stockExtra).map(normalizeHistorySub);
         historyState.b2b = b2bRaw.concat(b2bExtra).map(normalizeHistoryJob);
         historyState.invoice = invoiceRaw.concat(invoiceExtra).map(normalizeInvoiceJob);
+        historyState.enricher = enricherRaw.concat(enricherExtra).map(normalizeEnricherJob);
+        historyState.review = reviewRaw.concat(reviewExtra).map(normalizeReviewJob);
 
         /* Fall back to the locally cached activations when the server has
            nothing recorded yet for this browser. */
@@ -2954,6 +3274,8 @@
         historyState.stock = sortNewestFirst(historyState.stock, 'startedAt');
         historyState.b2b = sortNewestFirst(historyState.b2b, 'created');
         historyState.invoice = sortNewestFirst(historyState.invoice, 'created');
+        historyState.enricher = sortNewestFirst(historyState.enricher, 'created');
+        historyState.review = sortNewestFirst(historyState.review, 'created');
 
         historyState.loaded = true;
         paintHistory();
@@ -2972,6 +3294,9 @@
           '). <button type="button" class="linklike" data-history-retry>Try again</button>.</p>';
         if (stockPane) stockPane.innerHTML = note;
         if (b2bPane) b2bPane.innerHTML = note;
+        if (invoicePane) invoicePane.innerHTML = note;
+        if (enricherPane) enricherPane.innerHTML = note;
+        if (reviewPane) reviewPane.innerHTML = note;
         console.warn('[LiteWork] Account history unavailable.', message);
       });
   }
@@ -3848,6 +4173,8 @@
     stopScraperTimers();
     stopEmailTrail();
     stopInvoiceTimer();
+    stopLeTimer();
+    stopRwTimer();
     pendingGate = null;
     selectedStocks = [];
     lastWebhookResult = null;
@@ -3858,8 +4185,18 @@
     state.lastSubscription = null;
     state.scraperJob = null;
     state.invoiceJob = null;
-    historyState = { loaded: false, loading: false, stock: [], b2b: [], invoice: [] };
-    historyPages = { stock: 1, b2b: 1, invoice: 1 };
+    state.enricherJob = null;
+    state.reviewJob = null;
+    historyState = {
+      loaded: false,
+      loading: false,
+      stock: [],
+      b2b: [],
+      invoice: [],
+      enricher: [],
+      review: []
+    };
+    historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
     saveState();
 
     clearAuthSession();
@@ -4050,13 +4387,15 @@
         if (pageBtn) {
           const kind = pageBtn.getAttribute('data-hist-page');
           const dir = pageBtn.getAttribute('data-hist-dir');
-          if (kind === 'stock' || kind === 'b2b' || kind === 'invoice') {
-            const total =
-              kind === 'stock'
-                ? historyState.stock.length
-                : kind === 'b2b'
-                ? historyState.b2b.length
-                : historyState.invoice.length;
+          if (
+            kind === 'stock' ||
+            kind === 'b2b' ||
+            kind === 'invoice' ||
+            kind === 'enricher' ||
+            kind === 'review'
+          ) {
+            const list = historyState[kind] || [];
+            const total = list.length;
             const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
             const current = clamp(Number(historyPages[kind]) || 1, 1, pages);
             historyPages[kind] = clamp(current + (dir === 'next' ? 1 : -1), 1, pages);
@@ -4095,6 +4434,30 @@
         const invDownload = event.target.closest('[data-invoice-download]');
         if (invDownload) {
           downloadInvoiceExcel(invDownload.getAttribute('data-invoice-download'));
+          return;
+        }
+
+        const leResume = event.target.closest('[data-enricher-resume]');
+        if (leResume) {
+          openLeHistoryJob(leResume.getAttribute('data-enricher-resume'));
+          return;
+        }
+
+        const leDownload = event.target.closest('[data-enricher-download]');
+        if (leDownload) {
+          downloadLeExcel(leDownload.getAttribute('data-enricher-download'));
+          return;
+        }
+
+        const rwResume = event.target.closest('[data-review-resume]');
+        if (rwResume) {
+          openRwHistoryJob(rwResume.getAttribute('data-review-resume'));
+          return;
+        }
+
+        const rwDownload = event.target.closest('[data-review-download]');
+        if (rwDownload) {
+          downloadRwExcel(rwDownload.getAttribute('data-review-download'));
         }
       });
     }
@@ -4196,6 +4559,88 @@
     if (invoiceDownloadBtn) {
       invoiceDownloadBtn.addEventListener('click', function () {
         downloadInvoiceExcel();
+      });
+    }
+
+    /* Lead Enricher (Worker #4): launch, columns, resume + download */
+    $$('[data-open-enricher]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openLeadEnricherModal();
+      });
+    });
+
+    $$('[data-open-enricher-columns]').forEach(function (btn) {
+      btn.addEventListener('click', openEnricherColumnsModal);
+    });
+
+    const leResumeBtn = $('#leResumeBtn');
+    if (leResumeBtn) {
+      leResumeBtn.addEventListener('click', function () {
+        const input = $('#leResumeId');
+        const value = input ? input.value.trim() : '';
+        if (!value) {
+          toast('Enter a Lead Enricher Job ID to check.', 'warn');
+          return;
+        }
+        openLeHistoryJob(value);
+      });
+    }
+
+    const leResumeInput = $('#leResumeId');
+    if (leResumeInput) {
+      leResumeInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (leResumeBtn) leResumeBtn.click();
+        }
+      });
+    }
+
+    const leDownloadBtn = $('#leDownloadBtn');
+    if (leDownloadBtn) {
+      leDownloadBtn.addEventListener('click', function () {
+        downloadLeExcel();
+      });
+    }
+
+    /* Review Miner (Worker #5): launch, sheet reference, resume + download */
+    $$('[data-open-review]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openReviewMinerModal();
+      });
+    });
+
+    $$('[data-open-review-sheets]').forEach(function (btn) {
+      btn.addEventListener('click', openReviewSheetsModal);
+    });
+
+    const rwResumeBtn = $('#rwResumeBtn');
+    if (rwResumeBtn) {
+      rwResumeBtn.addEventListener('click', function () {
+        const input = $('#rwResumeId');
+        const value = input ? input.value.trim() : '';
+        if (!value) {
+          toast('Enter a Review Miner Job ID to check.', 'warn');
+          return;
+        }
+        openRwHistoryJob(value);
+      });
+    }
+
+    const rwResumeInput = $('#rwResumeId');
+    if (rwResumeInput) {
+      rwResumeInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (rwResumeBtn) rwResumeBtn.click();
+        }
+      });
+    }
+
+    const rwDownloadBtn = $('#rwDownloadBtn');
+    if (rwDownloadBtn) {
+      rwDownloadBtn.addEventListener('click', function () {
+        downloadRwExcel();
       });
     }
 
@@ -7121,6 +7566,2322 @@
       });
   }
 
+  /* =================== M. LEAD ENRICHER (WORKER #4) ===================== */
+  let leFiles = [];
+  let leEstimateRows = 0;
+  let leRowsExact = true;
+  let leHistoryRows = 0;
+  let leSourceTab = 'history';
+  let leStarting = false;
+  let leJobsLoading = false;
+  let lePollTimer = null;
+  let lePollInFlight = false;
+  let lePollController = null;
+  let lePollEpoch = 0;
+  let lePollStartedAt = 0;
+
+  /* Preview columns mirror the 10 fixed Excel columns added by the worker. */
+  const LE_PREVIEW_COLUMNS = [
+    {
+      label: 'Company',
+      keys: ['company', 'company_name', 'Company', 'Company Name', 'business_name', 'name']
+    },
+    {
+      label: 'Website Status',
+      keys: ['website_status', 'site_status', 'Website Status', 'status', 'http_status']
+    },
+    {
+      label: 'Primary Email',
+      keys: ['primary_email', 'email', 'public_email', 'email_1', 'Public Email 1']
+    },
+    {
+      label: 'MX Verified',
+      keys: ['mx_verified', 'mx_status', 'dns_status', 'MX / DNS Status', 'mx']
+    },
+    {
+      label: 'WhatsApp',
+      keys: ['whatsapp', 'whatsapp_number', 'WhatsApp Number', 'wa_number']
+    },
+    {
+      label: 'Socials',
+      parts: [
+        { tag: 'FB', keys: ['facebook', 'facebook_url', 'Facebook URL'] },
+        { tag: 'IG', keys: ['instagram', 'instagram_url', 'Instagram URL'] },
+        { tag: 'LI', keys: ['linkedin', 'linkedin_url', 'LinkedIn URL'] }
+      ]
+    },
+    {
+      label: 'Outreach Opener',
+      keys: [
+        'outreach_opener',
+        'ai_outreach_opener',
+        'AI Outreach Opener',
+        'opener',
+        'cold_opener'
+      ]
+    }
+  ];
+
+  const RW_PREVIEW_COLUMNS = [
+    {
+      label: 'Competitor',
+      keys: ['competitor', 'competitor_name', 'name', 'company', 'business_name']
+    },
+    {
+      label: 'Avg Rating',
+      keys: ['avg_rating', 'average_rating', 'rating', 'avg_stars']
+    },
+    {
+      label: 'Top Complaints',
+      keys: ['top_complaints', 'complaints', 'complaint_themes', 'pain_points']
+    },
+    {
+      label: 'Biggest Vulnerability',
+      keys: ['biggest_vulnerability', 'vulnerability', 'weakness', 'main_weakness']
+    },
+    {
+      label: 'Sales Counter-Pitch',
+      keys: ['counter_pitch', 'sales_counter_pitch', 'pitch', 'sales_pitch']
+    }
+  ];
+
+  function previewFieldValue(row, keys) {
+    if (!row || typeof row !== 'object' || !Array.isArray(keys)) return '';
+    for (let i = 0; i < keys.length; i += 1) {
+      const raw = row[keys[i]];
+      if (raw === null || raw === undefined) continue;
+      const text = String(raw).trim();
+      if (text) return text;
+    }
+    return '';
+  }
+
+  function previewCellValue(row, col) {
+    if (!row || typeof row !== 'object') return '—';
+    if (Array.isArray(col.parts)) {
+      const parts = [];
+      col.parts.forEach(function (part) {
+        const value = previewFieldValue(row, part.keys);
+        if (value) parts.push(part.tag + ' ' + value);
+      });
+      return parts.length ? parts.join(' · ') : '—';
+    }
+    const value = previewFieldValue(row, col.keys);
+    return value || '—';
+  }
+
+  function renderPreviewTable(table, columns, rows, emptyMessage) {
+    if (!table) return;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (thead) {
+      thead.innerHTML =
+        '<tr>' +
+        columns.map(function (col) {
+          return '<th>' + escapeHtml(col.label) + '</th>';
+        }).join('') +
+        '</tr>';
+    }
+    if (!tbody) return;
+    if (!rows.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="' + columns.length + '" class="table-empty">' +
+        escapeHtml(emptyMessage) + '</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows
+      .map(function (row) {
+        return (
+          '<tr>' +
+          columns.map(function (col, index) {
+            return '<td class="' + (index === 0 ? 'cell-strong' : '') + '">' +
+              escapeHtml(previewCellValue(row, col)) + '</td>';
+          }).join('') +
+          '</tr>'
+        );
+      })
+      .join('');
+  }
+
+  /* 1–50 = 5 cr · 51–150 = 10 cr · 151–300 = 15 cr. */
+  function leQuote(sites) {
+    const n = clamp(Number(sites) || 0, 0, LE_TIER_3_MAX);
+    let credits = 0;
+    let tier = 'No sites';
+    if (n > 0) {
+      if (n <= LE_TIER_1_MAX) {
+        credits = LE_TIER_1_CREDITS;
+        tier = '1–' + LE_TIER_1_MAX + ' sites';
+      } else if (n <= LE_TIER_2_MAX) {
+        credits = LE_TIER_2_CREDITS;
+        tier = LE_TIER_1_MAX + 1 + '–' + LE_TIER_2_MAX + ' sites';
+      } else {
+        credits = LE_TIER_3_CREDITS;
+        tier = LE_TIER_2_MAX + 1 + '–' + LE_TIER_3_MAX + ' sites';
+      }
+    }
+    return { count: n, credits: credits, tier: tier };
+  }
+
+  function leRawSites() {
+    if (leSourceTab === 'upload') return Math.max(0, Number(leEstimateRows) || 0);
+    return Math.max(0, Number(leHistoryRows) || 0);
+  }
+
+  function leSelectedSites() {
+    return clamp(leRawSites(), 0, LE_TIER_3_MAX);
+  }
+
+  /* History lead counts are exact; uploaded .xlsx counts are only estimated. */
+  function leCountIsExact() {
+    return leSourceTab === 'history' ? true : leRowsExact === true;
+  }
+
+  function lePageActive() {
+    return currentRoute() === 'enricher-results';
+  }
+
+  function leIsComplete(job) {
+    return (
+      !!job &&
+      String(job.status || '').toLowerCase() === 'completed' &&
+      job.download_ready === true
+    );
+  }
+
+  function leJobFailed(job) {
+    const status = String((job && job.status) || '').toLowerCase();
+    return (
+      status === 'failed' ||
+      status === 'error' ||
+      status === 'cancelled' ||
+      status === 'canceled'
+    );
+  }
+
+  function lePollActive(job) {
+    return !!job && !leJobFailed(job) && !leIsComplete(job);
+  }
+
+  function stopLeTimer() {
+    lePollEpoch += 1;
+    if (lePollTimer) {
+      window.clearTimeout(lePollTimer);
+      lePollTimer = null;
+    }
+    lePollStartedAt = 0;
+    if (lePollController) {
+      try {
+        lePollController.abort();
+      } catch (err) {
+        /* already settled */
+      }
+      lePollController = null;
+    }
+    lePollInFlight = false;
+  }
+
+  function setLeBadge(kind, text) {
+    const badge = $('#leStatus');
+    if (!badge) return;
+    badge.classList.remove('is-pending', 'is-ok', 'is-fail');
+    if (kind) badge.classList.add('is-' + kind);
+    const label = $('.webhook-text', badge);
+    if (label) label.textContent = text;
+  }
+
+  function startLePolling(job, force) {
+    if (!job || !LE_STATUS_URL) return;
+    if (!lePageActive()) return;
+    if (lePollTimer || lePollInFlight) return;
+    if (!force && !lePollActive(job)) return;
+
+    lePollStartedAt = Date.now();
+    lePollEpoch += 1;
+    const epoch = lePollEpoch;
+    setLeBadge('pending', force ? 'Refreshing status…' : 'Starting lead enrichment…');
+    pollLeStatus(!!force, epoch);
+  }
+
+  function forceLePollNow() {
+    const job = state.enricherJob;
+    if (!job || !LE_STATUS_URL) return;
+    if (lePollTimer) {
+      window.clearTimeout(lePollTimer);
+      lePollTimer = null;
+    }
+    if (lePollInFlight) return;
+    if (!lePollStartedAt) lePollStartedAt = Date.now();
+    pollLeStatus(true, lePollEpoch);
+  }
+
+  function scheduleNextLePoll(delay, epoch) {
+    if (epoch !== lePollEpoch) return;
+    if (lePollTimer) window.clearTimeout(lePollTimer);
+    lePollTimer = window.setTimeout(function () {
+      lePollTimer = null;
+      pollLeStatus(false, epoch);
+    }, Math.max(0, delay));
+  }
+
+  function ensureLeRunning() {
+    const job = state.enricherJob;
+    if (!job || leJobFailed(job) || leIsComplete(job)) return;
+    if (!isLoggedIn()) return;
+    startLePolling(job);
+  }
+
+  function extractLePreview(data) {
+    if (!data || typeof data !== 'object') return [];
+    const lists = [];
+    const preview = data.preview;
+    if (Array.isArray(preview)) {
+      lists.push(preview);
+    } else if (preview && typeof preview === 'object') {
+      if (Array.isArray(preview.rows)) lists.push(preview.rows);
+      if (Array.isArray(preview.leads)) lists.push(preview.leads);
+      if (Array.isArray(preview.websites)) lists.push(preview.websites);
+    }
+    if (Array.isArray(data.preview_rows)) lists.push(data.preview_rows);
+    if (Array.isArray(data.rows)) lists.push(data.rows);
+    if (Array.isArray(data.results)) lists.push(data.results);
+    if (Array.isArray(data.leads)) lists.push(data.leads);
+    if (Array.isArray(data.websites)) lists.push(data.websites);
+    if (Array.isArray(data.enriched)) lists.push(data.enriched);
+
+    for (let i = 0; i < lists.length; i += 1) {
+      if (lists[i].length) return lists[i];
+    }
+    return [];
+  }
+
+  function pollLeStatus(force, expectedEpoch) {
+    const job = state.enricherJob;
+    if (!job || !LE_STATUS_URL) return;
+    const epoch = expectedEpoch == null ? lePollEpoch : expectedEpoch;
+    if (epoch !== lePollEpoch) return;
+    if (lePollInFlight) return;
+    if (!force && !lePollActive(job)) return;
+    if (!lePollStartedAt) lePollStartedAt = Date.now();
+
+    lePollInFlight = true;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    lePollController = controller;
+    /* 12s timeout + 3-strike tolerance, same policy as the other workers. */
+    const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
+
+    const request = fetch(LE_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
+      mode: 'cors',
+      headers: authHeaders(),
+      signal: controller ? controller.signal : undefined
+    })
+      .then(function (response) {
+        if (epoch !== lePollEpoch) return null;
+        if (response.status === 401) {
+          stopLeTimer();
+          handleAuthExpired(
+            'Your session expired. Log in again to check this enrichment job.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          failLeJob('Insufficient credits');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (epoch !== lePollEpoch) return;
+        if (typeof data !== 'object') throw new Error('Empty status response');
+
+        if (setLiveCredits(extractRemaining(data))) syncCreditUI();
+
+        const toNumber = function (value) {
+          if (value === null || value === undefined || value === '') return null;
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
+        const firstNumber = function () {
+          for (let i = 0; i < arguments.length; i += 1) {
+            const n = toNumber(arguments[i]);
+            if (n !== null) return n;
+          }
+          return null;
+        };
+
+        const percent = toNumber(data.percent);
+        if (percent !== null) job.percent = clamp(percent, 0, 100);
+
+        const total = firstNumber(data.sites_total, data.total_sites, data.website_count, data.row_count);
+        if (total !== null) job.sites_total = Math.max(0, Math.floor(total));
+
+        const checked = firstNumber(
+          data.sites_checked,
+          data.checked_sites,
+          data.websites_checked,
+          data.processed_sites
+        );
+        if (checked !== null) job.sites_checked = Math.max(0, Math.floor(checked));
+
+        const active = data.active_site || data.current_site || data.active_website;
+        if (active != null) job.active_site = String(active);
+
+        if (data.download_ready != null) {
+          job.download_ready =
+            data.download_ready === true ||
+            data.download_ready === 'true' ||
+            data.download_ready === 1;
+        }
+        if (data.email_sent != null) {
+          job.email_sent = data.email_sent === true || data.email_sent === 'true';
+        }
+
+        const previewRows = extractLePreview(data);
+        if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
+
+        const status = String(data.status || job.status || 'processing').toLowerCase();
+        job.status = status;
+        job.poll_errors = 0;
+
+        if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
+          failLeJob(data.error ? String(data.error) : '');
+          return;
+        }
+
+        if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1) {
+          if (job.download_ready === true) {
+            completeLeJob(true);
+          } else {
+            setLeBadge('pending', 'Completed — finalizing Excel…');
+            saveState();
+            updateLeProgress();
+            renderLeTable();
+          }
+          return;
+        }
+
+        if (status === 'queued' || status === 'pending' || status === 'starting') {
+          setLeBadge('pending', 'Starting lead enrichment…');
+        } else {
+          setLeBadge(
+            'pending',
+            'Checking websites · ' +
+              Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
+          );
+        }
+
+        saveState();
+        updateLeProgress();
+        renderLeTable();
+      })
+      .catch(function (err) {
+        if (epoch !== lePollEpoch) return;
+
+        const failures = (Number(job && job.poll_errors) || 0) + 1;
+        if (job) job.poll_errors = failures;
+
+        console.warn(
+          '[LiteWork] Lead Enricher status check failed (' + failures + ').',
+          err && err.message ? err.message : err
+        );
+
+        if (job) {
+          if (failures >= 3) {
+            setLeBadge('pending', 'Reconnecting…');
+          } else {
+            const phase = String(job.status || '').toLowerCase();
+            if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
+              setLeBadge('pending', 'Starting lead enrichment…');
+            }
+          }
+          saveState();
+        }
+        updateLeProgress();
+      });
+
+    /* ALWAYS release the guard and keep the setTimeout chain alive. */
+    request.finally(function () {
+      if (timer) window.clearTimeout(timer);
+      if (lePollController === controller) lePollController = null;
+      if (epoch !== lePollEpoch) return;
+
+      lePollInFlight = false;
+      const activeJob = state.enricherJob;
+      if (!activeJob || !lePollActive(activeJob)) return;
+
+      if (!lePollStartedAt) lePollStartedAt = Date.now();
+      if (Date.now() - lePollStartedAt >= STATUS_POLL_WINDOW_MS) {
+        setLeBadge('pending', 'Still running — click Check to refresh');
+        saveState();
+        updateLeProgress();
+        return;
+      }
+      scheduleNextLePoll(LE_POLL_MS, epoch);
+    });
+  }
+
+  function renderLeResults() {
+    const empty = $('#enricherEmpty');
+    const main = $('#enricherMain');
+    if (!empty || !main) return;
+
+    const job = state.enricherJob;
+    if (!job) {
+      empty.hidden = false;
+      main.hidden = true;
+      return;
+    }
+
+    empty.hidden = true;
+    main.hidden = false;
+
+    const resume = $('#leResumeId');
+    if (resume) resume.value = job.job_id || '';
+    const resumeBtn = $('#leResumeBtn');
+    if (resumeBtn) {
+      resumeBtn.disabled = false;
+      resumeBtn.removeAttribute('disabled');
+      resumeBtn.setAttribute('aria-disabled', 'false');
+    }
+
+    renderLeJobSummary();
+    renderLeTable();
+    updateLeProgress();
+
+    if (leIsComplete(job)) {
+      completeLeJob(true);
+      return;
+    }
+    if (leJobFailed(job)) {
+      setLeBadge('fail', 'Job failed · ' + (job.error || job.status || 'start a new batch'));
+      return;
+    }
+    ensureLeRunning();
+  }
+
+  function renderLeJobSummary() {
+    const job = state.enricherJob;
+    if (!job) return;
+    const meta = $('#leJobMeta');
+    const summary = $('#leJobSummary');
+    const sites = Number(job.sites_total) || 0;
+    const credits = Number(job.credits_spent) || 0;
+
+    if (meta) {
+      meta.textContent = sites
+        ? sites + ' website' + (sites === 1 ? '' : 's') + ' · ' + credits + ' credits'
+        : 'Waiting for the first status update…';
+    }
+
+    if (summary) {
+      summary.innerHTML =
+        '<div class="summary-row"><dt>Websites</dt><dd><strong>' + sites + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Checked</dt><dd>' +
+        (Number(job.sites_checked) || 0) + '</dd></div>' +
+        '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + credits + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Source</dt><dd>' +
+        escapeHtml(job.source === 'upload' ? 'Excel / CSV upload' : 'Lead Scraper history') +
+        '</dd></div>' +
+        '<div class="summary-row"><dt>Delivery email</dt><dd>' +
+        escapeHtml(job.email || accountEmail() || '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Started</dt><dd>' +
+        escapeHtml(job.created_at ? fmtMYT(job.created_at) : '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
+        escapeHtml(job.job_id) + '</code></dd></div>';
+    }
+  }
+
+  function updateLeProgress() {
+    const job = state.enricherJob;
+    if (!job) return;
+
+    const total = Number(job.sites_total) || 0;
+    const checked = clamp(Math.floor(Number(job.sites_checked) || 0), 0, total || 9999);
+    const complete = leIsComplete(job);
+    const percent = complete
+      ? 100
+      : Math.floor(clamp(Number(job.percent) || 0, 0, 100));
+
+    const fill = $('#leRingFill');
+    if (fill) fill.style.strokeDashoffset = String(RING_LENGTH - (RING_LENGTH * percent) / 100);
+
+    const percentEl = $('#leRingPercent');
+    if (percentEl) percentEl.textContent = percent + '%';
+
+    const countEl = $('#leRingCount');
+    if (countEl) {
+      countEl.textContent = checked + ' / ' + (total || '—') + ' websites checked';
+    }
+
+    const activeEl = $('#leRingActive');
+    if (activeEl) {
+      const activeSite = String(job.active_site || '').trim();
+      const phase = String(job.status || '').toLowerCase();
+      const terminal =
+        complete ||
+        phase === 'completed' ||
+        phase === 'complete' ||
+        phase === 'failed' ||
+        phase === 'error';
+      if (activeSite && !terminal) {
+        activeEl.hidden = false;
+        activeEl.textContent = 'Checking "' + activeSite + '"…';
+      } else {
+        activeEl.hidden = true;
+        activeEl.textContent = '';
+      }
+    }
+
+    const card = $('#leRingCard');
+    if (card) card.classList.toggle('is-complete', complete);
+
+    const downloadBtn = $('#leDownloadBtn');
+    if (downloadBtn) downloadBtn.disabled = !complete;
+
+    const downloadTitle = $('#leDownloadTitle');
+    if (downloadTitle) {
+      downloadTitle.textContent =
+        complete && total ? 'Enriched Excel (.xlsx) · ' + total + ' websites' : 'Enriched Excel (.xlsx)';
+    }
+
+    const downloadSub = $('#leDownloadSub');
+    if (downloadSub) {
+      if (complete) downloadSub.textContent = 'Ready to download';
+      else if (String(job.status || '').toLowerCase() === 'completed') {
+        downloadSub.textContent = 'Finalizing Excel…';
+      } else {
+        downloadSub.textContent = 'Live progress from the enrichment backend';
+      }
+    }
+
+    const emailNote = $('#leEmailNote');
+    if (emailNote) {
+      const email = job.email || accountEmail() || 'your delivery email';
+      const sent = complete && job.email_sent === true;
+      emailNote.textContent = sent
+        ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
+        : 'Excel (.xlsx) will also be emailed to ' + email +
+          ' when the backend marks it ready — safe to close this tab.';
+      emailNote.classList.toggle('is-sent', sent);
+    }
+
+    const tableMeta = $('#leTableMeta');
+    if (tableMeta) {
+      const count = (job.preview_rows || []).length;
+      tableMeta.textContent =
+        'Live preview · ' + count + ' website' + (count === 1 ? '' : 's') +
+        ' enriched · emails, MX, socials & openers';
+    }
+
+    renderLeJobSummary();
+  }
+
+  function renderLeTable() {
+    const table = $('#leTable');
+    if (!table || !state.enricherJob) return;
+    const job = state.enricherJob;
+    const rows = Array.isArray(job.preview_rows) ? job.preview_rows.slice(0, 50) : [];
+    const message =
+      String(job.status || '').toLowerCase() === 'completed'
+        ? 'Preview unavailable — download the .xlsx for every website.'
+        : 'Waiting for the first enriched website…';
+    renderPreviewTable(table, LE_PREVIEW_COLUMNS, rows, message);
+
+    const pill = $('#lePreviewPill');
+    if (pill) {
+      pill.textContent = rows.length + ' website' + (rows.length === 1 ? '' : 's');
+    }
+  }
+
+  function completeLeJob(silent) {
+    const job = state.enricherJob;
+    if (!job) return;
+
+    job.status = 'completed';
+    job.download_ready = true;
+    job.percent = 100;
+
+    updateLeProgress();
+    renderLeTable();
+
+    stopLeTimer();
+    historyState.loaded = false;
+    saveState();
+
+    setLeBadge('ok', 'Completed · .xlsx ready');
+    if (!silent) toast('Enriched Excel is ready to download.', 'success');
+  }
+
+  function failLeJob(reason) {
+    const job = state.enricherJob;
+    if (!job) return;
+    job.status = 'failed';
+    job.error = reason || '';
+    stopLeTimer();
+    saveState();
+    updateLeProgress();
+    setLeBadge('fail', 'Job failed · ' + (reason || 'please try again'));
+  }
+
+  function downloadLeExcel(jobId) {
+    const job = state.enricherJob || {};
+    const id = String(jobId || job.job_id || '').trim();
+    if (!id || !LE_DOWNLOAD_URL) {
+      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      return;
+    }
+
+    toast('Requesting your enriched Excel from the cloud…', 'info');
+
+    fetch(LE_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
+      mode: 'cors',
+      headers: authHeaders()
+    })
+      .then(function (response) {
+        if (response.status === 401) {
+          handleAuthExpired(
+            'Your session expired. Log in again to download your enriched leads.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          toast('Insufficient credits for this download.', 'warn');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (!blob) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = 'litework-enriched-leads-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
+        toast('Enriched Excel download ready.', 'success');
+      })
+      .catch(function (err) {
+        console.warn('[LiteWork] Lead Enricher download failed.', err);
+        toast('Could not download the enriched Excel. Please try again.', 'warn');
+      });
+  }
+
+  function openLeHistoryJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return;
+
+    stopLeTimer();
+    const known = (historyState.enricher || []).filter(function (entry) {
+      return String(entry.job_id || '') === id;
+    })[0];
+    const current = state.enricherJob;
+    const sameJob = !!current && String(current.job_id || '') === id;
+
+    if (!sameJob) {
+      state.enricherJob = {
+        job_id: id,
+        status: 'processing',
+        percent: 0,
+        sites_total: known ? known.sites : 0,
+        sites_checked: known ? known.checked : 0,
+        active_site: '',
+        download_ready: false,
+        preview_rows: [],
+        credits_spent: known ? known.credits : 0,
+        source: known && known.source ? known.source : '',
+        email: accountEmail(),
+        created_at: new Date().toISOString(),
+        poll_errors: 0
+      };
+    } else {
+      current.poll_errors = 0;
+      current.error = '';
+      if (leJobFailed(current)) current.status = 'processing';
+    }
+    saveState();
+
+    if (currentRoute() === 'enricher-results') {
+      renderLeResults();
+      startLePolling(state.enricherJob, true);
+    } else {
+      window.location.hash = '#enricher-results';
+    }
+  }
+
+  /* ----- Lead Enricher configuration modal ----- */
+  function leColumnsChipsHtml() {
+    return (
+      '<div class="inv-cols-block">' +
+      '<p class="inv-cols-title">10 Fixed Columns Added to Your Excel</p>' +
+      '<div class="inv-chips">' +
+      LE_COLUMNS.map(function (label) {
+        return '<span class="inv-chip">' + escapeHtml(label) + '</span>';
+      }).join('') +
+      '</div>' +
+      '<p class="inv-chip-note">Appended to your original columns — nothing is overwritten.</p>' +
+      '</div>'
+    );
+  }
+
+  function leRenderJobOptions(jobs) {
+    const select = $('#leJobSelect');
+    if (!select) return;
+    const list = Array.isArray(jobs) ? jobs : [];
+    if (!list.length) {
+      leHistoryRows = 0;
+      select.innerHTML =
+        '<option value="">No completed Lead Scraper jobs — upload a file instead</option>';
+      updateLeQuote();
+      return;
+    }
+
+    select.innerHTML = list
+      .map(function (job, index) {
+        const leads = Number(job.target) || Number(job.scraped) || 0;
+        const terms = job.terms && job.terms.length ? job.terms.slice(0, 2).join(', ') : '—';
+        const label =
+          (job.country || '—') + ' · ' + terms + ' · ' + (leads || '—') + ' leads · ' + job.job_id;
+        return (
+          '<option value="' + escapeHtml(job.job_id) + '" data-rows="' +
+          (leads || LE_TIER_1_MAX) + '" data-country="' + escapeHtml(job.country || '') + '"' +
+          (index === 0 ? ' selected' : '') + '>' +
+          escapeHtml(label) + '</option>'
+        );
+      })
+      .join('');
+
+    const first = select.options[select.selectedIndex];
+    leHistoryRows = first ? Number(first.getAttribute('data-rows')) || 0 : 0;
+    updateLeQuote();
+  }
+
+  function loadLeJobs() {
+    const select = $('#leJobSelect');
+    if (!select || leJobsLoading) return;
+    leJobsLoading = true;
+
+    const local = (historyState.b2b || []).filter(function (job) {
+      const status = String((job && job.status) || '').toLowerCase();
+      return (
+        !!job &&
+        !!job.job_id &&
+        (job.downloadReady ||
+          ['completed', 'complete', 'success', 'done'].indexOf(status) !== -1)
+      );
+    });
+    if (local.length) leRenderJobOptions(local);
+
+    apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
+      .then(function (response) {
+        return readJson(response).then(function (body) {
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return body;
+        });
+      })
+      .then(function (body) {
+        leJobsLoading = false;
+        const source = historySource(body);
+        const raw = pickArray(source, [
+          'b2b_lead_scraper',
+          'jobs',
+          'scraper_jobs',
+          'lead_jobs',
+          'b2b',
+          'b2b_jobs',
+          'scrapes'
+        ]);
+        const jobs = raw.map(normalizeHistoryJob).filter(function (job) {
+          const status = String(job.status || '').toLowerCase();
+          return (
+            !!job.job_id &&
+            (job.downloadReady ||
+              ['completed', 'complete', 'success', 'done'].indexOf(status) !== -1)
+          );
+        });
+        leRenderJobOptions(jobs.length ? jobs : local);
+      })
+      .catch(function (err) {
+        leJobsLoading = false;
+        if (!local.length) leRenderJobOptions([]);
+        console.warn(
+          '[LiteWork] Could not load Lead Scraper jobs for the enricher.',
+          err && err.message ? err.message : err
+        );
+      });
+  }
+
+  function readFileText(file) {
+    return new Promise(function (resolve, reject) {
+      try {
+        const reader = new FileReader();
+        reader.onload = function () { resolve(String(reader.result || '')); };
+        reader.onerror = function () { reject(new Error('Could not read the file.')); };
+        reader.readAsText(file);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function estimateLeRows(file) {
+    const size = Number(file && file.size) || 0;
+    const extMatch = String((file && file.name) || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    const ext = extMatch ? extMatch[1] : '';
+    if (ext === 'csv' || ext === 'txt') {
+      return readFileText(file)
+        .then(function (text) {
+          const lines = text.split(/\r\n|\n|\r/).filter(function (line) {
+            return String(line).trim() !== '';
+          });
+          return { rows: Math.max(1, lines.length - 1), exact: true };
+        })
+        .catch(function () {
+          return { rows: Math.max(1, Math.round(size / 140)), exact: false };
+        });
+    }
+    /* .xlsx is a compressed workbook — estimate from file size, never block. */
+    return Promise.resolve({ rows: Math.max(1, Math.round(size / 140)), exact: false });
+  }
+
+  function setLeFile(file) {
+    const errEl = $('#enricherFormError');
+    if (errEl) errEl.textContent = '';
+    if (!file) return;
+
+    const extMatch = String(file.name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    const ext = extMatch ? extMatch[1] : '';
+    if (['xlsx', 'xls', 'csv'].indexOf(ext) === -1) {
+      if (errEl) errEl.textContent = 'Upload an .xlsx, .xls or .csv file.';
+      return;
+    }
+    if (file.size > LE_MAX_FILE_BYTES) {
+      if (errEl) {
+        errEl.textContent =
+          'File is too large — the limit is ' +
+          Math.round(LE_MAX_FILE_BYTES / 1048576) + ' MB.';
+      }
+      return;
+    }
+
+    leFiles = [file];
+    leEstimateRows = 0;
+    leRowsExact = false;
+    const box = $('#leUploaded');
+    if (box) {
+      box.hidden = false;
+      box.innerHTML =
+        '<div><strong>' + escapeHtml(file.name) + '</strong>' +
+        '<span id="leUploadedMeta">Reading row count…</span></div>';
+    }
+
+    estimateLeRows(file).then(function (result) {
+      if (!leFiles.length || leFiles[0] !== file) return;
+      leEstimateRows = result.rows;
+      leRowsExact = result.exact === true;
+      const meta = $('#leUploadedMeta');
+      if (meta) {
+        meta.textContent =
+          (leRowsExact ? result.rows + ' rows' : '≈ ' + result.rows + ' rows') +
+          ' · ' + formatFileSize(file.size);
+      }
+      updateLeQuote();
+    });
+    updateLeQuote();
+  }
+
+  function updateLeQuote() {
+    const raw = leRawSites();
+    const sites = leSelectedSites();
+    const quote = leQuote(sites);
+    const tooMany = raw > LE_TIER_3_MAX && leCountIsExact();
+
+    const availableEl = $('#leAvailable');
+    if (availableEl) availableEl.textContent = state.credits + ' Credits';
+
+    const siteEl = $('#leSiteCount');
+    if (siteEl) {
+      siteEl.textContent = raw > LE_TIER_3_MAX ? String(raw) : String(sites);
+      siteEl.classList.toggle('is-zero', sites === 0);
+    }
+
+    const tierEl = $('#leTier');
+    if (tierEl) {
+      tierEl.textContent = quote.tier;
+      tierEl.classList.toggle('is-zero', sites === 0);
+    }
+
+    const costEl = $('#leCost');
+    if (costEl) costEl.textContent = quote.credits + ' Credits';
+
+    const shortfall = quote.credits - state.credits;
+    const shortEl = $('#enricherShortfall');
+    if (shortEl) {
+      if (tooMany) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'Up to ' + LE_TIER_3_MAX + ' websites per run — split this list into smaller batches.';
+      } else if (sites > 0 && shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this batch. Top up credits to continue.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+
+    const btn = $('#enricherStartBtn');
+    if (btn) {
+      btn.disabled = leStarting || sites <= 0 || !quote.credits || tooMany;
+      btn.textContent = leStarting
+        ? 'Starting enrichment…'
+        : 'Confirm & Spend ' + quote.credits + ' Credit' + (quote.credits === 1 ? '' : 's');
+    }
+  }
+
+  function openLeadEnricherModal() {
+    if (!requireAuth({ action: 'enricher' })) return;
+
+    leFiles = [];
+    leEstimateRows = 0;
+    leHistoryRows = 0;
+    leSourceTab = 'history';
+    leStarting = false;
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Website & Email Lead Enricher</h2>' +
+      '<p class="modal-sub">Add verified emails, live MX checks, WhatsApp, socials and AI openers to your list · 5 credits (1–50 sites) · 10 credits (51–150) · 15 credits (151–300)</p>' +
+      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="leAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Websites</span>' +
+      '<span class="calc-value is-zero" id="leSiteCount">0</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Tier</span>' +
+      '<span class="calc-value is-zero" id="leTier">No sites</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="leCost">0 Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="enricherForm" novalidate>' +
+      '<div class="field"><label for="enricherEmail">Delivery email</label>' +
+      '<input type="email" id="enricherEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
+      '<div class="src-tabs" role="tablist" aria-label="Lead source">' +
+      '<button type="button" class="src-tab is-active" data-le-source="history" role="tab" aria-selected="true">From Lead Scraper History</button>' +
+      '<button type="button" class="src-tab" data-le-source="upload" role="tab" aria-selected="false">Upload Excel / CSV</button>' +
+      '</div>' +
+      '<div class="src-pane" id="lePaneHistory">' +
+      '<label class="le-hint" for="leJobSelect">Completed Lead Scraper job</label>' +
+      '<select class="le-select" id="leJobSelect">' +
+      '<option value="">Loading your Lead Scraper jobs…</option>' +
+      '</select>' +
+      '<p class="le-hint">Shows Country · search terms · lead count · Job ID. Only completed runs are listed.</p>' +
+      '</div>' +
+      '<div class="src-pane" id="lePaneUpload" hidden>' +
+      '<label class="inv-drop" id="leDrop" for="leFileInput">' +
+      '<span class="inv-drop-icon" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#22D3EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M12 16V5" /><path d="m7 10 5-5 5 5" />' +
+      '<path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17" />' +
+      '</svg></span>' +
+      '<strong>Drag & drop your website list</strong>' +
+      '<span class="inv-drop-sub">or click to browse · max ' +
+      Math.round(LE_MAX_FILE_BYTES / 1048576) + ' MB · up to ' + LE_TIER_3_MAX + ' sites</span>' +
+      '<span class="inv-drop-types">XLSX · XLS · CSV</span>' +
+      '<span class="inv-drop-tip">One row per company. Include a website or Google Maps URL column — the enricher appends 10 verified columns to your original sheet.</span>' +
+      '</label>' +
+      '<input type="file" id="leFileInput" class="inv-file-input" accept="' +
+      escapeHtml(LE_ACCEPT) + '" />' +
+      '<div class="le-uploaded" id="leUploaded" hidden></div>' +
+      '</div>' +
+      '<div class="modal-section"><h3>Enrichment options</h3></div>' +
+      '<div class="le-opt is-locked">' +
+      '<input type="checkbox" checked disabled />' +
+      '<div><span class="le-opt-title">Public Emails + Live DNS/MX Verification ' +
+      '<span class="le-opt-badge">Included</span></span>' +
+      '<span class="le-opt-hint">Every website is scanned for public addresses and each domain is checked for live MX records.</span></div>' +
+      '</div>' +
+      '<label class="le-opt">' +
+      '<input type="checkbox" id="leSocial" checked />' +
+      '<div><span class="le-opt-title">Extract WhatsApp & Social Links (FB, IG, LinkedIn)</span>' +
+      '<span class="le-opt-hint">Adds WhatsApp numbers plus Facebook, Instagram and LinkedIn profile URLs.</span></div>' +
+      '</label>' +
+      '<label class="le-opt">' +
+      '<input type="checkbox" id="leAiSummary" />' +
+      '<div><span class="le-opt-title">Generate AI 1-Line Company Summary & Custom Cold Opener</span>' +
+      '<span class="le-opt-hint">Writes a one-line summary and a tailored first message per lead.</span></div>' +
+      '</label>' +
+      '<div class="le-offer field" id="leOfferField" hidden>' +
+      '<label for="leOffer">Your product or offer (e.g., "Fast packaging supply across Malaysia")</label>' +
+      '<input type="text" id="leOffer" autocomplete="off" placeholder="Fast packaging supply across Malaysia" />' +
+      '</div>' +
+      leColumnsChipsHtml() +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="enricherFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="enricherShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="enricherStartBtn" disabled>' +
+      'Confirm & Spend 0 Credits</button>' +
+      '<p class="fine">Credits are deducted immediately. Enrichment runs in the cloud.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    $$('[data-le-source]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        leSourceTab = btn.getAttribute('data-le-source') === 'upload' ? 'upload' : 'history';
+        $$('[data-le-source]').forEach(function (b) {
+          const on = b === btn;
+          b.classList.toggle('is-active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        const historyPane = $('#lePaneHistory');
+        const uploadPane = $('#lePaneUpload');
+        if (historyPane) historyPane.hidden = leSourceTab !== 'history';
+        if (uploadPane) uploadPane.hidden = leSourceTab !== 'upload';
+        updateLeQuote();
+      });
+    });
+
+    const jobSelect = $('#leJobSelect');
+    if (jobSelect) {
+      jobSelect.addEventListener('change', function () {
+        const opt = jobSelect.options[jobSelect.selectedIndex];
+        leHistoryRows = opt ? Number(opt.getAttribute('data-rows')) || 0 : 0;
+        updateLeQuote();
+      });
+    }
+
+    const drop = $('#leDrop');
+    const input = $('#leFileInput');
+    if (drop && input) {
+      ['dragenter', 'dragover'].forEach(function (evt) {
+        drop.addEventListener(evt, function (event) {
+          event.preventDefault();
+          drop.classList.add('is-drag');
+        });
+      });
+      ['dragleave', 'dragend'].forEach(function (evt) {
+        drop.addEventListener(evt, function () {
+          drop.classList.remove('is-drag');
+        });
+      });
+      drop.addEventListener('drop', function (event) {
+        event.preventDefault();
+        drop.classList.remove('is-drag');
+        if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
+          setLeFile(event.dataTransfer.files[0]);
+        }
+      });
+      input.addEventListener('change', function () {
+        if (input.files && input.files.length) setLeFile(input.files[0]);
+        input.value = '';
+      });
+    }
+
+    const aiToggle = $('#leAiSummary');
+    if (aiToggle) {
+      aiToggle.addEventListener('change', function () {
+        const offerField = $('#leOfferField');
+        if (offerField) offerField.hidden = !aiToggle.checked;
+        if (aiToggle.checked && $('#leOffer')) $('#leOffer').focus();
+      });
+    }
+
+    const form = $('#enricherForm');
+    if (form) form.addEventListener('submit', handleLeadEnricherStart);
+
+    updateLeQuote();
+    loadLeJobs();
+  }
+
+  function openEnricherColumnsModal() {
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Lead Enricher — Excel Output</h2>' +
+      '<p class="modal-sub">Your original columns are kept and these 10 verified columns are appended.</p>' +
+      leColumnsChipsHtml() +
+      '<div class="modal-actions">' +
+      '<button type="button" class="btn btn-ghost" data-modal-close>Close</button>' +
+      '</div>',
+      false
+    );
+  }
+
+  function handleLeadEnricherStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'enricher' });
+      return;
+    }
+
+    const errEl = $('#enricherFormError');
+    const jobSelect = $('#leJobSelect');
+    const file = leFiles[0] || null;
+    const jobId =
+      leSourceTab === 'history' && jobSelect ? String(jobSelect.value || '').trim() : '';
+    const sites = leSelectedSites();
+    const quote = leQuote(sites);
+
+    if (leSourceTab === 'history' && !jobId) {
+      if (errEl) errEl.textContent = 'Choose a completed Lead Scraper job, or switch to upload.';
+      return;
+    }
+    if (leSourceTab === 'upload' && !file) {
+      if (errEl) errEl.textContent = 'Upload an .xlsx or .csv website list to continue.';
+      return;
+    }
+    if (sites <= 0) {
+      if (errEl) errEl.textContent = 'This batch has no websites to enrich.';
+      return;
+    }
+    const rawSites = leRawSites();
+    if (rawSites > LE_TIER_3_MAX && leCountIsExact()) {
+      if (errEl) {
+        errEl.textContent =
+          'Maximum ' + LE_TIER_3_MAX + ' websites per run — split the list into smaller batches.';
+      }
+      return;
+    }
+    if (state.credits < quote.credits) {
+      const shortfall = quote.credits - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this batch. Top up credits to continue.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    leStarting = true;
+    updateLeQuote();
+
+    const email = accountEmail();
+    const aiEl = $('#leAiSummary');
+    const socialEl = $('#leSocial');
+    const offerEl = $('#leOffer');
+    const aiOn = !!(aiEl && aiEl.checked);
+    const selectedOption = jobSelect ? jobSelect.options[jobSelect.selectedIndex] : null;
+
+    const payload = {
+      email: email,
+      source: leSourceTab,
+      sites: sites,
+      row_count: sites,
+      credits: quote.credits,
+      extract_social: !!(socialEl && socialEl.checked),
+      ai_summary: aiOn,
+      offer: aiOn && offerEl ? String(offerEl.value || '').trim() : ''
+    };
+
+    if (leSourceTab === 'history') {
+      payload.job_id = jobId;
+      payload.source_job_id = jobId;
+      payload.country = selectedOption
+        ? String(selectedOption.getAttribute('data-country') || '')
+        : '';
+    }
+
+    const ready = file
+      ? readFileAsBase64(file).then(function (base64) {
+          payload.file_name = file.name;
+          payload.file_type = file.type || '';
+          payload.file_size = file.size;
+          payload.file_base64 = base64;
+          return payload;
+        })
+      : Promise.resolve(payload);
+
+    ready
+      .then(function (body) {
+        return apiFetch(
+          LE_START_URL,
+          { method: 'POST', body: JSON.stringify(body) },
+          120000
+        );
+      })
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to launch Lead Enricher.',
+            { action: 'enricher' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this enrichment batch. Top up credits to continue.';
+            }
+            leStarting = false;
+            updateLeQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const returnedId =
+          outer.job_id || outer.jobId || outer.id || inner.job_id || inner.id || '';
+
+        state.enricherJob = {
+          job_id: String(returnedId || 'enr_' + Date.now()),
+          status: String(outer.status || inner.status || 'processing').toLowerCase(),
+          percent: 0,
+          sites_total:
+            Number(outer.sites_total || outer.total_sites || outer.row_count || 0) || sites,
+          sites_checked: 0,
+          active_site: '',
+          download_ready: false,
+          preview_rows: [],
+          credits_spent: quote.credits,
+          source: leSourceTab,
+          email: email,
+          created_at: new Date().toISOString(),
+          poll_errors: 0
+        };
+        saveState();
+
+        leStarting = false;
+        leFiles = [];
+        closeModal(false);
+        toast(
+          'Lead enrichment started — ' + sites + ' website' + (sites === 1 ? '' : 's') +
+            ' queued.',
+          'success'
+        );
+
+        if (window.location.hash === '#enricher-results') {
+          renderLeResults();
+          startLePolling(state.enricherJob);
+        } else {
+          window.location.hash = '#enricher-results';
+        }
+      })
+      .catch(function (err) {
+        leStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the enrichment job. Please try again.';
+        }
+        updateLeQuote();
+        console.warn('[LiteWork] Lead Enricher start failed.', err);
+      });
+  }
+
+  /* =================== N. REVIEW MINER (WORKER #5) ====================== */
+  let rwStarting = false;
+  let rwFocus = 'low';
+  let rwPollTimer = null;
+  let rwPollInFlight = false;
+  let rwPollController = null;
+  let rwPollEpoch = 0;
+  let rwPollStartedAt = 0;
+
+  /* 1–3 competitors = 5 cr · 4–5 competitors = 8 cr. */
+  function rwQuote(competitors) {
+    const n = clamp(Number(competitors) || 0, 0, RW_TIER_2_MAX);
+    let credits = 0;
+    let tier = 'No competitors';
+    if (n > 0) {
+      if (n <= RW_TIER_1_MAX) {
+        credits = RW_TIER_1_CREDITS;
+        tier = '1–' + RW_TIER_1_MAX + ' competitors';
+      } else {
+        credits = RW_TIER_2_CREDITS;
+        tier = RW_TIER_1_MAX + 1 + '–' + RW_TIER_2_MAX + ' competitors';
+      }
+    }
+    return { count: n, credits: credits, tier: tier };
+  }
+
+  function rwCompetitors() {
+    const rows = $$('#rwRows [data-rw-competitor]');
+    const list = [];
+    rows.forEach(function (input) {
+      const value = String(input.value || '').trim();
+      if (value) list.push(value);
+    });
+    return list;
+  }
+
+  function rwPageActive() {
+    return currentRoute() === 'review-results';
+  }
+
+  function rwIsComplete(job) {
+    return (
+      !!job &&
+      String(job.status || '').toLowerCase() === 'completed' &&
+      job.download_ready === true
+    );
+  }
+
+  function rwJobFailed(job) {
+    const status = String((job && job.status) || '').toLowerCase();
+    return (
+      status === 'failed' ||
+      status === 'error' ||
+      status === 'cancelled' ||
+      status === 'canceled'
+    );
+  }
+
+  function rwPollActive(job) {
+    return !!job && !rwJobFailed(job) && !rwIsComplete(job);
+  }
+
+  function stopRwTimer() {
+    rwPollEpoch += 1;
+    if (rwPollTimer) {
+      window.clearTimeout(rwPollTimer);
+      rwPollTimer = null;
+    }
+    rwPollStartedAt = 0;
+    if (rwPollController) {
+      try {
+        rwPollController.abort();
+      } catch (err) {
+        /* already settled */
+      }
+      rwPollController = null;
+    }
+    rwPollInFlight = false;
+  }
+
+  function setRwBadge(kind, text) {
+    const badge = $('#rwStatus');
+    if (!badge) return;
+    badge.classList.remove('is-pending', 'is-ok', 'is-fail');
+    if (kind) badge.classList.add('is-' + kind);
+    const label = $('.webhook-text', badge);
+    if (label) label.textContent = text;
+  }
+
+  function startRwPolling(job, force) {
+    if (!job || !RW_STATUS_URL) return;
+    if (!rwPageActive()) return;
+    if (rwPollTimer || rwPollInFlight) return;
+    if (!force && !rwPollActive(job)) return;
+
+    rwPollStartedAt = Date.now();
+    rwPollEpoch += 1;
+    const epoch = rwPollEpoch;
+    setRwBadge('pending', force ? 'Refreshing status…' : 'Starting review mining…');
+    pollRwStatus(!!force, epoch);
+  }
+
+  function forceRwPollNow() {
+    const job = state.reviewJob;
+    if (!job || !RW_STATUS_URL) return;
+    if (rwPollTimer) {
+      window.clearTimeout(rwPollTimer);
+      rwPollTimer = null;
+    }
+    if (rwPollInFlight) return;
+    if (!rwPollStartedAt) rwPollStartedAt = Date.now();
+    pollRwStatus(true, rwPollEpoch);
+  }
+
+  function scheduleNextRwPoll(delay, epoch) {
+    if (epoch !== rwPollEpoch) return;
+    if (rwPollTimer) window.clearTimeout(rwPollTimer);
+    rwPollTimer = window.setTimeout(function () {
+      rwPollTimer = null;
+      pollRwStatus(false, epoch);
+    }, Math.max(0, delay));
+  }
+
+  function ensureRwRunning() {
+    const job = state.reviewJob;
+    if (!job || rwJobFailed(job) || rwIsComplete(job)) return;
+    if (!isLoggedIn()) return;
+    startRwPolling(job);
+  }
+
+  function extractRwPreview(data) {
+    if (!data || typeof data !== 'object') return [];
+    const lists = [];
+    const preview = data.preview;
+    if (Array.isArray(preview)) {
+      lists.push(preview);
+    } else if (preview && typeof preview === 'object') {
+      if (Array.isArray(preview.rows)) lists.push(preview.rows);
+      if (Array.isArray(preview.competitors)) lists.push(preview.competitors);
+      if (Array.isArray(preview.battlecard)) lists.push(preview.battlecard);
+    }
+    if (Array.isArray(data.preview_rows)) lists.push(data.preview_rows);
+    if (Array.isArray(data.rows)) lists.push(data.rows);
+    if (Array.isArray(data.competitors)) lists.push(data.competitors);
+    if (Array.isArray(data.battlecard)) lists.push(data.battlecard);
+    if (Array.isArray(data.results)) lists.push(data.results);
+
+    for (let i = 0; i < lists.length; i += 1) {
+      if (lists[i].length) return lists[i];
+    }
+    return [];
+  }
+
+  function pollRwStatus(force, expectedEpoch) {
+    const job = state.reviewJob;
+    if (!job || !RW_STATUS_URL) return;
+    const epoch = expectedEpoch == null ? rwPollEpoch : expectedEpoch;
+    if (epoch !== rwPollEpoch) return;
+    if (rwPollInFlight) return;
+    if (!force && !rwPollActive(job)) return;
+    if (!rwPollStartedAt) rwPollStartedAt = Date.now();
+
+    rwPollInFlight = true;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    rwPollController = controller;
+    /* 12s timeout + 3-strike tolerance, same policy as the other workers. */
+    const timer = controller ? window.setTimeout(function () { controller.abort(); }, 12000) : null;
+
+    const request = fetch(RW_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
+      mode: 'cors',
+      headers: authHeaders(),
+      signal: controller ? controller.signal : undefined
+    })
+      .then(function (response) {
+        if (epoch !== rwPollEpoch) return null;
+        if (response.status === 401) {
+          stopRwTimer();
+          handleAuthExpired(
+            'Your session expired. Log in again to check this review mining job.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          failRwJob('Insufficient credits');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (epoch !== rwPollEpoch) return;
+        if (typeof data !== 'object') throw new Error('Empty status response');
+
+        if (setLiveCredits(extractRemaining(data))) syncCreditUI();
+
+        const toNumber = function (value) {
+          if (value === null || value === undefined || value === '') return null;
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
+        const firstNumber = function () {
+          for (let i = 0; i < arguments.length; i += 1) {
+            const n = toNumber(arguments[i]);
+            if (n !== null) return n;
+          }
+          return null;
+        };
+
+        const percent = toNumber(data.percent);
+        if (percent !== null) job.percent = clamp(percent, 0, 100);
+
+        const total = firstNumber(
+          data.competitors_total,
+          data.total_competitors,
+          data.competitor_count
+        );
+        if (total !== null) job.competitors_total = Math.max(0, Math.floor(total));
+
+        const mined = firstNumber(
+          data.competitors_mined,
+          data.mined_competitors,
+          data.processed_competitors,
+          data.competitors_done
+        );
+        if (mined !== null) job.competitors_mined = Math.max(0, Math.floor(mined));
+
+        const reviews = firstNumber(
+          data.reviews_count,
+          data.total_reviews,
+          data.reviews_scraped,
+          data.review_count
+        );
+        if (reviews !== null) job.reviews_count = Math.max(0, Math.floor(reviews));
+
+        const active = data.active_competitor || data.current_competitor || data.competitor_name;
+        if (active != null) job.active_competitor = String(active);
+
+        if (data.download_ready != null) {
+          job.download_ready =
+            data.download_ready === true ||
+            data.download_ready === 'true' ||
+            data.download_ready === 1;
+        }
+        if (data.email_sent != null) {
+          job.email_sent = data.email_sent === true || data.email_sent === 'true';
+        }
+
+        const previewRows = extractRwPreview(data);
+        if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
+
+        const status = String(data.status || job.status || 'processing').toLowerCase();
+        job.status = status;
+        job.poll_errors = 0;
+
+        if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
+          failRwJob(data.error ? String(data.error) : '');
+          return;
+        }
+
+        if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1) {
+          if (job.download_ready === true) {
+            completeRwJob(true);
+          } else {
+            setRwBadge('pending', 'Completed — finalizing Excel…');
+            saveState();
+            updateRwProgress();
+            renderRwTable();
+          }
+          return;
+        }
+
+        if (status === 'queued' || status === 'pending' || status === 'starting') {
+          setRwBadge('pending', 'Starting review mining…');
+        } else {
+          setRwBadge(
+            'pending',
+            'Mining reviews · ' +
+              Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
+          );
+        }
+
+        saveState();
+        updateRwProgress();
+        renderRwTable();
+      })
+      .catch(function (err) {
+        if (epoch !== rwPollEpoch) return;
+
+        const failures = (Number(job && job.poll_errors) || 0) + 1;
+        if (job) job.poll_errors = failures;
+
+        console.warn(
+          '[LiteWork] Review Miner status check failed (' + failures + ').',
+          err && err.message ? err.message : err
+        );
+
+        if (job) {
+          if (failures >= 3) {
+            setRwBadge('pending', 'Reconnecting…');
+          } else {
+            const phase = String(job.status || '').toLowerCase();
+            if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
+              setRwBadge('pending', 'Starting review mining…');
+            }
+          }
+          saveState();
+        }
+        updateRwProgress();
+      });
+
+    /* ALWAYS release the guard and keep the setTimeout chain alive. */
+    request.finally(function () {
+      if (timer) window.clearTimeout(timer);
+      if (rwPollController === controller) rwPollController = null;
+      if (epoch !== rwPollEpoch) return;
+
+      rwPollInFlight = false;
+      const activeJob = state.reviewJob;
+      if (!activeJob || !rwPollActive(activeJob)) return;
+
+      if (!rwPollStartedAt) rwPollStartedAt = Date.now();
+      if (Date.now() - rwPollStartedAt >= STATUS_POLL_WINDOW_MS) {
+        setRwBadge('pending', 'Still running — click Check to refresh');
+        saveState();
+        updateRwProgress();
+        return;
+      }
+      scheduleNextRwPoll(RW_POLL_MS, epoch);
+    });
+  }
+
+  function renderRwResults() {
+    const empty = $('#reviewEmpty');
+    const main = $('#reviewMain');
+    if (!empty || !main) return;
+
+    const job = state.reviewJob;
+    if (!job) {
+      empty.hidden = false;
+      main.hidden = true;
+      return;
+    }
+
+    empty.hidden = true;
+    main.hidden = false;
+
+    const resume = $('#rwResumeId');
+    if (resume) resume.value = job.job_id || '';
+    const resumeBtn = $('#rwResumeBtn');
+    if (resumeBtn) {
+      resumeBtn.disabled = false;
+      resumeBtn.removeAttribute('disabled');
+      resumeBtn.setAttribute('aria-disabled', 'false');
+    }
+
+    renderRwJobSummary();
+    renderRwTable();
+    updateRwProgress();
+
+    if (rwIsComplete(job)) {
+      completeRwJob(true);
+      return;
+    }
+    if (rwJobFailed(job)) {
+      setRwBadge('fail', 'Job failed · ' + (job.error || job.status || 'start a new run'));
+      return;
+    }
+    ensureRwRunning();
+  }
+
+  function renderRwJobSummary() {
+    const job = state.reviewJob;
+    if (!job) return;
+    const meta = $('#rwJobMeta');
+    const summary = $('#rwJobSummary');
+    const competitors = Number(job.competitors_total) || 0;
+    const credits = Number(job.credits_spent) || 0;
+    const reviews = Number(job.reviews_count) || 0;
+
+    if (meta) {
+      meta.textContent = competitors
+        ? competitors + ' competitor' + (competitors === 1 ? '' : 's') + ' · ' +
+          reviews + ' reviews · ' + credits + ' credits'
+        : 'Waiting for the first status update…';
+    }
+
+    if (summary) {
+      summary.innerHTML =
+        '<div class="summary-row"><dt>Competitors</dt><dd><strong>' + competitors + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Mined</dt><dd>' +
+        (Number(job.competitors_mined) || 0) + '</dd></div>' +
+        '<div class="summary-row"><dt>Reviews</dt><dd>' + reviews + '</dd></div>' +
+        '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + credits + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Review focus</dt><dd>' +
+        escapeHtml(job.review_focus === 'all' ? 'All reviews (1–5★)' : 'Low ratings (1–3★)') +
+        '</dd></div>' +
+        '<div class="summary-row"><dt>Delivery email</dt><dd>' +
+        escapeHtml(job.email || accountEmail() || '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Started</dt><dd>' +
+        escapeHtml(job.created_at ? fmtMYT(job.created_at) : '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
+        escapeHtml(job.job_id) + '</code></dd></div>';
+    }
+  }
+
+  function updateRwProgress() {
+    const job = state.reviewJob;
+    if (!job) return;
+
+    const total = Number(job.competitors_total) || 0;
+    const mined = clamp(Math.floor(Number(job.competitors_mined) || 0), 0, total || 9999);
+    const reviews = Math.floor(Number(job.reviews_count) || 0);
+    const complete = rwIsComplete(job);
+    const percent = complete
+      ? 100
+      : Math.floor(clamp(Number(job.percent) || 0, 0, 100));
+
+    const fill = $('#rwRingFill');
+    if (fill) fill.style.strokeDashoffset = String(RING_LENGTH - (RING_LENGTH * percent) / 100);
+
+    const percentEl = $('#rwRingPercent');
+    if (percentEl) percentEl.textContent = percent + '%';
+
+    const countEl = $('#rwRingCount');
+    if (countEl) {
+      countEl.textContent =
+        mined + ' / ' + (total || '—') + ' competitors mined · ' + reviews + ' reviews';
+    }
+
+    const activeEl = $('#rwRingActive');
+    if (activeEl) {
+      const activeName = String(job.active_competitor || '').trim();
+      const phase = String(job.status || '').toLowerCase();
+      const terminal =
+        complete ||
+        phase === 'completed' ||
+        phase === 'complete' ||
+        phase === 'failed' ||
+        phase === 'error';
+      if (activeName && !terminal) {
+        activeEl.hidden = false;
+        activeEl.textContent = 'Mining "' + activeName + '"…';
+      } else {
+        activeEl.hidden = true;
+        activeEl.textContent = '';
+      }
+    }
+
+    const card = $('#rwRingCard');
+    if (card) card.classList.toggle('is-complete', complete);
+
+    const downloadBtn = $('#rwDownloadBtn');
+    if (downloadBtn) downloadBtn.disabled = !complete;
+
+    const downloadTitle = $('#rwDownloadTitle');
+    if (downloadTitle) {
+      downloadTitle.textContent =
+        complete && total
+          ? 'Battlecard Excel (.xlsx) · ' + total + ' competitors'
+          : 'Battlecard Excel (.xlsx)';
+    }
+
+    const downloadSub = $('#rwDownloadSub');
+    if (downloadSub) {
+      if (complete) downloadSub.textContent = 'Ready to download';
+      else if (String(job.status || '').toLowerCase() === 'completed') {
+        downloadSub.textContent = 'Finalizing Excel…';
+      } else {
+        downloadSub.textContent = 'Live progress from the review mining backend';
+      }
+    }
+
+    const emailNote = $('#rwEmailNote');
+    if (emailNote) {
+      const email = job.email || accountEmail() || 'your delivery email';
+      const sent = complete && job.email_sent === true;
+      emailNote.textContent = sent
+        ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
+        : 'Excel (.xlsx) will also be emailed to ' + email +
+          ' when the backend marks it ready — safe to close this tab.';
+      emailNote.classList.toggle('is-sent', sent);
+    }
+
+    const tableMeta = $('#rwTableMeta');
+    if (tableMeta) {
+      const count = (job.preview_rows || []).length;
+      tableMeta.textContent =
+        'Live preview · ' + count + ' competitor' + (count === 1 ? '' : 's') +
+        ' mapped · complaints, vulnerabilities & counter-pitches';
+    }
+
+    renderRwJobSummary();
+  }
+
+  function renderRwTable() {
+    const table = $('#rwTable');
+    if (!table || !state.reviewJob) return;
+    const job = state.reviewJob;
+    const rows = Array.isArray(job.preview_rows) ? job.preview_rows.slice(0, 50) : [];
+    const message =
+      String(job.status || '').toLowerCase() === 'completed'
+        ? 'Preview unavailable — download the .xlsx for the full battlecard.'
+        : 'Waiting for the first competitor battlecard…';
+    renderPreviewTable(table, RW_PREVIEW_COLUMNS, rows, message);
+
+    const pill = $('#rwPreviewPill');
+    if (pill) {
+      pill.textContent = rows.length + ' competitor' + (rows.length === 1 ? '' : 's');
+    }
+  }
+
+  function completeRwJob(silent) {
+    const job = state.reviewJob;
+    if (!job) return;
+
+    job.status = 'completed';
+    job.download_ready = true;
+    job.percent = 100;
+
+    updateRwProgress();
+    renderRwTable();
+
+    stopRwTimer();
+    historyState.loaded = false;
+    saveState();
+
+    setRwBadge('ok', 'Completed · .xlsx ready');
+    if (!silent) toast('Review battlecard is ready to download.', 'success');
+  }
+
+  function failRwJob(reason) {
+    const job = state.reviewJob;
+    if (!job) return;
+    job.status = 'failed';
+    job.error = reason || '';
+    stopRwTimer();
+    saveState();
+    updateRwProgress();
+    setRwBadge('fail', 'Job failed · ' + (reason || 'please try again'));
+  }
+
+  function downloadRwExcel(jobId) {
+    const job = state.reviewJob || {};
+    const id = String(jobId || job.job_id || '').trim();
+    if (!id || !RW_DOWNLOAD_URL) {
+      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      return;
+    }
+
+    toast('Requesting your review battlecard from the cloud…', 'info');
+
+    fetch(RW_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
+      mode: 'cors',
+      headers: authHeaders()
+    })
+      .then(function (response) {
+        if (response.status === 401) {
+          handleAuthExpired(
+            'Your session expired. Log in again to download your battlecard.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          toast('Insufficient credits for this download.', 'warn');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (!blob) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = 'litework-review-battlecard-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
+        toast('Battlecard Excel download ready.', 'success');
+      })
+      .catch(function (err) {
+        console.warn('[LiteWork] Review Miner download failed.', err);
+        toast('Could not download the battlecard Excel. Please try again.', 'warn');
+      });
+  }
+
+  function openRwHistoryJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return;
+
+    stopRwTimer();
+    const known = (historyState.review || []).filter(function (entry) {
+      return String(entry.job_id || '') === id;
+    })[0];
+    const current = state.reviewJob;
+    const sameJob = !!current && String(current.job_id || '') === id;
+
+    if (!sameJob) {
+      state.reviewJob = {
+        job_id: id,
+        status: 'processing',
+        percent: 0,
+        competitors_total: known ? known.competitors : 0,
+        competitors_mined: 0,
+        reviews_count: known ? known.reviews : 0,
+        active_competitor: '',
+        download_ready: false,
+        preview_rows: [],
+        credits_spent: known ? known.credits : 0,
+        review_focus: 'low',
+        email: accountEmail(),
+        created_at: new Date().toISOString(),
+        poll_errors: 0
+      };
+    } else {
+      current.poll_errors = 0;
+      current.error = '';
+      if (rwJobFailed(current)) current.status = 'processing';
+    }
+    saveState();
+
+    if (currentRoute() === 'review-results') {
+      renderRwResults();
+      startRwPolling(state.reviewJob, true);
+    } else {
+      window.location.hash = '#review-results';
+    }
+  }
+
+  /* ----- Review Miner configuration modal ----- */
+  function rwSheetsChipsHtml() {
+    return (
+      '<div class="inv-cols-block">' +
+      '<p class="inv-cols-title">3 Excel Sheets Included</p>' +
+      '<div class="inv-chips">' +
+      RW_SHEETS.map(function (label) {
+        return '<span class="inv-chip">' + escapeHtml(label) + '</span>';
+      }).join('') +
+      '</div>' +
+      '<p class="inv-chip-note">Executive Battlecard · Complaint Breakdown · Raw Reviews</p>' +
+      '</div>'
+    );
+  }
+
+  function updateReviewRowButtons() {
+    const rows = $$('#rwRows .rw-row');
+    const count = rows.length;
+    rows.forEach(function (row) {
+      const btn = row.querySelector('[data-rw-remove]');
+      if (btn) btn.disabled = count <= 1;
+    });
+    const addBtn = $('#rwAddBtn');
+    if (addBtn) {
+      const full = count >= RW_TIER_2_MAX;
+      addBtn.disabled = full;
+      addBtn.textContent = full
+        ? 'Maximum ' + RW_TIER_2_MAX + ' competitors'
+        : '+ Add Competitor';
+    }
+    const hint = $('#rwCountHint');
+    if (hint) hint.textContent = count + ' of ' + RW_TIER_2_MAX;
+  }
+
+  function updateReviewQuote() {
+    const list = rwCompetitors();
+    const quote = rwQuote(list.length);
+
+    const availableEl = $('#rwAvailable');
+    if (availableEl) availableEl.textContent = state.credits + ' Credits';
+
+    const countEl = $('#rwCompetitorCount');
+    if (countEl) {
+      countEl.textContent = String(list.length);
+      countEl.classList.toggle('is-zero', list.length === 0);
+    }
+
+    const tierEl = $('#rwTier');
+    if (tierEl) {
+      tierEl.textContent = quote.tier;
+      tierEl.classList.toggle('is-zero', list.length === 0);
+    }
+
+    const costEl = $('#rwCost');
+    if (costEl) costEl.textContent = quote.credits + ' Credits';
+
+    const shortfall = quote.credits - state.credits;
+    const shortEl = $('#reviewShortfall');
+    if (shortEl) {
+      if (list.length > 0 && shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this run. Top up credits to continue.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+
+    const btn = $('#reviewStartBtn');
+    if (btn) {
+      btn.disabled = rwStarting || list.length === 0 || !quote.credits;
+      btn.textContent = rwStarting
+        ? 'Starting review mining…'
+        : 'Confirm & Spend ' + quote.credits + ' Credit' + (quote.credits === 1 ? '' : 's');
+    }
+  }
+
+  function addReviewRow(value) {
+    const rows = $('#rwRows');
+    if (!rows) return;
+    if (rows.children.length >= RW_TIER_2_MAX) {
+      toast('Up to ' + RW_TIER_2_MAX + ' competitors per run.', 'warn');
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'rw-row';
+    row.innerHTML =
+      '<input type="text" data-rw-competitor autocomplete="off" ' +
+      'placeholder=\'e.g. "ABC Dental Clinic, Johor Bahru" or a Google Maps URL\' />' +
+      '<button type="button" class="rw-remove" data-rw-remove aria-label="Remove competitor">×</button>';
+    rows.appendChild(row);
+
+    const input = row.querySelector('[data-rw-competitor]');
+    if (input) {
+      input.value = value || '';
+      input.addEventListener('input', updateReviewQuote);
+    }
+    const removeBtn = row.querySelector('[data-rw-remove]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        if ($$('#rwRows .rw-row').length <= 1) return;
+        row.parentNode.removeChild(row);
+        updateReviewRowButtons();
+        updateReviewQuote();
+      });
+    }
+
+    updateReviewRowButtons();
+    updateReviewQuote();
+    if (input && !value) input.focus();
+  }
+
+  function openReviewMinerModal() {
+    if (!requireAuth({ action: 'review' })) return;
+
+    rwStarting = false;
+    rwFocus = 'low';
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Competitor Review Miner</h2>' +
+      '<p class="modal-sub">Mine 1–5 competitors\' Google reviews into an Executive Battlecard · 5 credits (1–3 competitors) · 8 credits (4–5 competitors)</p>' +
+      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="rwAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Competitors</span>' +
+      '<span class="calc-value is-zero" id="rwCompetitorCount">0</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Tier</span>' +
+      '<span class="calc-value is-zero" id="rwTier">No competitors</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="rwCost">0 Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="reviewForm" novalidate>' +
+      '<div class="field"><label for="reviewEmail">Delivery email</label>' +
+      '<input type="email" id="reviewEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
+      '<div class="modal-section"><h3>Competitors</h3>' +
+      '<span class="fine">Add 1–' + RW_TIER_2_MAX + ' names or Google Maps URLs</span></div>' +
+      '<div class="rw-rows" id="rwRows"></div>' +
+      '<div class="rw-add-row">' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="rwAddBtn">+ Add Competitor</button>' +
+      '<span class="fine" id="rwCountHint">1 of ' + RW_TIER_2_MAX + '</span>' +
+      '</div>' +
+      '<div class="modal-section"><h3>Review focus</h3></div>' +
+      '<div class="rw-focus" id="rwFocusGroup" role="radiogroup" aria-label="Review focus">' +
+      '<button type="button" class="rw-focus-option is-active" data-rw-focus="low" role="radio" aria-checked="true">' +
+      '<strong>Low Ratings Only (1–3★ Pain Points)</strong>' +
+      '<span>Fastest path to the weaknesses rivals are already being criticised for.</span>' +
+      '</button>' +
+      '<button type="button" class="rw-focus-option" data-rw-focus="all" role="radio" aria-checked="false">' +
+      '<strong>All Reviews (1–5★ Full SWOT)</strong>' +
+      '<span>Full strengths, weaknesses, opportunities and threats per competitor.</span>' +
+      '</button>' +
+      '</div>' +
+      '<div class="field"><label for="rwPitch">Your key advantage (optional — tailors the Sales Counter-Pitch)</label>' +
+      '<input type="text" id="rwPitch" autocomplete="off" placeholder="e.g. Same-day delivery with fixed, all-in pricing" /></div>' +
+      rwSheetsChipsHtml() +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="reviewFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="reviewShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="reviewStartBtn" disabled>' +
+      'Confirm & Spend 0 Credits</button>' +
+      '<p class="fine">Credits are deducted immediately. Review mining runs in the cloud.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    const addBtn = $('#rwAddBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        addReviewRow('');
+      });
+    }
+
+    const focusGroup = $('#rwFocusGroup');
+    if (focusGroup) {
+      focusGroup.addEventListener('click', function (event) {
+        const option = event.target.closest('[data-rw-focus]');
+        if (!option) return;
+        rwFocus = option.getAttribute('data-rw-focus') === 'all' ? 'all' : 'low';
+        $$('#rwFocusGroup [data-rw-focus]').forEach(function (btn) {
+          const on = btn === option;
+          btn.classList.toggle('is-active', on);
+          btn.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+      });
+    }
+
+    const form = $('#reviewForm');
+    if (form) form.addEventListener('submit', handleReviewMinerStart);
+
+    addReviewRow('');
+    updateReviewQuote();
+  }
+
+  function openReviewSheetsModal() {
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Review Miner — Excel Output</h2>' +
+      '<p class="modal-sub">One workbook, three sheets, ready to hand to sales.</p>' +
+      rwSheetsChipsHtml() +
+      '<ul class="cross-list">' +
+      '<li>Executive Battlecard — one row per competitor with rating, complaints, vulnerability and counter-pitch</li>' +
+      '<li>Complaint Breakdown — every recurring complaint theme with frequency</li>' +
+      '<li>Raw Reviews — the source reviews behind each insight</li>' +
+      '</ul>' +
+      '<div class="modal-actions">' +
+      '<button type="button" class="btn btn-ghost" data-modal-close>Close</button>' +
+      '</div>',
+      false
+    );
+  }
+
+  function handleReviewMinerStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'review' });
+      return;
+    }
+
+    const errEl = $('#reviewFormError');
+    const competitors = rwCompetitors();
+    const quote = rwQuote(competitors.length);
+
+    if (!competitors.length) {
+      if (errEl) errEl.textContent = 'Add at least one competitor to continue.';
+      return;
+    }
+    if (competitors.length > RW_TIER_2_MAX) {
+      if (errEl) errEl.textContent = 'Maximum ' + RW_TIER_2_MAX + ' competitors per run.';
+      return;
+    }
+    if (state.credits < quote.credits) {
+      const shortfall = quote.credits - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this run. Top up credits to continue.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    rwStarting = true;
+    updateReviewQuote();
+
+    const email = accountEmail();
+    const pitchEl = $('#rwPitch');
+    const pitch = pitchEl ? String(pitchEl.value || '').trim() : '';
+
+    apiFetch(
+      RW_START_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email,
+          competitors: competitors,
+          review_focus: rwFocus,
+          focus: rwFocus,
+          pitch_angle: pitch,
+          credits: quote.credits
+        })
+      },
+      60000
+    )
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to launch Review Miner.',
+            { action: 'review' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this run. Top up credits to continue.';
+            }
+            rwStarting = false;
+            updateReviewQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const returnedId =
+          outer.job_id || outer.jobId || outer.id || inner.job_id || inner.id || '';
+
+        state.reviewJob = {
+          job_id: String(returnedId || 'rev_' + Date.now()),
+          status: String(outer.status || inner.status || 'processing').toLowerCase(),
+          percent: 0,
+          competitors_total:
+            Number(outer.competitors_total || outer.total_competitors || 0) ||
+            competitors.length,
+          competitors_mined: 0,
+          reviews_count: 0,
+          active_competitor: '',
+          download_ready: false,
+          preview_rows: [],
+          credits_spent: quote.credits,
+          review_focus: rwFocus,
+          email: email,
+          created_at: new Date().toISOString(),
+          poll_errors: 0
+        };
+        saveState();
+
+        rwStarting = false;
+        closeModal(false);
+        toast(
+          'Review mining started — ' + competitors.length + ' competitor' +
+            (competitors.length === 1 ? '' : 's') + ' queued.',
+          'success'
+        );
+
+        if (window.location.hash === '#review-results') {
+          renderRwResults();
+          startRwPolling(state.reviewJob);
+        } else {
+          window.location.hash = '#review-results';
+        }
+      })
+      .catch(function (err) {
+        rwStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the review mining job. Please try again.';
+        }
+        updateReviewQuote();
+        console.warn('[LiteWork] Review Miner start failed.', err);
+      });
+  }
+
   /* Returning to the tab should never wait for the next 2.5s tick. */
   function resumePollingOnFocus() {
     if (document.visibilityState === 'hidden') return;
@@ -7133,6 +9894,12 @@
     }
     if (route === 'invoice-results' && invoicePollActive(state.invoiceJob)) {
       forceInvoicePollNow();
+    }
+    if (route === 'enricher-results' && lePollActive(state.enricherJob)) {
+      forceLePollNow();
+    }
+    if (route === 'review-results' && rwPollActive(state.reviewJob)) {
+      forceRwPollNow();
     }
   }
 

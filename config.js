@@ -367,6 +367,67 @@ window.CONFIG = {
   ],
   INVOICE_OCR_DEFAULT_EXPORT_FORMAT: 'standard',
 
+  /* --- Lead Enricher agent (4th live worker) ------------------------------
+     Upload an Excel/CSV list of websites (or reuse a finished Lead Scraper
+     job) and get 10 extra columns back: public emails, live DNS/MX checks,
+     WhatsApp + social profiles and an optional AI cold opener.
+     Tier pricing: 1–50 sites = 5 cr · 51–150 = 10 cr · 151–300 = 15 cr. */
+  LEAD_ENRICHER_AGENT_ID: 'website-email-lead-enricher',
+  LEAD_ENRICHER_AGENT_NAME: 'Website & Email Lead Enricher',
+  LEAD_ENRICHER_TIER_1_MAX: 50,
+  LEAD_ENRICHER_TIER_1_CREDITS: 5,
+  LEAD_ENRICHER_TIER_2_MAX: 150,
+  LEAD_ENRICHER_TIER_2_CREDITS: 10,
+  LEAD_ENRICHER_TIER_3_MAX: 300,
+  LEAD_ENRICHER_TIER_3_CREDITS: 15,
+  LEAD_ENRICHER_MAX_FILE_MB: 10,
+  LEAD_ENRICHER_POLL_MS: 2500,
+  LEAD_ENRICHER_START_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/lead-enricher-start',
+  LEAD_ENRICHER_STATUS_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/lead-enricher-status',
+  LEAD_ENRICHER_DOWNLOAD_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-enriched-leads',
+  LEAD_ENRICHER_ACCEPT: '.xlsx,.xls,.csv',
+
+  /* The 10 fixed columns appended to the uploaded Excel by the enricher. */
+  LEAD_ENRICHER_COLUMNS: [
+    'Public Email 1',
+    'Public Email 2',
+    'Email Source Page',
+    'MX / DNS Status',
+    'Website Status',
+    'WhatsApp Number',
+    'Facebook URL',
+    'Instagram URL',
+    'LinkedIn URL',
+    'AI Outreach Opener'
+  ],
+
+  /* --- Review Miner agent (5th live worker) ------------------------------
+     Mines 1–5 competitors' Google reviews into an Executive Battlecard
+     .xlsx. Tier pricing: 1–3 competitors = 5 cr · 4–5 competitors = 8 cr. */
+  REVIEW_MINER_AGENT_ID: 'competitor-review-miner',
+  REVIEW_MINER_AGENT_NAME: 'Competitor Review Miner',
+  REVIEW_MINER_TIER_1_MAX: 3,
+  REVIEW_MINER_TIER_1_CREDITS: 5,
+  REVIEW_MINER_TIER_2_MAX: 5,
+  REVIEW_MINER_TIER_2_CREDITS: 8,
+  REVIEW_MINER_POLL_MS: 2500,
+  REVIEW_MINER_START_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/review-miner-start',
+  REVIEW_MINER_STATUS_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/review-miner-status',
+  REVIEW_MINER_DOWNLOAD_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-review-battlecard',
+
+  /* The 3 sheets written into the battlecard workbook. */
+  REVIEW_MINER_SHEETS: [
+    'Executive Battlecard',
+    'Complaint Breakdown',
+    'Raw Reviews'
+  ],
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
