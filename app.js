@@ -2153,6 +2153,12 @@
 
   /* ============ GLOBAL ACTIVE-JOB PROGRESS PILL (bottom-right) ============ */
   let dismissedJobPillId = '';
+  const JOB_PILL_POS_KEY = 'lw_job_pill_pos';
+  const JOB_PILL_MARGIN = 12;
+  const JOB_PILL_DEFAULT_GAP = 20;
+  const JOB_PILL_DRAG_THRESHOLD = 6;
+  let jobPillDrag = null;
+  let jobPillSuppressClick = false;
 
   function jobPillStartedAt(job) {
     const raw = job && (job.started_at || job.created_at || job.submitted_at);
@@ -2217,6 +2223,86 @@
       });
   }
 
+  /* --- Position persistence + viewport clamping -------------------------- */
+  function readJobPillPos() {
+    try {
+      const raw = window.localStorage.getItem(JOB_PILL_POS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const left = Number(parsed && parsed.left);
+      const top = Number(parsed && parsed.top);
+      if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+      return { left: left, top: top };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function saveJobPillPos(left, top) {
+    try {
+      window.localStorage.setItem(
+        JOB_PILL_POS_KEY,
+        JSON.stringify({ left: Math.round(left), top: Math.round(top) })
+      );
+    } catch (err) {
+      /* Private mode / storage disabled — position simply won't persist. */
+    }
+  }
+
+  /* 12px margin on all 4 edges; never negative when the pill is wider than
+     the viewport (it then pins to the left/top margin). */
+  function clampJobPillAxis(value, size, viewport) {
+    const max = viewport - size - JOB_PILL_MARGIN;
+    if (max < JOB_PILL_MARGIN) return JOB_PILL_MARGIN;
+    return Math.min(Math.max(JOB_PILL_MARGIN, value), max);
+  }
+
+  function applyJobPillPosition(left, top, persist) {
+    const pill = $('#jobPill');
+    if (!pill || pill.hidden) return null;
+
+    const width = pill.offsetWidth;
+    const height = pill.offsetHeight;
+    const clampedLeft = clampJobPillAxis(left, width, window.innerWidth);
+    const clampedTop = clampJobPillAxis(top, height, window.innerHeight);
+
+    pill.style.left = clampedLeft + 'px';
+    pill.style.top = clampedTop + 'px';
+    pill.style.right = 'auto';
+    pill.style.bottom = 'auto';
+
+    if (persist) saveJobPillPos(clampedLeft, clampedTop);
+    return { left: clampedLeft, top: clampedTop };
+  }
+
+  /* Restore the saved position, or default to bottom-right (20px gap). */
+  function restoreJobPillPosition() {
+    const pill = $('#jobPill');
+    if (!pill || pill.hidden) return;
+
+    const stored = readJobPillPos();
+    if (stored) {
+      applyJobPillPosition(stored.left, stored.top, false);
+      return;
+    }
+
+    applyJobPillPosition(
+      window.innerWidth - pill.offsetWidth - JOB_PILL_DEFAULT_GAP,
+      window.innerHeight - pill.offsetHeight - JOB_PILL_DEFAULT_GAP,
+      false
+    );
+  }
+
+  /* window.resize / orientationchange: keep the pill inside the viewport. */
+  function reclampJobPillPosition() {
+    const pill = $('#jobPill');
+    if (!pill || pill.hidden) return;
+    const rect = pill.getBoundingClientRect();
+    /* Persist only if the user had already chosen a position; otherwise the
+       default stays a computed bottom-right anchor. */
+    applyJobPillPosition(rect.left, rect.top, !!readJobPillPos());
+  }
+
   function updateJobPill() {
     const pill = $('#jobPill');
     if (!pill) return;
@@ -2242,6 +2328,7 @@
       return;
     }
 
+    const wasHidden = pill.hidden;
     pill.hidden = false;
     pill.classList.toggle('is-done', primary.complete);
     pill.dataset.route = primary.route;
@@ -2266,28 +2353,148 @@
 
     const dismiss = $('#jobPillDismiss');
     if (dismiss) dismiss.hidden = !primary.complete;
+
+    /* First paint (or first show after hiding) — place from saved/default. */
+    if (wasHidden) restoreJobPillPosition();
+  }
+
+  function moveJobPill(event) {
+    if (!jobPillDrag || event.pointerId !== jobPillDrag.pointerId) return;
+
+    const dx = event.clientX - jobPillDrag.startX;
+    const dy = event.clientY - jobPillDrag.startY;
+
+    if (!jobPillDrag.moved) {
+      if (Math.sqrt(dx * dx + dy * dy) <= JOB_PILL_DRAG_THRESHOLD) return;
+      jobPillDrag.moved = true;
+      const pill = $('#jobPill');
+      if (pill) pill.classList.add('is-dragging');
+    }
+
+    if (event.cancelable) event.preventDefault();
+    const applied = applyJobPillPosition(
+      jobPillDrag.originLeft + dx,
+      jobPillDrag.originTop + dy,
+      false
+    );
+
+    /* Rebase the drag origin on the clamped result so over-dragging past an
+       edge never creates a dead zone when the user drags back. */
+    if (applied) {
+      jobPillDrag.originLeft = applied.left - dx;
+      jobPillDrag.originTop = applied.top - dy;
+    }
+  }
+
+  /* Finish a pointer gesture: persist only if it actually became a drag. */
+  function endJobPillDrag(event) {
+    if (!jobPillDrag) return;
+    if (event && event.pointerId != null && event.pointerId !== jobPillDrag.pointerId) return;
+
+    const pill = $('#jobPill');
+    const moved = jobPillDrag.moved;
+    const pointerId = jobPillDrag.pointerId;
+    jobPillDrag = null;
+
+    if (pill) {
+      pill.classList.remove('is-dragging');
+      if (pill.releasePointerCapture && pointerId != null) {
+        try {
+          pill.releasePointerCapture(pointerId);
+        } catch (err) {
+          /* capture already released */
+        }
+      }
+      if (moved) {
+        const rect = pill.getBoundingClientRect();
+        applyJobPillPosition(rect.left, rect.top, true);
+      }
+    }
+
+    if (moved) {
+      /* Swallow the synthetic click that follows a drag release. */
+      jobPillSuppressClick = true;
+      window.setTimeout(function () {
+        jobPillSuppressClick = false;
+      }, 350);
+    }
   }
 
   function bindJobPill() {
     const pill = $('#jobPill');
     if (!pill) return;
 
-    const main = $('#jobPillMain');
-    if (main) {
-      main.addEventListener('click', function () {
-        const target = pill.dataset.route;
-        if (target) window.location.hash = '#' + target;
-      });
-    }
+    /* One click handler on the pill itself: pointer capture can retarget the
+       synthesized click to the capturing element, so listening on #jobPill
+       guarantees normal clicks (and grip clicks) still open the results page. */
+    pill.addEventListener('click', function (event) {
+      if (jobPillSuppressClick) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.target.closest && event.target.closest('#jobPillDismiss')) return;
+      const target = pill.dataset.route;
+      if (target) window.location.hash = '#' + target;
+    });
 
     const dismiss = $('#jobPillDismiss');
     if (dismiss) {
       dismiss.addEventListener('click', function (event) {
+        if (jobPillSuppressClick) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         event.stopPropagation();
         dismissedJobPillId = pill.dataset.jobId || '';
         pill.hidden = true;
       });
     }
+
+    /* Unified Pointer Events: mouse, trackpad and touch all behave the same.
+       Dragging starts anywhere on the pill except the × dismiss button, and
+       only after the pointer travels more than JOB_PILL_DRAG_THRESHOLD. */
+    pill.addEventListener('pointerdown', function (event) {
+      if (pill.hidden) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+      /* Any fresh press clears the previous drag's click guard. */
+      jobPillSuppressClick = false;
+
+      /* × always clicks — never starts a drag. */
+      if (event.target.closest && event.target.closest('#jobPillDismiss')) return;
+
+      const rect = pill.getBoundingClientRect();
+      jobPillDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originLeft: rect.left,
+        originTop: rect.top,
+        moved: false
+      };
+
+      if (pill.setPointerCapture) {
+        try {
+          pill.setPointerCapture(event.pointerId);
+        } catch (err) {
+          /* capture unsupported — window listeners below still track it */
+        }
+      }
+    });
+
+    /* Window-level tracking works with or without pointer capture. */
+    window.addEventListener('pointermove', moveJobPill);
+    window.addEventListener('pointerup', endJobPillDrag);
+    window.addEventListener('pointercancel', endJobPillDrag);
+    pill.addEventListener('lostpointercapture', endJobPillDrag);
+
+    /* Keep the pill on-screen after resize / iPad orientation changes. */
+    window.addEventListener('resize', reclampJobPillPosition);
+    window.addEventListener('orientationchange', function () {
+      window.setTimeout(reclampJobPillPosition, 250);
+    });
 
     window.setInterval(updateJobPill, 1000);
     updateJobPill();

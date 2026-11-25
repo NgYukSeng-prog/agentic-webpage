@@ -8079,14 +8079,14 @@ table.leads-table {
    ====================================================================== */
 .job-pill {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  left: auto;
+  top: auto;
   z-index: 90;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 5px 6px 5px 5px;
-  max-width: calc(100vw - 32px);
+  max-width: calc(100vw - 24px);
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.94);
   backdrop-filter: blur(16px) saturate(150%);
@@ -8094,10 +8094,42 @@ table.leads-table {
   border: 1px solid rgba(34, 211, 238, 0.4);
   box-shadow: 0 22px 48px -20px rgba(2, 6, 23, 0.95);
   animation: jobPillIn 0.22s ease;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .job-pill[hidden] {
   display: none;
+}
+
+.job-pill.is-dragging {
+  animation: none;
+  cursor: grabbing;
+  box-shadow: 0 30px 60px -18px rgba(2, 6, 23, 0.98);
+}
+
+.job-pill-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px 0 8px;
+  margin-right: -3px;
+  color: rgba(148, 163, 184, 0.8);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -2px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.job-pill.is-dragging .job-pill-grip {
+  cursor: grabbing;
+  color: rgba(226, 232, 240, 0.95);
 }
 
 .job-pill.is-done {
@@ -8209,11 +8241,6 @@ table.leads-table {
 }
 
 @media (max-width: 520px) {
-  .job-pill {
-    right: 12px;
-    bottom: 16px;
-  }
-
   .job-pill-text {
     max-width: 140px;
   }
