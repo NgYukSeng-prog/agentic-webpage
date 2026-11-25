@@ -41,6 +41,13 @@ window.CONFIG = {
   AUTH_TOKEN_KEY: 'aaas_token',
   FREE_SIGNUP_CREDITS: 5,
 
+  /* --- Home page layout --------------------------------------------------
+     Home is rendered from index.html with BOTH templates in the DOM.
+     'template2' = calm editorial layout (default)
+     'template1' = original hero + stats + steps layout
+     Change this one string to restore the original Home page instantly. */
+  HOME_TEMPLATE: 'template2',
+
   /* --- Billing / credit checkout ---------------------------------------- */
   BILLING_CHECKOUT_URL: 'https://n8n.20.205.96.122.sslip.io/webhook/billing/create-checkout',
   /* Manual top-up fallback while online card/bank checkout is onboarding. */

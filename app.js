@@ -98,6 +98,11 @@
       'Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).'
   );
   const FREE_SIGNUP_CREDITS = toPositiveInt(CFG.FREE_SIGNUP_CREDITS, 5);
+  /* Home layout: 'template2' = editorial layout, 'template1' = original. */
+  const HOME_TEMPLATE =
+    String(CFG.HOME_TEMPLATE || 'template1').toLowerCase() === 'template2'
+      ? 'template2'
+      : 'template1';
   const GOOGLE_CLIENT_ID = String(CFG.GOOGLE_CLIENT_ID || '').trim();
   const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
 
@@ -2148,100 +2153,207 @@
     document.title = TITLES[route] || TITLES.home;
     window.scrollTo(0, 0);
 
-    updateJobPill();
+    updateJobDock();
   }
 
-  /* ============ GLOBAL ACTIVE-JOB PROGRESS PILL (bottom-right) ============ */
-  let dismissedJobPillId = '';
-  const JOB_PILL_POS_KEY = 'lw_job_pill_pos';
-  const JOB_PILL_MARGIN = 12;
-  const JOB_PILL_DEFAULT_GAP = 20;
-  const JOB_PILL_DRAG_THRESHOLD = 6;
-  let jobPillDrag = null;
-  let jobPillSuppressClick = false;
+  /* ============ GLOBAL ACTIVE-JOB DOCK (multi-job AssistiveTouch) ========= */
+  const JOB_DOCK_POS_KEY = 'lw_job_pill_pos';
+  const JOB_DOCK_DISMISS_KEY = 'lw_job_dismissed';
+  const JOB_DOCK_MARGIN = 12;
+  const JOB_DOCK_DEFAULT_GAP = 20;
+  const JOB_DOCK_DRAG_THRESHOLD = 6;
 
-  function jobPillStartedAt(job) {
+  /* In-progress states used by the five workers' backends. */
+  const JOB_DOCK_RUNNING = [
+    'running',
+    'queued',
+    'starting',
+    'exporting',
+    'processing',
+    'pending',
+    'waiting',
+    'refreshing'
+  ];
+  const JOB_DOCK_DONE = ['completed', 'complete', 'success', 'done'];
+  const JOB_DOCK_FAILED = ['failed', 'error', 'cancelled', 'canceled'];
+
+  /* Jobs seen running in THIS session — only these may surface once finished.
+     Old completed jobs restored from localStorage never enter this set. */
+  const activeJobIds = new Set();
+  let jobDockDrag = null;
+  let jobDockSuppressClick = false;
+  let lastJobDockSignature = '';
+
+  function loadDismissedJobIds() {
+    const set = new Set();
+    try {
+      const raw = window.sessionStorage.getItem(JOB_DOCK_DISMISS_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(list)) {
+        list.forEach(function (id) {
+          if (id) set.add(String(id));
+        });
+      }
+    } catch (err) {
+      /* sessionStorage unavailable — dismissal is session-memory only. */
+    }
+    return set;
+  }
+
+  const dismissedJobIds = loadDismissedJobIds();
+
+  function saveDismissedJobIds() {
+    try {
+      window.sessionStorage.setItem(
+        JOB_DOCK_DISMISS_KEY,
+        JSON.stringify(Array.from(dismissedJobIds))
+      );
+    } catch (err) {
+      /* ignore */
+    }
+  }
+
+  function dismissJobDockId(id) {
+    const key = String(id || '');
+    if (!key) return;
+    dismissedJobIds.add(key);
+    saveDismissedJobIds();
+    lastJobDockSignature = '';
+    updateJobDock();
+  }
+
+  function findJobById(id) {
+    const key = String(id || '');
+    if (!key) return null;
+    const jobs = [state.scraperJob, state.invoiceJob, state.enricherJob, state.reviewJob];
+    for (let i = 0; i < jobs.length; i += 1) {
+      if (jobs[i] && String(jobs[i].job_id) === key) return jobs[i];
+    }
+    return null;
+  }
+
+  function jobDockStartedAt(job) {
     const raw = job && (job.started_at || job.created_at || job.submitted_at);
     const ms = raw ? new Date(raw).getTime() : NaN;
     return Number.isFinite(ms) ? ms : 0;
   }
 
-  function jobPillNumber(value) {
+  function jobDockNumber(value) {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
   }
 
-  function jobPillEntries() {
+  function jobDockState(job) {
+    const status = String((job && job.status) || '').toLowerCase();
+    if (JOB_DOCK_RUNNING.indexOf(status) !== -1) return 'running';
+    if (JOB_DOCK_DONE.indexOf(status) !== -1) return 'done';
+    if (JOB_DOCK_FAILED.indexOf(status) !== -1) return 'failed';
+    return '';
+  }
+
+  /* Build the visible stack: every in-progress job + only jobs that ran in
+     this session and have just finished (until dismissed). */
+  function jobDockEntries() {
     const defs = [
       {
         job: state.scraperJob,
         route: 'scraper-results',
-        name: LEAD_AGENT_NAME,
-        complete: scraperIsComplete(state.scraperJob),
-        failed: scraperJobFailed(state.scraperJob),
-        percent: scraperPercent(state.scraperJob)
+        name: 'Lead Scraper',
+        percent: jobDockNumber(scraperPercent(state.scraperJob))
       },
       {
         job: state.invoiceJob,
         route: 'invoice-results',
-        name: INV_AGENT_NAME,
-        complete: invoiceIsComplete(state.invoiceJob),
-        failed: invoiceJobFailed(state.invoiceJob),
-        percent: jobPillNumber(state.invoiceJob && state.invoiceJob.percent)
+        name: 'Invoice OCR',
+        percent: jobDockNumber(state.invoiceJob && state.invoiceJob.percent)
       },
       {
         job: state.enricherJob,
         route: 'enricher-results',
-        name: LE_AGENT_NAME,
-        complete: leIsComplete(state.enricherJob),
-        failed: leJobFailed(state.enricherJob),
-        percent: jobPillNumber(state.enricherJob && state.enricherJob.percent)
+        name: 'Lead Enricher',
+        percent: jobDockNumber(state.enricherJob && state.enricherJob.percent)
       },
       {
         job: state.reviewJob,
         route: 'review-results',
-        name: RW_AGENT_NAME,
-        complete: rwIsComplete(state.reviewJob),
-        failed: rwJobFailed(state.reviewJob),
-        percent: jobPillNumber(state.reviewJob && state.reviewJob.percent)
+        name: 'Review Miner',
+        percent: jobDockNumber(state.reviewJob && state.reviewJob.percent)
       }
     ];
 
-    return defs
-      .filter(function (entry) {
-        return !!entry.job && !!entry.job.job_id && !entry.failed;
-      })
-      .map(function (entry) {
-        return {
-          id: String(entry.job.job_id),
-          route: entry.route,
-          name: entry.name,
-          complete: entry.complete,
-          percent: entry.complete ? 100 : clamp(entry.percent, 0, 99),
-          startedAt: jobPillStartedAt(entry.job)
-        };
-      });
+    const entries = [];
+
+    defs.forEach(function (def) {
+      const job = def.job;
+      if (!job || !job.job_id) return;
+
+      const id = String(job.job_id);
+      if (dismissedJobIds.has(id)) return;
+
+      const stateName = jobDockState(job);
+
+      if (stateName === 'running') {
+        activeJobIds.add(id);
+        entries.push({
+          id: id,
+          route: def.route,
+          name: def.name,
+          state: 'running',
+          percent: clamp(jobDockNumber(def.percent), 0, 99),
+          startedAt: jobDockStartedAt(job)
+        });
+        return;
+      }
+
+      /* Finished/failed jobs surface only if they ran in this session. */
+      if (!activeJobIds.has(id)) return;
+
+      if (stateName === 'done') {
+        entries.push({
+          id: id,
+          route: def.route,
+          name: def.name,
+          state: 'done',
+          percent: 100,
+          startedAt: jobDockStartedAt(job)
+        });
+      } else if (stateName === 'failed') {
+        entries.push({
+          id: id,
+          route: def.route,
+          name: def.name,
+          state: 'failed',
+          percent: clamp(jobDockNumber(def.percent), 0, 99),
+          startedAt: jobDockStartedAt(job)
+        });
+      }
+    });
+
+    return entries.sort(function (a, b) {
+      return b.startedAt - a.startedAt;
+    });
   }
 
   /* --- Header safe zone, persistence and magnetic edge snapping ---------- */
-  function jobPillHeaderBottom() {
+  function jobDockHeaderBottom() {
     const headerEl = document.querySelector('header, .site-header, .navbar');
     return headerEl ? headerEl.getBoundingClientRect().bottom : 72;
   }
 
-  function jobPillBounds(pill) {
-    const width = pill.offsetWidth;
-    const height = pill.offsetHeight;
-    /* Safe top begins just below the live header (fallback 72px). */
-    const minTop = Math.ceil(jobPillHeaderBottom() + JOB_PILL_MARGIN);
-    const maxTop = Math.max(minTop, window.innerHeight - height - JOB_PILL_MARGIN);
-    const maxLeft = Math.max(JOB_PILL_MARGIN, window.innerWidth - width - JOB_PILL_MARGIN);
+  /* Bounds cover the ENTIRE stack height, so the last row can never clip off
+     the bottom and the first row can never hide behind the navbar. */
+  function jobDockBounds(dock) {
+    const width = dock.offsetWidth;
+    const height = dock.offsetHeight;
+    const minTop = Math.ceil(jobDockHeaderBottom() + JOB_DOCK_MARGIN);
+    const maxTop = Math.max(minTop, window.innerHeight - height - JOB_DOCK_MARGIN);
+    const maxLeft = Math.max(JOB_DOCK_MARGIN, window.innerWidth - width - JOB_DOCK_MARGIN);
     return { width: width, height: height, minTop: minTop, maxTop: maxTop, maxLeft: maxLeft };
   }
 
-  function readJobPillPos() {
+  function readJobDockPos() {
     try {
-      const raw = window.localStorage.getItem(JOB_PILL_POS_KEY);
+      const raw = window.localStorage.getItem(JOB_DOCK_POS_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const top = Number(parsed && parsed.top);
@@ -2260,10 +2372,10 @@
     }
   }
 
-  function saveJobPillPos(side, top) {
+  function saveJobDockPos(side, top) {
     try {
       window.localStorage.setItem(
-        JOB_PILL_POS_KEY,
+        JOB_DOCK_POS_KEY,
         JSON.stringify({ side: side === 'left' ? 'left' : 'right', top: Math.round(top) })
       );
     } catch (err) {
@@ -2271,271 +2383,304 @@
     }
   }
 
-  function clampJobPillTop(value, bounds) {
+  function clampJobDockTop(value, bounds) {
     return Math.min(Math.max(bounds.minTop, value), bounds.maxTop);
   }
 
-  function clampJobPillLeft(value, bounds) {
-    return Math.min(Math.max(JOB_PILL_MARGIN, value), bounds.maxLeft);
+  function clampJobDockLeft(value, bounds) {
+    return Math.min(Math.max(JOB_DOCK_MARGIN, value), bounds.maxLeft);
   }
 
   function edgeLeftFor(side, bounds) {
-    return side === 'left' ? JOB_PILL_MARGIN : bounds.maxLeft;
+    return side === 'left' ? JOB_DOCK_MARGIN : bounds.maxLeft;
   }
 
-  /* Write the clamped position to the pill (no persistence). `bounds` may be
+  /* Write the clamped position to the dock (no persistence). `bounds` may be
      passed in during a drag to avoid re-measuring on every pointermove. */
-  function setJobPillPosition(left, top, bounds) {
-    const pill = $('#jobPill');
-    if (!pill || pill.hidden) return null;
+  function setJobDockPosition(left, top, bounds) {
+    const dock = $('#jobDock');
+    if (!dock || dock.hidden) return null;
 
-    const b = bounds || jobPillBounds(pill);
-    const clampedLeft = clampJobPillLeft(left, b);
-    const clampedTop = clampJobPillTop(top, b);
+    const b = bounds || jobDockBounds(dock);
+    const clampedLeft = clampJobDockLeft(left, b);
+    const clampedTop = clampJobDockTop(top, b);
 
-    pill.style.left = clampedLeft + 'px';
-    pill.style.top = clampedTop + 'px';
-    pill.style.right = 'auto';
-    pill.style.bottom = 'auto';
+    dock.style.left = clampedLeft + 'px';
+    dock.style.top = clampedTop + 'px';
+    dock.style.right = 'auto';
+    dock.style.bottom = 'auto';
 
     return { left: clampedLeft, top: clampedTop, bounds: b };
   }
 
   /* Restore: pin to the saved side, strictly below the header safe zone.
      With no saved position, default to bottom-right (20px gap). */
-  function restoreJobPillPosition() {
-    const pill = $('#jobPill');
-    if (!pill || pill.hidden) return;
+  function restoreJobDockPosition() {
+    const dock = $('#jobDock');
+    if (!dock || dock.hidden) return;
 
-    const bounds = jobPillBounds(pill);
-    const saved = readJobPillPos();
+    const bounds = jobDockBounds(dock);
+    const saved = readJobDockPos();
 
     if (saved) {
-      setJobPillPosition(edgeLeftFor(saved.side, bounds), clampJobPillTop(saved.top, bounds));
+      setJobDockPosition(edgeLeftFor(saved.side, bounds), clampJobDockTop(saved.top, bounds));
       return;
     }
 
-    setJobPillPosition(
+    setJobDockPosition(
       bounds.maxLeft,
-      clampJobPillTop(window.innerHeight - bounds.height - JOB_PILL_DEFAULT_GAP, bounds)
+      clampJobDockTop(window.innerHeight - bounds.height - JOB_DOCK_DEFAULT_GAP, bounds)
     );
   }
 
   /* Magnetic snap: glide to the nearest left/right edge on release. */
-  function snapJobPillToEdge() {
-    const pill = $('#jobPill');
-    if (!pill || pill.hidden) return null;
+  function snapJobDockToEdge() {
+    const dock = $('#jobDock');
+    if (!dock || dock.hidden) return null;
 
-    const bounds = jobPillBounds(pill);
-    const rect = pill.getBoundingClientRect();
+    const bounds = jobDockBounds(dock);
+    const rect = dock.getBoundingClientRect();
     const centerX = rect.left + bounds.width / 2;
     const side = centerX < window.innerWidth / 2 ? 'left' : 'right';
     const targetLeft = edgeLeftFor(side, bounds);
-    const targetTop = clampJobPillTop(rect.top, bounds);
+    const targetTop = clampJobDockTop(rect.top, bounds);
 
     /* Spring-like glide only for the snap; drag tracking stays instant. */
-    pill.classList.add('is-snapping');
-    void pill.offsetWidth;
-    setJobPillPosition(targetLeft, targetTop);
-    saveJobPillPos(side, targetTop);
+    dock.classList.add('is-snapping');
+    void dock.offsetWidth;
+    setJobDockPosition(targetLeft, targetTop);
+    saveJobDockPos(side, targetTop);
 
     window.setTimeout(function () {
-      pill.classList.remove('is-snapping');
+      dock.classList.remove('is-snapping');
     }, 320);
 
     return { side: side, left: targetLeft, top: targetTop };
   }
 
   /* window.resize / orientationchange: re-pin to the saved edge. */
-  function reclampJobPillPosition() {
-    const pill = $('#jobPill');
-    if (!pill || pill.hidden) return;
+  function reclampJobDockPosition() {
+    const dock = $('#jobDock');
+    if (!dock || dock.hidden) return;
 
-    const bounds = jobPillBounds(pill);
-    const saved = readJobPillPos();
+    const bounds = jobDockBounds(dock);
+    const saved = readJobDockPos();
 
     if (saved) {
-      const top = clampJobPillTop(saved.top, bounds);
-      setJobPillPosition(edgeLeftFor(saved.side, bounds), top);
-      saveJobPillPos(saved.side, top);
+      const top = clampJobDockTop(saved.top, bounds);
+      setJobDockPosition(edgeLeftFor(saved.side, bounds), top);
+      saveJobDockPos(saved.side, top);
       return;
     }
 
-    const rect = pill.getBoundingClientRect();
-    setJobPillPosition(bounds.maxLeft, clampJobPillTop(rect.top, bounds));
+    const rect = dock.getBoundingClientRect();
+    setJobDockPosition(bounds.maxLeft, clampJobDockTop(rect.top, bounds));
   }
 
-  function updateJobPill() {
-    const pill = $('#jobPill');
-    if (!pill) return;
+  function renderJobDockRows(entries) {
+    return entries
+      .map(function (entry) {
+        const done = entry.state === 'done';
+        const failed = entry.state === 'failed';
+        const rowClass = done ? ' is-done' : failed ? ' is-failed' : '';
+        const status = done ? 'Ready' : failed ? 'Failed' : Math.floor(entry.percent) + '%';
+        const action = done || failed ? 'Open →' : 'View →';
+
+        return (
+          '<div class="job-dock-row' + rowClass + '" data-job-row="' + escapeHtml(entry.id) + '">' +
+          '<span class="job-dock-grip" aria-hidden="true">⋮⋮</span>' +
+          (done
+            ? '<span class="job-dock-dot is-check" aria-hidden="true">✓</span>'
+            : '<span class="job-dock-dot" aria-hidden="true"></span>') +
+          '<span class="job-dock-name">' + escapeHtml(entry.name) + '</span>' +
+          '<span class="job-dock-status">' + status + '</span>' +
+          '<button type="button" class="job-dock-open" data-job-open="' + escapeHtml(entry.route) +
+          '" data-job-id="' + escapeHtml(entry.id) + '">' + action + '</button>' +
+          (done || failed
+            ? '<button type="button" class="job-dock-x" data-job-dismiss="' + escapeHtml(entry.id) +
+              '" aria-label="Dismiss ' + escapeHtml(entry.name) + ' status">×</button>'
+            : '') +
+          '</div>'
+        );
+      })
+      .join('');
+  }
+
+  function updateJobDock() {
+    const dock = $('#jobDock');
+    const rowsEl = $('#jobDockRows');
+    if (!dock || !rowsEl) return;
 
     const route = currentRoute();
-    const entries = jobPillEntries().sort(function (a, b) {
-      return b.startedAt - a.startedAt;
+    /* A job's own results page never shows its dock row. */
+    const entries = jobDockEntries().filter(function (entry) {
+      return entry.route !== route;
     });
-    const running = entries.filter(function (entry) { return !entry.complete; });
-    const finished = entries.filter(function (entry) { return entry.complete; });
 
-    let primary = running[0] || null;
-    if (!primary) {
-      primary =
-        finished.filter(function (entry) {
-          return entry.id !== dismissedJobPillId;
-        })[0] || null;
-    }
-
-    /* Hide on the job's own results page, or when nothing is left to show. */
-    if (!primary || primary.route === route) {
-      pill.hidden = true;
+    if (!entries.length) {
+      dock.hidden = true;
+      lastJobDockSignature = '';
       return;
     }
 
-    const wasHidden = pill.hidden;
-    pill.hidden = false;
-    pill.classList.toggle('is-done', primary.complete);
-    pill.dataset.route = primary.route;
-    pill.dataset.jobId = primary.id;
+    const signature = entries
+      .map(function (entry) {
+        return entry.id + ':' + entry.state + ':' + Math.floor(entry.percent);
+      })
+      .join('|');
+    const wasHidden = dock.hidden;
 
-    const text = $('#jobPillText');
-    if (text) {
-      text.textContent =
-        primary.name + ' · ' +
-        (primary.complete ? 'Ready (100%)' : Math.floor(primary.percent) + '%');
+    dock.hidden = false;
+
+    if (signature !== lastJobDockSignature) {
+      rowsEl.innerHTML = renderJobDockRows(entries);
+      lastJobDockSignature = signature;
     }
 
-    const cue = $('#jobPillCue');
-    if (cue) cue.textContent = primary.complete ? 'Open Results →' : 'View →';
-
-    const more = $('#jobPillMore');
-    if (more) {
-      const extra = Math.max(0, running.length - 1);
-      more.hidden = extra <= 0;
-      more.textContent = extra > 0 ? '+' + extra + ' more' : '';
+    if (wasHidden) {
+      restoreJobDockPosition();
+    } else if (!jobDockDrag && !dock.classList.contains('is-snapping')) {
+      /* Row count changes the stack height/width — re-pin to the saved edge
+         and re-clamp the top so the whole stack stays in the safe area. */
+      const rect = dock.getBoundingClientRect();
+      const bounds = jobDockBounds(dock);
+      const saved = readJobDockPos();
+      const side = saved
+        ? saved.side
+        : rect.left + bounds.width / 2 < window.innerWidth / 2
+        ? 'left'
+        : 'right';
+      setJobDockPosition(edgeLeftFor(side, bounds), rect.top, bounds);
     }
-
-    const dismiss = $('#jobPillDismiss');
-    if (dismiss) dismiss.hidden = !primary.complete;
-
-    /* First paint (or first show after hiding) — place from saved/default. */
-    if (wasHidden) restoreJobPillPosition();
   }
 
-  function moveJobPill(event) {
-    if (!jobPillDrag || event.pointerId !== jobPillDrag.pointerId) return;
+  function moveJobDock(event) {
+    if (!jobDockDrag || event.pointerId !== jobDockDrag.pointerId) return;
 
-    const dx = event.clientX - jobPillDrag.startX;
-    const dy = event.clientY - jobPillDrag.startY;
+    const dx = event.clientX - jobDockDrag.startX;
+    const dy = event.clientY - jobDockDrag.startY;
 
-    if (!jobPillDrag.moved) {
-      if (Math.sqrt(dx * dx + dy * dy) <= JOB_PILL_DRAG_THRESHOLD) return;
-      jobPillDrag.moved = true;
-      const pill = $('#jobPill');
-      if (pill) {
-        pill.classList.remove('is-snapping');
-        pill.classList.add('is-dragging');
+    if (!jobDockDrag.moved) {
+      if (Math.sqrt(dx * dx + dy * dy) <= JOB_DOCK_DRAG_THRESHOLD) return;
+      jobDockDrag.moved = true;
+      const dock = $('#jobDock');
+      if (dock) {
+        dock.classList.remove('is-snapping');
+        dock.classList.add('is-dragging');
+        /* Capture only after the 6px threshold so a simple tap/click keeps
+           its original target (View/Open/× must still receive the click). */
+        if (dock.setPointerCapture) {
+          try {
+            dock.setPointerCapture(event.pointerId);
+          } catch (err) {
+            /* capture unsupported — window listeners still track the drag */
+          }
+        }
       }
     }
 
     if (event.cancelable) event.preventDefault();
-    const applied = setJobPillPosition(
-      jobPillDrag.originLeft + dx,
-      jobPillDrag.originTop + dy,
-      jobPillDrag.bounds
+    const applied = setJobDockPosition(
+      jobDockDrag.originLeft + dx,
+      jobDockDrag.originTop + dy,
+      jobDockDrag.bounds
     );
 
     /* Rebase the drag origin on the clamped result so over-dragging past an
        edge never creates a dead zone when the user drags back. */
     if (applied) {
-      jobPillDrag.originLeft = applied.left - dx;
-      jobPillDrag.originTop = applied.top - dy;
+      jobDockDrag.originLeft = applied.left - dx;
+      jobDockDrag.originTop = applied.top - dy;
     }
   }
 
-  /* Finish a pointer gesture: persist only if it actually became a drag. */
-  function endJobPillDrag(event) {
-    if (!jobPillDrag) return;
-    if (event && event.pointerId != null && event.pointerId !== jobPillDrag.pointerId) return;
+  /* Finish a pointer gesture: persist + snap only if it became a drag. */
+  function endJobDockDrag(event) {
+    if (!jobDockDrag) return;
+    if (event && event.pointerId != null && event.pointerId !== jobDockDrag.pointerId) return;
 
-    const pill = $('#jobPill');
-    const moved = jobPillDrag.moved;
-    const pointerId = jobPillDrag.pointerId;
-    jobPillDrag = null;
+    const dock = $('#jobDock');
+    const moved = jobDockDrag.moved;
+    const pointerId = jobDockDrag.pointerId;
+    jobDockDrag = null;
 
-    if (pill) {
-      pill.classList.remove('is-dragging');
-      if (pill.releasePointerCapture && pointerId != null) {
+    if (dock) {
+      dock.classList.remove('is-dragging');
+      if (dock.releasePointerCapture && pointerId != null) {
         try {
-          pill.releasePointerCapture(pointerId);
+          dock.releasePointerCapture(pointerId);
         } catch (err) {
           /* capture already released */
         }
       }
-      if (moved) snapJobPillToEdge();
+      if (moved) snapJobDockToEdge();
     }
 
     if (moved) {
       /* Swallow the synthetic click that follows a drag release. */
-      jobPillSuppressClick = true;
+      jobDockSuppressClick = true;
       window.setTimeout(function () {
-        jobPillSuppressClick = false;
+        jobDockSuppressClick = false;
       }, 350);
     }
   }
 
-  function bindJobPill() {
-    const pill = $('#jobPill');
-    if (!pill) return;
+  function bindJobDock() {
+    const dock = $('#jobDock');
+    if (!dock) return;
 
-    /* One click handler on the pill itself: pointer capture can retarget the
-       synthesized click to the capturing element, so listening on #jobPill
-       guarantees normal clicks (and grip clicks) still open the results page. */
-    pill.addEventListener('click', function (event) {
-      if (jobPillSuppressClick) {
+    /* Delegated click: View/Open/× keep working because pointer capture is
+       only taken after a real drag starts (see moveJobDock). */
+    dock.addEventListener('click', function (event) {
+      if (jobDockSuppressClick) {
         event.preventDefault();
         event.stopPropagation();
         return;
       }
-      if (event.target.closest && event.target.closest('#jobPillDismiss')) return;
-      const target = pill.dataset.route;
-      if (target) window.location.hash = '#' + target;
+
+      const dismissBtn = event.target.closest
+        ? event.target.closest('[data-job-dismiss]')
+        : null;
+      if (dismissBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        dismissJobDockId(dismissBtn.getAttribute('data-job-dismiss'));
+        return;
+      }
+
+      const openBtn = event.target.closest ? event.target.closest('[data-job-open]') : null;
+      if (!openBtn) return;
+
+      event.preventDefault();
+      const id = openBtn.getAttribute('data-job-id') || '';
+      const route = openBtn.getAttribute('data-job-open');
+      if (!route) return;
+
+      /* Opening a finished job marks it viewed so it never lingers. */
+      if (jobDockState(findJobById(id)) === 'done') dismissJobDockId(id);
+      window.location.hash = '#' + route;
     });
 
-    const dismiss = $('#jobPillDismiss');
-    if (dismiss) {
-      dismiss.addEventListener('click', function (event) {
-        if (jobPillSuppressClick) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-        event.stopPropagation();
-        dismissedJobPillId = pill.dataset.jobId || '';
-        pill.hidden = true;
-      });
-    }
-
-    /* Unified Pointer Events: mouse, trackpad and touch all behave the same.
-       Dragging starts anywhere on the pill except the × dismiss button, and
-       only after the pointer travels more than JOB_PILL_DRAG_THRESHOLD. */
-    pill.addEventListener('pointerdown', function (event) {
-      if (pill.hidden) return;
+    /* Unified Pointer Events: mouse, trackpad and touch behave the same. */
+    dock.addEventListener('pointerdown', function (event) {
+      if (dock.hidden) return;
       if (event.pointerType === 'mouse' && event.button !== 0) return;
 
       /* Any fresh press clears the previous drag's click guard. */
-      jobPillSuppressClick = false;
+      jobDockSuppressClick = false;
 
-      /* × always clicks — never starts a drag. */
-      if (event.target.closest && event.target.closest('#jobPillDismiss')) return;
+      /* Buttons always click — never start a drag from View/Open/×. */
+      if (event.target.closest && event.target.closest('button')) return;
 
       /* Freeze any in-flight snap animation at the current visual spot. */
-      const rect = pill.getBoundingClientRect();
-      pill.classList.remove('is-snapping');
-      pill.style.left = rect.left + 'px';
-      pill.style.top = rect.top + 'px';
-      pill.style.right = 'auto';
-      pill.style.bottom = 'auto';
+      const rect = dock.getBoundingClientRect();
+      dock.classList.remove('is-snapping');
+      dock.style.left = rect.left + 'px';
+      dock.style.top = rect.top + 'px';
+      dock.style.right = 'auto';
+      dock.style.bottom = 'auto';
 
-      jobPillDrag = {
+      jobDockDrag = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
@@ -2543,32 +2688,25 @@
         originTop: rect.top,
         moved: false,
         /* Measured once per gesture — stable for 60fps pointer tracking. */
-        bounds: jobPillBounds(pill)
+        bounds: jobDockBounds(dock)
       };
-
-      if (pill.setPointerCapture) {
-        try {
-          pill.setPointerCapture(event.pointerId);
-        } catch (err) {
-          /* capture unsupported — window listeners below still track it */
-        }
-      }
+      /* No setPointerCapture here: a simple tap must keep its button target. */
     });
 
     /* Window-level tracking works with or without pointer capture. */
-    window.addEventListener('pointermove', moveJobPill);
-    window.addEventListener('pointerup', endJobPillDrag);
-    window.addEventListener('pointercancel', endJobPillDrag);
-    pill.addEventListener('lostpointercapture', endJobPillDrag);
+    window.addEventListener('pointermove', moveJobDock);
+    window.addEventListener('pointerup', endJobDockDrag);
+    window.addEventListener('pointercancel', endJobDockDrag);
+    dock.addEventListener('lostpointercapture', endJobDockDrag);
 
-    /* Keep the pill on-screen after resize / iPad orientation changes. */
-    window.addEventListener('resize', reclampJobPillPosition);
+    /* Keep the whole stack on-screen after resize / iPad rotation. */
+    window.addEventListener('resize', reclampJobDockPosition);
     window.addEventListener('orientationchange', function () {
-      window.setTimeout(reclampJobPillPosition, 250);
+      window.setTimeout(reclampJobDockPosition, 250);
     });
 
-    window.setInterval(updateJobPill, 1000);
-    updateJobPill();
+    window.setInterval(updateJobDock, 1000);
+    updateJobDock();
   }
 
   /* ======================= E. CREDIT UI / SUBSCRIBE ======================= */
@@ -10903,10 +11041,36 @@
     if (invoicePollActive(state.invoiceJob)) forceInvoicePollNow();
     if (lePollActive(state.enricherJob)) forceLePollNow();
     if (rwPollActive(state.reviewJob)) forceRwPollNow();
-    updateJobPill();
+    updateJobDock();
   }
 
   /* ============================== INIT =================================== */
+  /* Both Home templates live in the DOM; only one is shown. The live output
+     preview is a single node moved into the active template's mount point so
+     every existing tab/render handler keeps working with zero duplication. */
+  function applyHomeTemplate() {
+    const t1 = $('#homeTemplate1');
+    const t2 = $('#homeTemplate2');
+    if (!t1 || !t2) return;
+
+    const active = HOME_TEMPLATE === 'template2' ? t2 : t1;
+    t1.hidden = active !== t1;
+    t2.hidden = active !== t2;
+
+    const host = $('#homePreviewHost');
+    if (!host) return;
+
+    const mount = active.querySelector('[data-home-preview-mount]');
+    if (!mount || host.parentNode === mount) return;
+
+    const first = mount.firstElementChild;
+    if (first && first.classList && first.classList.contains('preview-note')) {
+      mount.insertBefore(host, first);
+    } else {
+      mount.appendChild(host);
+    }
+  }
+
   function init() {
     const year = $('#year');
     if (year) year.textContent = String(new Date().getFullYear());
@@ -10915,6 +11079,7 @@
       window.history.replaceState(null, '', '#home');
     }
 
+    applyHomeTemplate();
     buildStockGrid();
     renderTopup();
     renderHomeBrief('NVDA');
@@ -10923,7 +11088,7 @@
     updateNextBrief();
     bindEvents();
     renderAuthUI();
-    bindJobPill();
+    bindJobDock();
 
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) resumePollingOnFocus();
