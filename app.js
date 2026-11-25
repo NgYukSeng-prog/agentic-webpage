@@ -401,6 +401,16 @@
     return '$' + Number(n).toFixed(2);
   }
 
+  /* Multi-market formatting for the sample briefs (US · Bursa · SGX). */
+  function briefMoney(brief, n) {
+    const amount = Number(n);
+    const value = Number.isFinite(amount) ? amount.toFixed(2) : '0.00';
+    const currency = String((brief && brief.currency) || 'USD').toUpperCase();
+    if (currency === 'MYR') return 'RM' + value;
+    if (currency === 'SGD') return 'S$' + value;
+    return '$' + value;
+  }
+
   function fmtMYT(iso) {
     try {
       return (
@@ -584,6 +594,56 @@
       whySell: [
         'Delivery estimates trimmed on softer EU registrations.',
         'Fresh price cuts extended to two more markets.'
+      ]
+    },
+    '1295.KL': {
+      symbol: '1295.KL',
+      name: 'Public Bank Berhad',
+      currency: 'MYR',
+      price: 4.55,
+      changePct: 0.7,
+      dayLow: 4.51,
+      dayHigh: 4.58,
+      low52: 3.92,
+      high52: 4.72,
+      marketCap: 'RM88.4B',
+      pe: '12.6',
+      fundamental: { hold: 66, sell: 34 },
+      macd: { hold: 58, sell: 42 },
+      takeaway:
+        'Steady accumulation above the RM4.40 shelf — a defensive hold while loan growth guidance is reaffirmed.',
+      whyHold: [
+        'Asset quality stays strong with a stable impaired-loan ratio.',
+        'Dividend yield near 5% keeps income funds supportive.'
+      ],
+      whySell: [
+        'Net interest margin compresses as deposit costs creep up.',
+        'MACD histogram is flattening just below the 4.60 resistance.'
+      ]
+    },
+    'D05.SI': {
+      symbol: 'D05.SI',
+      name: 'DBS Group Holdings',
+      currency: 'SGD',
+      price: 65.44,
+      changePct: 1.1,
+      dayLow: 64.6,
+      dayHigh: 65.88,
+      low52: 52.3,
+      high52: 68.1,
+      marketCap: 'S$186B',
+      pe: '12.9',
+      fundamental: { hold: 70, sell: 30 },
+      macd: { hold: 62, sell: 38 },
+      takeaway:
+        'Trend remains constructive above S$63 — hold through the dividend date rather than chase a stretched open.',
+      whyHold: [
+        'Record fee income and a fully covered dividend support the floor.',
+        'Price holds above the S$63.20 breakout shelf.'
+      ],
+      whySell: [
+        'Wealth-management flows cooled versus last quarter.',
+        'Valuation near 1.5× book leaves little margin for a miss.'
       ]
     }
   };
@@ -2881,7 +2941,7 @@
     const dayRange =
       b.dayLow == null || b.dayHigh == null
         ? '—'
-        : money(b.dayLow) + ' – ' + money(b.dayHigh);
+        : briefMoney(b, b.dayLow) + ' – ' + briefMoney(b, b.dayHigh);
 
     return (
       '<div class="brief brief-compact">' +
@@ -2901,14 +2961,14 @@
       '      <span class="brief-company">' + escapeHtml(b.name || '') + '</span>' +
       '    </div>' +
       '    <div class="brief-ident-price">' +
-      '      <span class="brief-close">' + money(b.price) + '</span>' +
+      '      <span class="brief-close">' + briefMoney(b, b.price) + '</span>' +
       '      <span class="pill-change ' + (up ? 'up' : 'down') + '">' + changeText + '</span>' +
       '    </div>' +
       '  </div>' +
       '  <div class="brief-metrics">' +
       '    <div class="metric"><span>Day Range</span><strong>' + dayRange + '</strong></div>' +
       '    <div class="metric"><span>52-Wk Range</span><strong>' +
-      money(b.low52) + ' – ' + money(b.high52) + '</strong></div>' +
+      briefMoney(b, b.low52) + ' – ' + briefMoney(b, b.high52) + '</strong></div>' +
       '    <div class="metric"><span>Market Cap</span><strong>' +
       escapeHtml(b.marketCap || '—') + '</strong></div>' +
       '    <div class="metric"><span>P/E Ratio</span><strong>' +

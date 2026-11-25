@@ -8566,3 +8566,39 @@ table.leads-table {
     min-height: 300px;
   }
 }
+
+/* ======================================================================
+   25. HOME PREVIEW · LATEST LIVE-OUTPUT FORMATS
+   ====================================================================== */
+.brief-tab-price {
+  margin-left: 4px;
+  font-size: 0.66rem;
+  font-weight: 750;
+  color: var(--slate-500);
+  font-variant-numeric: tabular-nums;
+}
+
+.brief-tab.is-active .brief-tab-price {
+  color: #a5f3fc;
+}
+
+.home-scrape-meta {
+  font-size: 0.68rem !important;
+  color: var(--slate-400);
+  line-height: 1.4;
+}
+
+/* Xero Bills sample needs room for all 10 export columns. */
+.xero-home-table {
+  min-width: 1120px;
+}
+
+/* All five panes share one grid cell, so tab switching keeps an exact
+   constant height regardless of which sample is visible. */
+.preview-body {
+  align-items: stretch;
+}
+
+.preview-body > .home-pane {
+  height: 100%;
+}
