@@ -8341,18 +8341,20 @@ table.leads-table {
 }
 
 .home2-title {
-  margin: 26px 0 0;
-  font-size: clamp(2.6rem, 6.4vw, 4.3rem);
+  max-width: 680px;
+  margin: 0 auto;
+  font-size: clamp(2.4rem, 5.8vw, 4rem);
   font-weight: 700;
-  line-height: 1.02;
+  line-height: 1.06;
   letter-spacing: -0.03em;
   color: #fff;
+  text-wrap: balance;
 }
 
 .home2-lede {
-  margin: 18px auto 0;
-  max-width: 46ch;
-  font-size: 1.06rem;
+  margin: 20px auto 0;
+  max-width: 520px;
+  font-size: 1.05rem;
   line-height: 1.6;
   color: var(--slate-400);
 }
