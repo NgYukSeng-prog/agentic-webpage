@@ -138,10 +138,70 @@ window.CONFIG = {
   AGENT_ID: 'stock-market-news-agent',
   AGENT_NAME: 'Stock Market News Agent',
 
-  /* --- Curated universe --------------------------------------------------
-     A deliberately small, liquid US equity / ETF list so the selection grid
-     stays usable on a phone. Add or remove entries freely — the grid is
-     generated from this array.                                          */
+  /* --- Stock regions -----------------------------------------------------
+     Region tabs inside the Stock Market News Agent modal. Each region owns
+     its ticker grid; users may combine tickers from any region in a single
+     subscription (5 credits per stock · 5 trading days).                  */
+  STOCK_REGIONS: [
+    {
+      id: 'us',
+      label: 'US Markets',
+      flag: '🇺🇸',
+      markets: 'NASDAQ · NYSE',
+      stocks: [
+        { symbol: 'NVDA', name: 'NVIDIA Corporation', tag: 'Semiconductors' },
+        { symbol: 'AAPL', name: 'Apple Inc.', tag: 'Consumer Tech' },
+        { symbol: 'TSLA', name: 'Tesla, Inc.', tag: 'EV & Energy' },
+        { symbol: 'PLTR', name: 'Palantir Technologies', tag: 'AI Software' },
+        { symbol: 'SPY', name: 'SPDR S&P 500 ETF', tag: 'Index ETF' },
+        { symbol: 'MSFT', name: 'Microsoft Corporation', tag: 'Cloud & AI' },
+        { symbol: 'AMZN', name: 'Amazon.com, Inc.', tag: 'E-Commerce' },
+        { symbol: 'META', name: 'Meta Platforms, Inc.', tag: 'Social & AI' },
+        { symbol: 'GOOGL', name: 'Alphabet Inc.', tag: 'Search & Ads' },
+        { symbol: 'AMD', name: 'Advanced Micro Devices', tag: 'Semiconductors' },
+        { symbol: 'QQQ', name: 'Invesco QQQ Trust', tag: 'Nasdaq-100 ETF' },
+        { symbol: 'NFLX', name: 'Netflix, Inc.', tag: 'Streaming' }
+      ]
+    },
+    {
+      id: 'my',
+      label: 'Malaysia',
+      flag: '🇲🇾',
+      markets: 'Bursa Malaysia',
+      stocks: [
+        { symbol: '1155.KL', name: 'Maybank', tag: 'Banking' },
+        { symbol: '1295.KL', name: 'Public Bank', tag: 'Banking' },
+        { symbol: '1023.KL', name: 'CIMB Group', tag: 'Banking' },
+        { symbol: '1066.KL', name: 'RHB Bank', tag: 'Banking' },
+        { symbol: '4677.KL', name: 'YTL Corporation', tag: 'Utilities & Infra' },
+        { symbol: '6742.KL', name: 'YTL Power', tag: 'Energy & AI DC' },
+        { symbol: '5347.KL', name: 'Tenaga Nasional', tag: 'Utilities' },
+        { symbol: '5183.KL', name: 'Petronas Chemicals', tag: 'Petrochemicals' },
+        { symbol: '5296.KL', name: 'MR D.I.Y. Group', tag: 'Retail' },
+        { symbol: '4863.KL', name: 'Telekom Malaysia', tag: 'Telco & Fiber' }
+      ]
+    },
+    {
+      id: 'sg',
+      label: 'Singapore',
+      flag: '🇸🇬',
+      markets: 'SGX',
+      stocks: [
+        { symbol: 'D05.SI', name: 'DBS Group', tag: 'Banking' },
+        { symbol: 'O39.SI', name: 'OCBC Bank', tag: 'Banking' },
+        { symbol: 'U11.SI', name: 'UOB', tag: 'Banking' },
+        { symbol: 'Z74.SI', name: 'Singtel', tag: 'Telco' },
+        { symbol: 'C6L.SI', name: 'Singapore Airlines', tag: 'Aviation' },
+        { symbol: 'C38U.SI', name: 'CapitaLand Integrated', tag: 'REIT' },
+        { symbol: 'S68.SI', name: 'SGX Group', tag: 'Exchange' },
+        { symbol: 'BN4.SI', name: 'Keppel Ltd', tag: 'Infrastructure' }
+      ]
+    }
+  ],
+  DEFAULT_STOCK_REGION: 'us',
+
+  /* --- Curated US universe (kept for backwards compatibility) ------------
+     The full region grids live in STOCK_REGIONS above.                     */
   SUPPORTED_STOCKS: [
     { symbol: 'NVDA', name: 'NVIDIA Corporation', tag: 'Semiconductors' },
     { symbol: 'AAPL', name: 'Apple Inc.', tag: 'Consumer Tech' },
@@ -158,15 +218,23 @@ window.CONFIG = {
   ],
 
   /* --- Lead Scraper Agent -----------------------------------------------
-     Second live Agent-as-a-Service. 15 credits buys one 1,000-lead .xlsx
-     extraction run (10 search terms). Endpoints are consumed by app.js.  */
-  /* Per-term pricing: 1 search term = 50 leads = 3 credits.
-     LEAD_SCRAPER_CREDITS stays as the minimum entry price (1 term). */
+     Second live Agent-as-a-Service. Endpoints are consumed by app.js.
+
+     Leads-per-term selector:
+       · 50 leads / term  = 3 credits (default)
+       · 100 leads / term = 5 credits
+     Hard ceiling: 500 leads per run, so a 100-lead mode caps at 5 terms and
+     a 50-lead mode caps at 10 terms. */
   LEAD_SCRAPER_CREDITS: 3,
   LEAD_SCRAPER_CREDITS_PER_TERM: 3,
   LEAD_SCRAPER_LEADS_PER_TERM: 50,
   LEAD_SCRAPER_MIN_CREDITS: 3,
   LEAD_SCRAPER_MAX_TERMS: 10,
+  LEAD_SCRAPER_MAX_LEADS: 500,
+  LEAD_SCRAPER_LEADS_OPTIONS: [
+    { leads: 50, credits: 3, label: '50 leads / term', note: '3 credits / term' },
+    { leads: 100, credits: 5, label: '100 leads / term', note: '5 credits / term' }
+  ],
   LEAD_SCRAPER_AGENT_ID: 'b2b-lead-scraper',
   LEAD_SCRAPER_AGENT_NAME: 'Lead Scraper Agent',
   LEAD_SCRAPER_TARGET_ROWS: 1000,

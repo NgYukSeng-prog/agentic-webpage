@@ -34,7 +34,40 @@
   const STORAGE_KEY = CFG.STORAGE_KEY || 'agentic.state.v1';
   const AGENT_ID = CFG.AGENT_ID || 'stock-market-news-agent';
   const AGENT_NAME = CFG.AGENT_NAME || 'Stock Market News Agent';
-  const STOCKS = Array.isArray(CFG.SUPPORTED_STOCKS) ? CFG.SUPPORTED_STOCKS : [];
+
+  /* Region tab grids for the stock picker (US · Malaysia · Singapore). */
+  const STOCK_REGIONS =
+    Array.isArray(CFG.STOCK_REGIONS) && CFG.STOCK_REGIONS.length
+      ? CFG.STOCK_REGIONS
+          .filter(function (region) {
+            return region && region.id && Array.isArray(region.stocks) && region.stocks.length;
+          })
+          .map(function (region) {
+            return {
+              id: String(region.id),
+              label: String(region.label || region.id),
+              flag: String(region.flag || ''),
+              markets: String(region.markets || ''),
+              stocks: region.stocks
+            };
+          })
+      : [
+          {
+            id: 'us',
+            label: 'US Markets',
+            flag: '🇺🇸',
+            markets: 'NASDAQ · NYSE',
+            stocks: Array.isArray(CFG.SUPPORTED_STOCKS) ? CFG.SUPPORTED_STOCKS : []
+          }
+        ];
+  const DEFAULT_STOCK_REGION = String(
+    CFG.DEFAULT_STOCK_REGION || (STOCK_REGIONS[0] && STOCK_REGIONS[0].id) || 'us'
+  );
+
+  /* Flattened universe — used for lookups and the default pre-selection. */
+  const STOCKS = STOCK_REGIONS.reduce(function (all, region) {
+    return all.concat(region.stocks);
+  }, []);
 
   /* --- Neon-backed auth API ------------------------------------------------ */
   const API_BASE = String(
@@ -68,12 +101,45 @@
   const GOOGLE_CLIENT_ID = String(CFG.GOOGLE_CLIENT_ID || '').trim();
   const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
 
-  /* B2B Lead Scraper: 1 search term = 50 leads = 3 credits (max 10 terms). */
-  const LEAD_CREDITS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_CREDITS_PER_TERM, 3);
-  const LEAD_LEADS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_LEADS_PER_TERM, 50);
-  const LEAD_MIN_CREDITS = toPositiveInt(CFG.LEAD_SCRAPER_MIN_CREDITS, 3);
+  /* B2B Lead Scraper: 1 search term = 50 leads (3 cr) or 100 leads (5 cr).
+     Max 500 leads per run, so 100-lead mode caps at 5 terms. */
+  const LEAD_OPTIONS =
+    Array.isArray(CFG.LEAD_SCRAPER_LEADS_OPTIONS) && CFG.LEAD_SCRAPER_LEADS_OPTIONS.length
+      ? CFG.LEAD_SCRAPER_LEADS_OPTIONS
+          .map(function (option) {
+            return {
+              leads: toPositiveInt(option && option.leads, 50),
+              credits: toPositiveInt(option && option.credits, 3),
+              label: String((option && option.label) || (option && option.leads) + ' leads / term'),
+              note: String((option && option.note) || (option && option.credits) + ' credits / term')
+            };
+          })
+          .filter(function (option) { return option.leads > 0 && option.credits > 0; })
+      : [
+          { leads: 50, credits: 3, label: '50 leads / term', note: '3 credits / term' },
+          { leads: 100, credits: 5, label: '100 leads / term', note: '5 credits / term' }
+        ];
+  const LEAD_MAX_LEADS = toPositiveInt(CFG.LEAD_SCRAPER_MAX_LEADS, 500);
+  const LEAD_CREDITS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_CREDITS_PER_TERM, LEAD_OPTIONS[0].credits);
+  const LEAD_LEADS_PER_TERM = toPositiveInt(CFG.LEAD_SCRAPER_LEADS_PER_TERM, LEAD_OPTIONS[0].leads);
+  const LEAD_MIN_CREDITS = toPositiveInt(CFG.LEAD_SCRAPER_MIN_CREDITS, LEAD_OPTIONS[0].credits);
   const LEAD_MAX_TERMS = toPositiveInt(CFG.LEAD_SCRAPER_MAX_TERMS, 10);
-  const LEAD_MAX_TARGET = LEAD_LEADS_PER_TERM * LEAD_MAX_TERMS;
+  const LEAD_MAX_TARGET = LEAD_MAX_LEADS;
+  let scraperLeadsPerTerm = LEAD_OPTIONS[0].leads;
+
+  function leadOptionFor(leads) {
+    const wanted = toPositiveInt(leads, LEAD_OPTIONS[0].leads);
+    for (let i = 0; i < LEAD_OPTIONS.length; i += 1) {
+      if (LEAD_OPTIONS[i].leads === wanted) return LEAD_OPTIONS[i];
+    }
+    return LEAD_OPTIONS[0];
+  }
+
+  /* 100 leads → 5 terms · 50 leads → 10 terms (never above LEAD_MAX_LEADS). */
+  function leadMaxTermsFor(leads) {
+    const per = toPositiveInt(leads, LEAD_OPTIONS[0].leads);
+    return Math.max(1, Math.min(LEAD_MAX_TERMS, Math.floor(LEAD_MAX_LEADS / per)));
+  }
   const LEAD_AGENT_ID = CFG.LEAD_SCRAPER_AGENT_ID || 'b2b-lead-scraper';
   const LEAD_AGENT_NAME = CFG.LEAD_SCRAPER_AGENT_NAME || 'Lead Scraper Agent';
   const LEAD_POLL_MS = toPositiveInt(CFG.LEAD_SCRAPER_POLL_MS, 2500);
@@ -2047,11 +2113,13 @@
     closeWallet();
     closeModal(false);
 
-    /* Keep the live job poller running between #scraper-results and #agents. */
-    if (route !== 'agents' && route !== 'scraper-results') stopScraperTimers();
-    if (route !== 'invoice-results') stopInvoiceTimer();
-    if (route !== 'enricher-results') stopLeTimer();
-    if (route !== 'review-results') stopRwTimer();
+    /* Every in-flight job keeps polling in the background — leaving a results
+       page must never pause or cancel its status loop. The floating
+       bottom-right pill mirrors the most recent active job. */
+    ensureScraperRunning();
+    ensureInvoiceRunning();
+    ensureLeRunning();
+    ensureRwRunning();
 
     if (route === 'configure') {
       /* #configure is now a modal: show #agents underneath, then open it. */
@@ -2079,6 +2147,150 @@
 
     document.title = TITLES[route] || TITLES.home;
     window.scrollTo(0, 0);
+
+    updateJobPill();
+  }
+
+  /* ============ GLOBAL ACTIVE-JOB PROGRESS PILL (bottom-right) ============ */
+  let dismissedJobPillId = '';
+
+  function jobPillStartedAt(job) {
+    const raw = job && (job.started_at || job.created_at || job.submitted_at);
+    const ms = raw ? new Date(raw).getTime() : NaN;
+    return Number.isFinite(ms) ? ms : 0;
+  }
+
+  function jobPillNumber(value) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function jobPillEntries() {
+    const defs = [
+      {
+        job: state.scraperJob,
+        route: 'scraper-results',
+        name: LEAD_AGENT_NAME,
+        complete: scraperIsComplete(state.scraperJob),
+        failed: scraperJobFailed(state.scraperJob),
+        percent: scraperPercent(state.scraperJob)
+      },
+      {
+        job: state.invoiceJob,
+        route: 'invoice-results',
+        name: INV_AGENT_NAME,
+        complete: invoiceIsComplete(state.invoiceJob),
+        failed: invoiceJobFailed(state.invoiceJob),
+        percent: jobPillNumber(state.invoiceJob && state.invoiceJob.percent)
+      },
+      {
+        job: state.enricherJob,
+        route: 'enricher-results',
+        name: LE_AGENT_NAME,
+        complete: leIsComplete(state.enricherJob),
+        failed: leJobFailed(state.enricherJob),
+        percent: jobPillNumber(state.enricherJob && state.enricherJob.percent)
+      },
+      {
+        job: state.reviewJob,
+        route: 'review-results',
+        name: RW_AGENT_NAME,
+        complete: rwIsComplete(state.reviewJob),
+        failed: rwJobFailed(state.reviewJob),
+        percent: jobPillNumber(state.reviewJob && state.reviewJob.percent)
+      }
+    ];
+
+    return defs
+      .filter(function (entry) {
+        return !!entry.job && !!entry.job.job_id && !entry.failed;
+      })
+      .map(function (entry) {
+        return {
+          id: String(entry.job.job_id),
+          route: entry.route,
+          name: entry.name,
+          complete: entry.complete,
+          percent: entry.complete ? 100 : clamp(entry.percent, 0, 99),
+          startedAt: jobPillStartedAt(entry.job)
+        };
+      });
+  }
+
+  function updateJobPill() {
+    const pill = $('#jobPill');
+    if (!pill) return;
+
+    const route = currentRoute();
+    const entries = jobPillEntries().sort(function (a, b) {
+      return b.startedAt - a.startedAt;
+    });
+    const running = entries.filter(function (entry) { return !entry.complete; });
+    const finished = entries.filter(function (entry) { return entry.complete; });
+
+    let primary = running[0] || null;
+    if (!primary) {
+      primary =
+        finished.filter(function (entry) {
+          return entry.id !== dismissedJobPillId;
+        })[0] || null;
+    }
+
+    /* Hide on the job's own results page, or when nothing is left to show. */
+    if (!primary || primary.route === route) {
+      pill.hidden = true;
+      return;
+    }
+
+    pill.hidden = false;
+    pill.classList.toggle('is-done', primary.complete);
+    pill.dataset.route = primary.route;
+    pill.dataset.jobId = primary.id;
+
+    const text = $('#jobPillText');
+    if (text) {
+      text.textContent =
+        primary.name + ' · ' +
+        (primary.complete ? 'Ready (100%)' : Math.floor(primary.percent) + '%');
+    }
+
+    const cue = $('#jobPillCue');
+    if (cue) cue.textContent = primary.complete ? 'Open Results →' : 'View →';
+
+    const more = $('#jobPillMore');
+    if (more) {
+      const extra = Math.max(0, running.length - 1);
+      more.hidden = extra <= 0;
+      more.textContent = extra > 0 ? '+' + extra + ' more' : '';
+    }
+
+    const dismiss = $('#jobPillDismiss');
+    if (dismiss) dismiss.hidden = !primary.complete;
+  }
+
+  function bindJobPill() {
+    const pill = $('#jobPill');
+    if (!pill) return;
+
+    const main = $('#jobPillMain');
+    if (main) {
+      main.addEventListener('click', function () {
+        const target = pill.dataset.route;
+        if (target) window.location.hash = '#' + target;
+      });
+    }
+
+    const dismiss = $('#jobPillDismiss');
+    if (dismiss) {
+      dismiss.addEventListener('click', function (event) {
+        event.stopPropagation();
+        dismissedJobPillId = pill.dataset.jobId || '';
+        pill.hidden = true;
+      });
+    }
+
+    window.setInterval(updateJobPill, 1000);
+    updateJobPill();
   }
 
   /* ======================= E. CREDIT UI / SUBSCRIBE ======================= */
@@ -2161,8 +2373,9 @@
           ' leads). <a href="#topup">Top up credits</a>.';
       } else {
         caption.innerHTML =
-          LEAD_CREDITS_PER_TERM + ' credits per ' + LEAD_LEADS_PER_TERM +
-          '-lead term · Finished .xlsx emailed & downloadable.';
+          LEAD_OPTIONS.map(function (option) {
+            return option.credits + ' credits per ' + option.leads + '-lead term';
+          }).join(' · ') + ' · Finished .xlsx emailed & downloadable.';
       }
     }
   }
@@ -3570,11 +3783,77 @@
   }
 
   /* =========================== H. CONFIGURE ============================== */
+  /* Region-aware picker: US · Malaysia (Bursa) · Singapore (SGX).
+     Tickers can be combined across regions in one subscription. */
+  let stockRegionId = DEFAULT_STOCK_REGION;
+
+  function stockRegionById(id) {
+    for (let i = 0; i < STOCK_REGIONS.length; i += 1) {
+      if (STOCK_REGIONS[i].id === id) return STOCK_REGIONS[i];
+    }
+    return STOCK_REGIONS[0] || null;
+  }
+
   function buildStockGrid() {
     const grid = $('#stockGrid');
     if (!grid) return;
 
-    grid.innerHTML = STOCKS.map(function (stock) {
+    const tabs = $('#stockRegionTabs');
+    if (tabs && !tabs.dataset.bound) {
+      tabs.innerHTML = STOCK_REGIONS.map(function (region) {
+        return (
+          '<button type="button" class="region-tab" data-stock-region="' + escapeHtml(region.id) + '" role="tab" aria-selected="false">' +
+          (region.flag ? '<span class="region-flag" aria-hidden="true">' + region.flag + '</span>' : '') +
+          '<span class="region-label">' + escapeHtml(region.label) + '</span>' +
+          '<span class="region-count">' + region.stocks.length + '</span>' +
+          '</button>'
+        );
+      }).join('');
+
+      tabs.addEventListener('click', function (event) {
+        const btn = event.target.closest ? event.target.closest('[data-stock-region]') : null;
+        if (!btn) return;
+        const id = btn.getAttribute('data-stock-region');
+        if (!id || id === stockRegionId) return;
+        stockRegionId = id;
+        renderStockRegion();
+      });
+      tabs.dataset.bound = '1';
+    }
+
+    if (!grid.dataset.bound) {
+      grid.addEventListener('click', function (event) {
+        const card = event.target.closest ? event.target.closest('.stock-card') : null;
+        if (!card || card.disabled) return;
+        toggleStock(card.getAttribute('data-ticker'));
+      });
+      grid.dataset.bound = '1';
+    }
+
+    const chips = $('#stockChips');
+    if (chips && !chips.dataset.bound) {
+      chips.addEventListener('click', function (event) {
+        const btn = event.target.closest ? event.target.closest('[data-remove-ticker]') : null;
+        if (!btn) return;
+        toggleStock(btn.getAttribute('data-remove-ticker'));
+      });
+      chips.dataset.bound = '1';
+    }
+
+    renderStockRegion();
+  }
+
+  function renderStockRegion() {
+    const grid = $('#stockGrid');
+    if (!grid) return;
+
+    const region = stockRegionById(stockRegionId) || STOCK_REGIONS[0];
+    if (!region) {
+      grid.innerHTML = '';
+      return;
+    }
+
+    grid.innerHTML = region.stocks.map(function (stock) {
       return (
         '<button type="button" class="stock-card" data-ticker="' + escapeHtml(stock.symbol) + '" aria-pressed="false">' +
         '<span class="stock-check" aria-hidden="true">' +
@@ -3586,12 +3865,48 @@
         '</button>'
       );
     }).join('');
+    grid.setAttribute('aria-label', region.label + ' tickers');
 
-    grid.addEventListener('click', function (event) {
-      const card = event.target.closest ? event.target.closest('.stock-card') : null;
-      if (!card || card.disabled) return;
-      toggleStock(card.getAttribute('data-ticker'));
-    });
+    const tabs = $('#stockRegionTabs');
+    if (tabs) {
+      $$('[data-stock-region]', tabs).forEach(function (btn) {
+        const active = btn.getAttribute('data-stock-region') === region.id;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-selected', String(active));
+      });
+    }
+
+    const note = $('#stockRegionNote');
+    if (note) {
+      note.textContent =
+        region.markets + ' · ' + region.stocks.length + ' tickers · ' +
+        CREDITS_PER_STOCK + ' credits per stock';
+    }
+
+    renderSelectedChips();
+    renderConfigure();
+  }
+
+  /* Compact chip strip: selected tickers stay visible when switching tabs. */
+  function renderSelectedChips() {
+    const wrap = $('#stockChips');
+    if (!wrap) return;
+
+    if (!selectedStocks.length) {
+      wrap.innerHTML =
+        '<span class="stock-chips-empty">No tickers selected yet — tap any card to add (any region).</span>';
+      return;
+    }
+
+    wrap.innerHTML = selectedStocks
+      .map(function (ticker) {
+        return (
+          '<span class="stock-chip">' + escapeHtml(ticker) +
+          '<button type="button" class="stock-chip-x" data-remove-ticker="' + escapeHtml(ticker) +
+          '" aria-label="Remove ' + escapeHtml(ticker) + '">×</button></span>'
+        );
+      })
+      .join('');
   }
 
   function toggleStock(symbol) {
@@ -3646,6 +3961,9 @@
         '</div></div>' +
         '<div class="modal-section"><h3>1. Select stocks</h3>' +
         '<span class="pill-note" id="stockQuotePill"></span></div>' +
+        '<div class="stock-region-tabs" id="stockRegionTabs" role="tablist" aria-label="Market region"></div>' +
+        '<p class="fine stock-region-note" id="stockRegionNote"></p>' +
+        '<div class="stock-chips" id="stockChips" aria-live="polite"></div>' +
         '<div class="stock-grid" id="stockGrid" role="group" aria-label="Select stocks to monitor"></div>' +
         '<p class="fine" id="stockGridHint"></p>' +
         '<div class="modal-section"><h3>2. Delivery details</h3>' +
@@ -3794,12 +4112,13 @@
         hint.textContent =
           'Selection limit reached · ' + selectedStocks.length + ' of ' + max +
           ' affordable stock' + (max === 1 ? '' : 's') +
-          ' selected. Deselect one to swap, or top up for more.';
+          ' selected across regions. Deselect one to swap, or top up for more.';
       } else {
         const free = max - selectedStocks.length;
         hint.textContent =
           'Choose up to ' + max + ' stock' + (max === 1 ? '' : 's') +
-          ' for this activation · ' + free + ' slot' + (free === 1 ? '' : 's') + ' left.';
+          ' across any region for this activation · ' + free + ' slot' +
+          (free === 1 ? '' : 's') + ' left.';
       }
     }
 
@@ -3828,6 +4147,9 @@
         'Confirm & Spend ' + cost + ' Credits (' + TRADING_DAYS + ' Trading Days)';
       activateBtn.disabled = selectedStocks.length === 0 || cost > state.credits;
     }
+
+    /* Chips mirror selections across every region tab. */
+    renderSelectedChips();
   }
 
   function setFieldError(input, message) {
@@ -4832,9 +5154,10 @@
     scraperPollInFlight = false;
   }
 
+  /* Background-safe: the scraper keeps polling on every route so the global
+     floating progress pill stays accurate when the user navigates away. */
   function scraperPageActive() {
-    const route = currentRoute();
-    return route === 'scraper-results' || route === 'agents';
+    return true;
   }
 
   function stopEmailTrail() {
@@ -5009,10 +5332,19 @@
         job.country + ' · ' + (job.search_terms || []).length + ' terms · ' + cols.length + ' columns';
     }
 
+    const ringRule = $('#ringRule');
+    if (ringRule) {
+      ringRule.textContent =
+        (Number(job.credits_per_term) || LEAD_CREDITS_PER_TERM) + ' credits per ' +
+        (Number(job.leads_per_term) || LEAD_LEADS_PER_TERM) + '-lead term';
+    }
+
     if (summary) {
       summary.innerHTML =
         '<div class="summary-row"><dt>Country</dt><dd>' + escapeHtml(job.country) + '</dd></div>' +
         '<div class="summary-row"><dt>Search terms</dt><dd>' + (job.search_terms || []).length + '</dd></div>' +
+        '<div class="summary-row"><dt>Leads per term</dt><dd>' +
+        (Number(job.leads_per_term) || LEAD_LEADS_PER_TERM) + '</dd></div>' +
         '<div class="summary-row"><dt>Target leads</dt><dd><strong>' + scraperTarget(job) + '</strong></dd></div>' +
         '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + (job.credits_spent || 0) + '</strong></dd></div>' +
         '<div class="summary-row"><dt>Columns</dt><dd>' + cols.length + '</dd></div>' +
@@ -5360,6 +5692,9 @@
         search_terms: job.search_terms,
         selected_columns: job.selected_columns,
         target_rows: scraperTarget(job),
+        target_count: scraperTarget(job),
+        leads_per_term: Number(job.leads_per_term) || scraperLeadsPerTerm,
+        credits_per_term: Number(job.credits_per_term) || LEAD_CREDITS_PER_TERM,
         credits_spent: job.credits_spent,
         remaining_credits: Math.max(0, state.credits)
       }),
@@ -5821,20 +6156,70 @@
   let lastScraperRequired = null;
   let scraperEmailTouched = false;
 
-  /* Live quote: filled terms × 3 credits = terms × 50 leads. */
+  /* Live quote: filled terms × (per-term lead volume & price). */
   function scraperQuote() {
+    const mode = leadOptionFor(scraperLeadsPerTerm);
+    const maxTerms = leadMaxTermsFor(mode.leads);
     const terms = $$('.term-field input')
+      .filter(function (input) {
+        const field = input.closest('.term-field');
+        return !field || !field.classList.contains('is-hidden');
+      })
       .map(function (input) { return input.value.trim(); })
       .filter(Boolean)
-      .slice(0, LEAD_MAX_TERMS);
+      .slice(0, maxTerms);
     const filled = terms.length;
 
     return {
       terms: terms,
       filled: filled,
-      required: filled * LEAD_CREDITS_PER_TERM,
-      target: filled * LEAD_LEADS_PER_TERM
+      maxTerms: maxTerms,
+      leadsPerTerm: mode.leads,
+      creditsPerTerm: mode.credits,
+      required: filled * mode.credits,
+      target: filled * mode.leads
     };
+  }
+
+  /* Apply the 50 / 100 leads-per-term mode: tab state, term cap & copy. */
+  function applyScraperLeadMode() {
+    const mode = leadOptionFor(scraperLeadsPerTerm);
+    const maxTerms = leadMaxTermsFor(mode.leads);
+
+    $$('#scraperLeadMode [data-leads]').forEach(function (btn) {
+      const active = toPositiveInt(btn.getAttribute('data-leads'), 0) === mode.leads;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+
+    $$('.term-field').forEach(function (field, index) {
+      const hidden = index >= maxTerms;
+      field.classList.toggle('is-hidden', hidden);
+      field.hidden = hidden;
+      if (hidden) {
+        const input = $('input', field);
+        if (input) input.value = '';
+      }
+    });
+
+    const heading = $('#scraperTermHeading');
+    if (heading) heading.textContent = 'Up to ' + maxTerms + ' search terms';
+
+    const hint = $('#scraperModeHint');
+    if (hint) {
+      hint.textContent =
+        '1 term = ' + mode.leads + ' leads = ' + mode.credits + ' credits · max ' +
+        maxTerms + ' terms (' + mode.leads * maxTerms + ' leads)';
+    }
+
+    const sub = $('#scraperModalSub');
+    if (sub) {
+      sub.textContent =
+        mode.leads + ' leads per term · ' + mode.credits + ' credits per term · max ' +
+        maxTerms + ' terms (' + LEAD_MAX_LEADS + ' leads)';
+    }
+
+    updateScraperQuote();
   }
 
   function updateScraperQuote() {
@@ -5844,11 +6229,14 @@
     if (pill) {
       pill.textContent =
         quote.filled === 0
-          ? 'Enter at least 1 search term (' + LEAD_LEADS_PER_TERM + ' leads · ' +
-            LEAD_CREDITS_PER_TERM + ' credits each)'
-          : 'Stops automatically at ' + quote.target + ' unique leads (' +
-            quote.filled + ' term' + (quote.filled === 1 ? '' : 's') + ')';
+          ? 'Enter at least 1 search term (' + quote.leadsPerTerm + ' leads · ' +
+            quote.creditsPerTerm + ' credits each)'
+          : quote.filled + ' term' + (quote.filled === 1 ? '' : 's') + ' × ' +
+            quote.leadsPerTerm + ' leads = ' + quote.target + ' unique leads';
     }
+
+    const targetValue = $('#scraperTargetValue');
+    if (targetValue) targetValue.textContent = String(quote.target);
 
     const total = $('#scraperCreditTotal');
     if (total) {
@@ -5931,10 +6319,22 @@
       );
     }).join('');
 
+    const leadModeOptions = LEAD_OPTIONS.map(function (option) {
+      return (
+        '<button type="button" class="lead-mode-pill" data-leads="' + option.leads +
+        '" role="tab" aria-selected="false">' +
+        '<span class="lead-mode-title">' + option.leads +
+        ' leads <span class="lead-mode-unit">/ term</span></span>' +
+        '<span class="lead-mode-note">' + option.credits + ' credits / term</span>' +
+        '</button>'
+      );
+    }).join('');
+
     openModal(
       '<h2 class="modal-title" id="modalTitle">Lead Scraper Agent</h2>' +
-      '<p class="modal-sub">1 term = ' + LEAD_LEADS_PER_TERM + ' leads = ' +
-      LEAD_CREDITS_PER_TERM + ' credits · max ' + LEAD_MAX_TERMS + ' terms</p>' +
+      '<p class="modal-sub" id="scraperModalSub">' + LEAD_LEADS_PER_TERM + ' leads per term · ' +
+      LEAD_CREDITS_PER_TERM + ' credits per term · max ' + LEAD_MAX_TERMS + ' terms (' +
+      LEAD_MAX_LEADS + ' leads)</p>' +
         '<form class="scraper-form" id="scraperForm" novalidate>' +
         '<div class="form-two">' +
         '<div class="field"><label for="scraperName">Full name <span class="req">*</span></label>' +
@@ -5950,14 +6350,23 @@
         '<div class="field" id="customCountryField" hidden>' +
         '<label for="scraperCustomCountry">Custom country</label>' +
         '<input type="text" id="scraperCustomCountry" placeholder="e.g. New Zealand" /></div>' +
-        '<div class="modal-section"><h3>10 search terms</h3>' +
+        '<div class="modal-section"><h3>Leads per term</h3>' +
+        '<span class="fine" id="scraperModeHint"></span></div>' +
+        '<div class="lead-mode" id="scraperLeadMode" role="tablist" aria-label="Leads per search term">' +
+        leadModeOptions +
+        '</div>' +
+        '<div class="modal-section"><h3 id="scraperTermHeading">Up to ' + LEAD_MAX_TERMS +
+        ' search terms</h3>' +
         '<button type="button" class="btn btn-ghost btn-sm" id="fillTermsBtn">Fill Sample Search Terms</button></div>' +
         '<div class="term-grid">' + terms.join('') + '</div>' +
         '<div class="scraper-quote">' +
+        '<div class="scraper-quote-cell"><span class="quote-label">Target leads</span>' +
+        '<strong class="quote-value" id="scraperTargetValue">0</strong></div>' +
+        '<div class="scraper-quote-cell"><span class="quote-label">Total cost</span>' +
+        '<strong class="quote-value modal-credit-total is-zero" id="scraperCreditTotal">0 credits</strong></div>' +
+        '</div>' +
         '<p class="pill-note" id="scraperQuotePill">Enter at least 1 search term (' +
         LEAD_LEADS_PER_TERM + ' leads · ' + LEAD_CREDITS_PER_TERM + ' credits each)</p>' +
-        '<span class="modal-credit-total is-zero" id="scraperCreditTotal">0 credits</span>' +
-        '</div>' +
         '<div class="modal-section"><h3>Excel columns</h3>' +
         '<span class="fine">Company and phone always included</span></div>' +
         '<div class="column-group">' +
@@ -5985,10 +6394,22 @@
       });
     }
 
+    const modeWrap = $('#scraperLeadMode');
+    if (modeWrap) {
+      modeWrap.addEventListener('click', function (event) {
+        const btn = event.target.closest ? event.target.closest('[data-leads]') : null;
+        if (!btn) return;
+        const leads = toPositiveInt(btn.getAttribute('data-leads'), scraperLeadsPerTerm);
+        if (leads === scraperLeadsPerTerm) return;
+        scraperLeadsPerTerm = leads;
+        applyScraperLeadMode();
+      });
+    }
+
     const fillBtn = $('#fillTermsBtn');
     if (fillBtn) {
       fillBtn.addEventListener('click', function () {
-        $$('.term-field input').forEach(function (input, index) {
+        $$('.term-field:not(.is-hidden) input').forEach(function (input, index) {
           input.value = LEAD_SAMPLE_TERMS[index] || '';
         });
         updateScraperQuote();
@@ -6020,7 +6441,7 @@
 
     lastScraperRequired = null;
     scraperEmailTouched = false;
-    updateScraperQuote();
+    applyScraperLeadMode();
 
     const nameEl = $('#scraperName');
     if (nameEl) nameEl.focus();
@@ -6097,6 +6518,8 @@
       selected_columns: columns,
       target_rows: quote.target,
       target_count: quote.target,
+      leads_per_term: quote.leadsPerTerm,
+      credits_per_term: quote.creditsPerTerm,
       scraped_rows: 0,
       filled_rows: 0,
       percent: 0,
@@ -6540,7 +6963,7 @@
   }
 
   function invoicePageActive() {
-    return currentRoute() === 'invoice-results';
+    return true;
   }
 
   function invoiceJobFailed(job) {
@@ -7794,7 +8217,7 @@
   }
 
   function lePageActive() {
-    return currentRoute() === 'enricher-results';
+    return true;
   }
 
   function leIsComplete(job) {
@@ -9244,7 +9667,7 @@
   }
 
   function rwPageActive() {
-    return currentRoute() === 'review-results';
+    return true;
   }
 
   function rwIsComplete(job) {
@@ -10198,22 +10621,11 @@
   /* Returning to the tab should never wait for the next 2.5s tick. */
   function resumePollingOnFocus() {
     if (document.visibilityState === 'hidden') return;
-    const route = currentRoute();
-    if (
-      (route === 'scraper-results' || route === 'agents') &&
-      scraperPollActive(state.scraperJob)
-    ) {
-      forceScraperPollNow();
-    }
-    if (route === 'invoice-results' && invoicePollActive(state.invoiceJob)) {
-      forceInvoicePollNow();
-    }
-    if (route === 'enricher-results' && lePollActive(state.enricherJob)) {
-      forceLePollNow();
-    }
-    if (route === 'review-results' && rwPollActive(state.reviewJob)) {
-      forceRwPollNow();
-    }
+    if (scraperPollActive(state.scraperJob)) forceScraperPollNow();
+    if (invoicePollActive(state.invoiceJob)) forceInvoicePollNow();
+    if (lePollActive(state.enricherJob)) forceLePollNow();
+    if (rwPollActive(state.reviewJob)) forceRwPollNow();
+    updateJobPill();
   }
 
   /* ============================== INIT =================================== */
@@ -10233,6 +10645,7 @@
     updateNextBrief();
     bindEvents();
     renderAuthUI();
+    bindJobPill();
 
     document.addEventListener('visibilitychange', function () {
       if (!document.hidden) resumePollingOnFocus();
