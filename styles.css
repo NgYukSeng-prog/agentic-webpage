@@ -8602,3 +8602,134 @@ table.leads-table {
 .preview-body > .home-pane {
   height: 100%;
 }
+
+/* ======================================================================
+   26. LIVE OUTPUT PREVIEW · MOBILE OVERFLOW GUARD (FILENAME + BADGE)
+   Keeps the filename/meta block and the status badge ("100% · ready",
+   "Xero ready", "07:00 MYT") inside the white preview card on every tab.
+   ====================================================================== */
+
+/* White preview card containers (Stock Brief .brief + the four .home-scrape
+   panes): never let a badge or table bleed past the rounded border. */
+.home-scrape,
+.brief {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.preview-body,
+.preview-body > .home-pane,
+.home-pane {
+  max-width: 100%;
+}
+
+/* Header row: filename/meta on the left, status badge on the right. */
+.home-scrape-head,
+.brief-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The left block shrinks first so a long .xlsx filename ellipsizes. */
+.home-scrape-title,
+.brief-agent {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.home-scrape-title strong,
+.brief-agent-text strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Secondary meta lines wrap instead of forcing horizontal scroll. */
+.home-scrape-title span,
+.brief-agent-text span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* The right-side badge keeps its intrinsic width and never wraps. */
+.home-scrape-head > .mini-pill,
+.home-scrape-head > .mini-pill-emerald,
+.brief-head > .brief-tag {
+  flex-shrink: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* Shell header ("Live output preview" + worker pill) may also wrap. */
+.preview-head {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.preview-label {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+/* Stock pane subhead (timestamp + ticker pills) may wrap on narrow widths. */
+.preview-subhead {
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.brief-tabs {
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 540px) {
+  /* Let the badge drop onto a neat row directly below the filename. */
+  .home-scrape-title,
+  .brief-agent {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .home-scrape-head,
+  .brief-head {
+    align-items: flex-start;
+    gap: 6px 12px;
+  }
+
+  .home-scrape-head > .mini-pill,
+  .home-scrape-head > .mini-pill-emerald,
+  .brief-head > .brief-tag {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .home-scrape {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Last-resort wrapping for very long sample filenames / meta copy. */
+  .home-scrape-title strong,
+  .brief-agent-text strong,
+  .home-scrape-title span,
+  .preview-fine {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
