@@ -8108,6 +8108,16 @@ table.leads-table {
   animation: none;
   cursor: grabbing;
   box-shadow: 0 30px 60px -18px rgba(2, 6, 23, 0.98);
+  transition: none !important;
+  will-change: left, top;
+}
+
+/* Spring-like magnetic glide to the nearest edge on release. */
+.job-pill.is-snapping {
+  transition:
+    left 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    top 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: left, top;
 }
 
 .job-pill-grip {

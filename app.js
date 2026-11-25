@@ -2223,84 +2223,146 @@
       });
   }
 
-  /* --- Position persistence + viewport clamping -------------------------- */
+  /* --- Header safe zone, persistence and magnetic edge snapping ---------- */
+  function jobPillHeaderBottom() {
+    const headerEl = document.querySelector('header, .site-header, .navbar');
+    return headerEl ? headerEl.getBoundingClientRect().bottom : 72;
+  }
+
+  function jobPillBounds(pill) {
+    const width = pill.offsetWidth;
+    const height = pill.offsetHeight;
+    /* Safe top begins just below the live header (fallback 72px). */
+    const minTop = Math.ceil(jobPillHeaderBottom() + JOB_PILL_MARGIN);
+    const maxTop = Math.max(minTop, window.innerHeight - height - JOB_PILL_MARGIN);
+    const maxLeft = Math.max(JOB_PILL_MARGIN, window.innerWidth - width - JOB_PILL_MARGIN);
+    return { width: width, height: height, minTop: minTop, maxTop: maxTop, maxLeft: maxLeft };
+  }
+
   function readJobPillPos() {
     try {
       const raw = window.localStorage.getItem(JOB_PILL_POS_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      const left = Number(parsed && parsed.left);
       const top = Number(parsed && parsed.top);
-      if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
-      return { left: left, top: top };
+      const side = parsed && parsed.side;
+      if (Number.isFinite(top) && (side === 'left' || side === 'right')) {
+        return { side: side, top: top };
+      }
+      /* Legacy {left, top} — derive the nearest side. */
+      const left = Number(parsed && parsed.left);
+      if (Number.isFinite(left) && Number.isFinite(top)) {
+        return { side: left < window.innerWidth / 2 ? 'left' : 'right', top: top };
+      }
+      return null;
     } catch (err) {
       return null;
     }
   }
 
-  function saveJobPillPos(left, top) {
+  function saveJobPillPos(side, top) {
     try {
       window.localStorage.setItem(
         JOB_PILL_POS_KEY,
-        JSON.stringify({ left: Math.round(left), top: Math.round(top) })
+        JSON.stringify({ side: side === 'left' ? 'left' : 'right', top: Math.round(top) })
       );
     } catch (err) {
       /* Private mode / storage disabled — position simply won't persist. */
     }
   }
 
-  /* 12px margin on all 4 edges; never negative when the pill is wider than
-     the viewport (it then pins to the left/top margin). */
-  function clampJobPillAxis(value, size, viewport) {
-    const max = viewport - size - JOB_PILL_MARGIN;
-    if (max < JOB_PILL_MARGIN) return JOB_PILL_MARGIN;
-    return Math.min(Math.max(JOB_PILL_MARGIN, value), max);
+  function clampJobPillTop(value, bounds) {
+    return Math.min(Math.max(bounds.minTop, value), bounds.maxTop);
   }
 
-  function applyJobPillPosition(left, top, persist) {
+  function clampJobPillLeft(value, bounds) {
+    return Math.min(Math.max(JOB_PILL_MARGIN, value), bounds.maxLeft);
+  }
+
+  function edgeLeftFor(side, bounds) {
+    return side === 'left' ? JOB_PILL_MARGIN : bounds.maxLeft;
+  }
+
+  /* Write the clamped position to the pill (no persistence). `bounds` may be
+     passed in during a drag to avoid re-measuring on every pointermove. */
+  function setJobPillPosition(left, top, bounds) {
     const pill = $('#jobPill');
     if (!pill || pill.hidden) return null;
 
-    const width = pill.offsetWidth;
-    const height = pill.offsetHeight;
-    const clampedLeft = clampJobPillAxis(left, width, window.innerWidth);
-    const clampedTop = clampJobPillAxis(top, height, window.innerHeight);
+    const b = bounds || jobPillBounds(pill);
+    const clampedLeft = clampJobPillLeft(left, b);
+    const clampedTop = clampJobPillTop(top, b);
 
     pill.style.left = clampedLeft + 'px';
     pill.style.top = clampedTop + 'px';
     pill.style.right = 'auto';
     pill.style.bottom = 'auto';
 
-    if (persist) saveJobPillPos(clampedLeft, clampedTop);
-    return { left: clampedLeft, top: clampedTop };
+    return { left: clampedLeft, top: clampedTop, bounds: b };
   }
 
-  /* Restore the saved position, or default to bottom-right (20px gap). */
+  /* Restore: pin to the saved side, strictly below the header safe zone.
+     With no saved position, default to bottom-right (20px gap). */
   function restoreJobPillPosition() {
     const pill = $('#jobPill');
     if (!pill || pill.hidden) return;
 
-    const stored = readJobPillPos();
-    if (stored) {
-      applyJobPillPosition(stored.left, stored.top, false);
+    const bounds = jobPillBounds(pill);
+    const saved = readJobPillPos();
+
+    if (saved) {
+      setJobPillPosition(edgeLeftFor(saved.side, bounds), clampJobPillTop(saved.top, bounds));
       return;
     }
 
-    applyJobPillPosition(
-      window.innerWidth - pill.offsetWidth - JOB_PILL_DEFAULT_GAP,
-      window.innerHeight - pill.offsetHeight - JOB_PILL_DEFAULT_GAP,
-      false
+    setJobPillPosition(
+      bounds.maxLeft,
+      clampJobPillTop(window.innerHeight - bounds.height - JOB_PILL_DEFAULT_GAP, bounds)
     );
   }
 
-  /* window.resize / orientationchange: keep the pill inside the viewport. */
+  /* Magnetic snap: glide to the nearest left/right edge on release. */
+  function snapJobPillToEdge() {
+    const pill = $('#jobPill');
+    if (!pill || pill.hidden) return null;
+
+    const bounds = jobPillBounds(pill);
+    const rect = pill.getBoundingClientRect();
+    const centerX = rect.left + bounds.width / 2;
+    const side = centerX < window.innerWidth / 2 ? 'left' : 'right';
+    const targetLeft = edgeLeftFor(side, bounds);
+    const targetTop = clampJobPillTop(rect.top, bounds);
+
+    /* Spring-like glide only for the snap; drag tracking stays instant. */
+    pill.classList.add('is-snapping');
+    void pill.offsetWidth;
+    setJobPillPosition(targetLeft, targetTop);
+    saveJobPillPos(side, targetTop);
+
+    window.setTimeout(function () {
+      pill.classList.remove('is-snapping');
+    }, 320);
+
+    return { side: side, left: targetLeft, top: targetTop };
+  }
+
+  /* window.resize / orientationchange: re-pin to the saved edge. */
   function reclampJobPillPosition() {
     const pill = $('#jobPill');
     if (!pill || pill.hidden) return;
+
+    const bounds = jobPillBounds(pill);
+    const saved = readJobPillPos();
+
+    if (saved) {
+      const top = clampJobPillTop(saved.top, bounds);
+      setJobPillPosition(edgeLeftFor(saved.side, bounds), top);
+      saveJobPillPos(saved.side, top);
+      return;
+    }
+
     const rect = pill.getBoundingClientRect();
-    /* Persist only if the user had already chosen a position; otherwise the
-       default stays a computed bottom-right anchor. */
-    applyJobPillPosition(rect.left, rect.top, !!readJobPillPos());
+    setJobPillPosition(bounds.maxLeft, clampJobPillTop(rect.top, bounds));
   }
 
   function updateJobPill() {
@@ -2368,14 +2430,17 @@
       if (Math.sqrt(dx * dx + dy * dy) <= JOB_PILL_DRAG_THRESHOLD) return;
       jobPillDrag.moved = true;
       const pill = $('#jobPill');
-      if (pill) pill.classList.add('is-dragging');
+      if (pill) {
+        pill.classList.remove('is-snapping');
+        pill.classList.add('is-dragging');
+      }
     }
 
     if (event.cancelable) event.preventDefault();
-    const applied = applyJobPillPosition(
+    const applied = setJobPillPosition(
       jobPillDrag.originLeft + dx,
       jobPillDrag.originTop + dy,
-      false
+      jobPillDrag.bounds
     );
 
     /* Rebase the drag origin on the clamped result so over-dragging past an
@@ -2405,10 +2470,7 @@
           /* capture already released */
         }
       }
-      if (moved) {
-        const rect = pill.getBoundingClientRect();
-        applyJobPillPosition(rect.left, rect.top, true);
-      }
+      if (moved) snapJobPillToEdge();
     }
 
     if (moved) {
@@ -2465,14 +2527,23 @@
       /* × always clicks — never starts a drag. */
       if (event.target.closest && event.target.closest('#jobPillDismiss')) return;
 
+      /* Freeze any in-flight snap animation at the current visual spot. */
       const rect = pill.getBoundingClientRect();
+      pill.classList.remove('is-snapping');
+      pill.style.left = rect.left + 'px';
+      pill.style.top = rect.top + 'px';
+      pill.style.right = 'auto';
+      pill.style.bottom = 'auto';
+
       jobPillDrag = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         originLeft: rect.left,
         originTop: rect.top,
-        moved: false
+        moved: false,
+        /* Measured once per gesture — stable for 60fps pointer tracking. */
+        bounds: jobPillBounds(pill)
       };
 
       if (pill.setPointerCapture) {
