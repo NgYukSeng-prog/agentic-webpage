@@ -9,7 +9,7 @@
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
   <meta property="og:description" content="Five live AI workers: a 07:00 MYT stock brief, a B2B Excel lead scraper, an Invoice OCR agent, a Website & Email Lead Enricher and a Competitor Review Miner. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=43" />
+  <link rel="stylesheet" href="styles.css?v=44" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='0.52' stop-color='%236366F1'/%3E%3Cstop offset='1' stop-color='%23A855F7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Cpath d='M19.4 4.6 9.2 17.4h4.55L12 26.9 23 14.2h-4.7z' fill='%2307131F'/%3E%3Ccircle cx='24.9' cy='7.4' r='1.05' fill='%23E0F2FE'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -1542,7 +1542,7 @@
         <div class="page-head configure-head">
           <span class="eyebrow">Lead Scraper Agent</span>
           <h1>Your Excel is being built.</h1>
-          <p>Live extraction progress · first 25 rows preview · .xlsx when the backend completes.</p>
+          <p>Working · first 25 rows preview · .xlsx when ready.</p>
         </div>
 
         <div class="panel" id="scraperEmpty" hidden>
@@ -1569,7 +1569,7 @@
               <p class="ring-active" id="ringActive" hidden></p>
               <span class="webhook-badge" id="scraperStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
-                <span class="webhook-text">Connecting to live status…</span>
+                <span class="webhook-text">Working…</span>
               </span>
               <p class="ring-hint" id="ringRule">3 credits per term · 50 leads each</p>
               <p class="ring-email" id="scraperEmailNote">Excel (.xlsx) will also be emailed to your delivery email when complete — safe to close this tab.</p>
@@ -1591,7 +1591,7 @@
                 </div>
               </div>
 
-              <p class="fine">Cloud extraction takes a few minutes for 50–500 leads. Safe to close this tab — return anytime with your Job ID.</p>
+              <p class="fine">Processing your request — safe to close this tab and return anytime with your Job ID.</p>
             </div>
           </div>
 
@@ -1614,7 +1614,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="downloadTitle">Excel (.xlsx)</strong>
-                <span id="downloadSub">Awaiting live backend status</span>
+                <span id="downloadSub">Working…</span>
               </div>
               <button type="button" class="btn btn-primary" id="downloadBtn" disabled>Download Full Excel (.xlsx)</button>
             </div>
@@ -1635,7 +1635,7 @@
         <div class="page-head configure-head">
           <span class="eyebrow">Invoice OCR Agent</span>
           <h1>Your invoice Excel is being built.</h1>
-          <p>Live OCR progress · extracted invoices preview · .xlsx when the backend completes.</p>
+          <p>Working · extracted invoices preview · .xlsx when ready.</p>
         </div>
 
         <div class="panel" id="invoiceEmpty" hidden>
@@ -1662,7 +1662,7 @@
               <p class="ring-active" id="invRingActive" hidden></p>
               <span class="webhook-badge" id="invoiceStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
-                <span class="webhook-text">Starting invoice OCR…</span>
+                <span class="webhook-text">Working…</span>
               </span>
               <p class="ring-hint" id="invRingRule">5 credits (1–5 files) · 10 credits (6–15 files)</p>
               <p class="ring-email" id="invoiceEmailNote">Excel (.xlsx) will also be emailed to your delivery email when complete — safe to close this tab.</p>
@@ -1684,7 +1684,7 @@
                 </div>
               </div>
 
-              <p class="fine">OCR runs in the cloud. Safe to close this tab — reopen it from Subscriptions & Purchase History.</p>
+              <p class="fine">Processing your request — safe to close this tab and return anytime. Reopen it from Subscriptions & Purchase History.</p>
             </div>
           </div>
 
@@ -1692,7 +1692,7 @@
             <div class="panel-head row-head">
               <div>
                 <h2>Extracted invoices</h2>
-                <p id="invoiceTableMeta">Live preview · fixed accounting columns</p>
+                <p id="invoiceTableMeta">Preview · fixed accounting columns</p>
               </div>
               <span class="mini-pill" id="invoicePreviewPill">0 invoices</span>
             </div>
@@ -1707,7 +1707,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="invoiceDownloadTitle">Excel (.xlsx)</strong>
-                <span id="invoiceDownloadSub">Awaiting live backend status</span>
+                <span id="invoiceDownloadSub">Working…</span>
               </div>
               <button type="button" class="btn btn-primary" id="invoiceDownloadBtn" disabled>Download Invoice Excel (.xlsx)</button>
             </div>
@@ -1728,7 +1728,7 @@
         <div class="page-head configure-head">
           <span class="eyebrow">Website & Email Lead Enricher</span>
           <h1>Your enriched Excel is being built.</h1>
-          <p>Live website checks · email + MX verification · socials and openers preview · .xlsx when the backend completes.</p>
+          <p>Working · email + MX verification · socials and openers preview · .xlsx when ready.</p>
         </div>
 
         <div class="panel" id="enricherEmpty" hidden>
@@ -1755,7 +1755,7 @@
               <p class="ring-active" id="leRingActive" hidden></p>
               <span class="webhook-badge" id="leStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
-                <span class="webhook-text">Starting lead enrichment…</span>
+                <span class="webhook-text">Working…</span>
               </span>
               <p class="ring-hint" id="leRingRule">5 credits (1–50 sites) · 10 credits (51–150) · 15 credits (151–300)</p>
               <p class="ring-email" id="leEmailNote">Excel (.xlsx) will also be emailed to your delivery email when complete — safe to close this tab.</p>
@@ -1777,7 +1777,7 @@
                 </div>
               </div>
 
-              <p class="fine">Enrichment runs in the cloud. Safe to close this tab — reopen it from Subscriptions & Purchase History.</p>
+              <p class="fine">Processing your request — safe to close this tab and return anytime. Reopen it from Subscriptions & Purchase History.</p>
             </div>
           </div>
 
@@ -1785,7 +1785,7 @@
             <div class="panel-head row-head">
               <div>
                 <h2>Enriched preview</h2>
-                <p id="leTableMeta">Live preview · emails, MX, socials & openers</p>
+                <p id="leTableMeta">Preview · emails, MX, socials & openers</p>
               </div>
               <span class="mini-pill" id="lePreviewPill">0 websites</span>
             </div>
@@ -1800,7 +1800,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="leDownloadTitle">Enriched Excel (.xlsx)</strong>
-                <span id="leDownloadSub">Awaiting live backend status</span>
+                <span id="leDownloadSub">Working…</span>
               </div>
               <button type="button" class="btn btn-primary" id="leDownloadBtn" disabled>Download Enriched Excel (.xlsx)</button>
             </div>
@@ -1821,7 +1821,7 @@
         <div class="page-head configure-head">
           <span class="eyebrow">Competitor Review Miner</span>
           <h1>Your battlecard is being mined.</h1>
-          <p>Live review mining · complaint themes and counter-pitches preview · 3-sheet .xlsx when the backend completes.</p>
+          <p>Working · complaint themes and counter-pitches preview · 3-sheet .xlsx when ready.</p>
         </div>
 
         <div class="panel" id="reviewEmpty" hidden>
@@ -1848,7 +1848,7 @@
               <p class="ring-active" id="rwRingActive" hidden></p>
               <span class="webhook-badge" id="rwStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
-                <span class="webhook-text">Starting review mining…</span>
+                <span class="webhook-text">Working…</span>
               </span>
               <p class="ring-hint" id="rwRingRule">5 credits (1–3 competitors) · 8 credits (4–5 competitors)</p>
               <p class="ring-email" id="rwEmailNote">Excel (.xlsx) will also be emailed to your delivery email when complete — safe to close this tab.</p>
@@ -1870,7 +1870,7 @@
                 </div>
               </div>
 
-              <p class="fine">Review mining runs in the cloud. Safe to close this tab — reopen it from Subscriptions & Purchase History.</p>
+              <p class="fine">Processing your request — safe to close this tab and return anytime. Reopen it from Subscriptions & Purchase History.</p>
             </div>
           </div>
 
@@ -1878,7 +1878,7 @@
             <div class="panel-head row-head">
               <div>
                 <h2>Executive Battlecard Preview</h2>
-                <p id="rwTableMeta">Live preview · complaints, vulnerabilities & counter-pitches</p>
+                <p id="rwTableMeta">Preview · complaints, vulnerabilities & counter-pitches</p>
               </div>
               <span class="mini-pill" id="rwPreviewPill">0 competitors</span>
             </div>
@@ -1893,7 +1893,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="rwDownloadTitle">Battlecard Excel (.xlsx)</strong>
-                <span id="rwDownloadSub">Awaiting live backend status</span>
+                <span id="rwDownloadSub">Working…</span>
               </div>
               <button type="button" class="btn btn-primary" id="rwDownloadBtn" disabled>Download Battlecard Excel (.xlsx)</button>
             </div>
@@ -1945,7 +1945,7 @@
               <p class="ring-active" id="propRingActive" hidden></p>
               <span class="webhook-badge" id="propStatus">
                 <span class="webhook-dot" aria-hidden="true"></span>
-                <span class="webhook-text">Connecting to live status…</span>
+                <span class="webhook-text">Working…</span>
               </span>
               <p class="ring-hint" id="propRingRule">7 days · 5 credits · ≥10% Below Median</p>
               <p class="ring-email" id="propEmailNote">Day-0 baseline Excel will also be emailed to your delivery email when ready — daily 08:00 MYT alerts follow automatically.</p>
@@ -1988,7 +1988,7 @@
             <div class="download-bar">
               <div class="download-info">
                 <strong id="propDownloadTitle">Day-0 Baseline Excel (.xlsx)</strong>
-                <span id="propDownloadSub">Awaiting live backend status</span>
+                <span id="propDownloadSub">Working…</span>
               </div>
               <button type="button" class="btn btn-primary" id="propDownloadBtn" disabled>Download Baseline Excel (.xlsx)</button>
             </div>
@@ -2140,7 +2140,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=43"></script>
-  <script src="app.js?v=43"></script>
+  <script src="config.js?v=44"></script>
+  <script src="app.js?v=44"></script>
 </body>
 </html>

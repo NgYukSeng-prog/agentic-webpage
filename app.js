@@ -3391,6 +3391,21 @@
       return null;
     })();
 
+    /* Some backends mark a Lead Scraper job as already enriched. */
+    const alreadyEnriched = (function () {
+      const raw = firstValue(
+        job,
+        ['already_enriched', 'alreadyEnriched', 'is_enriched', 'enriched'],
+        null
+      );
+      if (raw === true || raw === 1) return true;
+      if (typeof raw === 'string') {
+        const text = raw.trim().toLowerCase();
+        return ['true', '1', 'yes', 'y', 'completed', 'done', 'enriched'].indexOf(text) !== -1;
+      }
+      return false;
+    })();
+
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
       country: String(firstValue(job, ['country', 'location', 'region'], '—')),
@@ -3408,6 +3423,7 @@
       columns: columns,
       /* true/false when known, null when the backend never recorded it. */
       hasWebsite: explicitWebsite !== null ? explicitWebsite : websiteFromColumns,
+      alreadyEnriched: alreadyEnriched,
       downloadReady:
         job.download_ready === true ||
         job.download_ready === 'true' ||
@@ -3561,6 +3577,14 @@
       credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
       status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
       source: String(firstValue(job, ['source', 'source_type', 'input_source'], '')),
+      /* The Lead Scraper job this enrichment was built from, when recorded. */
+      source_job_id: String(
+        firstValue(
+          job,
+          ['source_job_id', 'sourceJobId', 'lead_job_id', 'input_job_id', 'source_id'],
+          ''
+        ) || ''
+      ),
       created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
       downloadReady:
         job.download_ready === true ||
@@ -4544,12 +4568,12 @@
   function downloadHistoryJob(jobId) {
     const id = String(jobId || '').trim();
     if (!id || !LEAD_DOWNLOAD_URL) {
-      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      toast('Download unlocks when your Excel is ready.', 'warn');
       return;
     }
 
     const url = LEAD_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id);
-    toast('Requesting your .xlsx from the cloud…', 'info');
+    toast('Preparing your download…', 'info');
 
     fetch(url, { mode: 'cors', headers: authHeaders() })
       .then(function (response) {
@@ -6295,8 +6319,8 @@
       wrap.hidden = false;
       wrap.innerHTML =
         '<div class="card-job-live">' +
-        '<span class="card-job-pill"><span class="job-live-dot"></span>Finalizing Excel…</span>' +
-        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
+        '<span class="card-job-pill"><span class="job-live-dot"></span>Finishing up…</span>' +
+        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Progress</a>' +
         '</div>';
       return;
     }
@@ -6305,8 +6329,8 @@
       wrap.hidden = false;
       wrap.innerHTML =
         '<div class="card-job-live">' +
-        '<span class="card-job-pill"><span class="job-live-dot"></span>Queued · Waiting for worker...</span>' +
-        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
+        '<span class="card-job-pill"><span class="job-live-dot"></span>Queued · Waiting to start…</span>' +
+        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Progress</a>' +
         '</div>';
       return;
     }
@@ -6318,7 +6342,7 @@
         '<span class="card-job-pill"><span class="job-live-dot"></span>Running · ' +
         scraped.toLocaleString('en-US') + ' / ' + target.toLocaleString('en-US') +
         ' leads (' + percent + '%)</span>' +
-        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Live Progress</a>' +
+        '<a class="btn btn-ghost btn-sm" href="#scraper-results">View Progress</a>' +
         '</div>';
       return;
     }
@@ -6515,9 +6539,9 @@
     if (downloadSub) {
       if (complete) downloadSub.textContent = 'Ready to download';
       else if (String(job.status || '').toLowerCase() === 'completed') {
-        downloadSub.textContent = 'Finalizing Excel…';
+        downloadSub.textContent = 'Finishing up…';
       } else {
-        downloadSub.textContent = 'Live progress from the scraper backend';
+        downloadSub.textContent = 'Working — safe to close this tab and return anytime.';
       }
     }
 
@@ -6536,7 +6560,7 @@
       emailNote.textContent = sent
         ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
         : 'Excel (.xlsx) will also be emailed to ' + email +
-          ' when the backend marks it ready — safe to close this tab.';
+          ' when ready — safe to close this tab.';
       emailNote.classList.toggle('is-sent', sent);
     }
 
@@ -6621,7 +6645,7 @@
         const message =
           job.status === 'completed'
             ? 'Preview unavailable — download the .xlsx for every lead.'
-            : 'Waiting for the first rows from the scraper backend…';
+            : 'Waiting for the first rows…';
         tbody.innerHTML =
           '<tr><td colspan="' + cols.length + '" class="table-empty">' + message + '</td></tr>';
       } else {
@@ -6731,7 +6755,7 @@
     };
 
     if (!LEAD_START_URL) {
-      failStart('Lead Scraper backend is not configured. Please try again later.');
+      failStart('Lead Scraper is unavailable right now. Please try again later.');
       return;
     }
 
@@ -6744,7 +6768,7 @@
       return;
     }
 
-    setScraperBadge('pending', 'Starting cloud scrape…');
+    setScraperBadge('pending', 'Working…');
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? window.setTimeout(function () { controller.abort(); }, 9000) : null;
@@ -6830,7 +6854,7 @@
         }
 
         if (body.mode === 'demo' || status === 'demo') {
-          failStart('The scraper backend is not returning live progress. Please try again later.');
+          failStart('Lead Scraper is temporarily busy. Please try again later.');
           return;
         }
 
@@ -6853,7 +6877,7 @@
           '[LiteWork] Lead scraper start response unavailable.',
           err && err.message ? err.message : err
         );
-        failStart('Could not reach the Lead Scraper backend. Please try again.');
+        failStart('Temporarily busy — please try again in a moment.');
       });
   }
 
@@ -6876,7 +6900,7 @@
     scraperPollStartedAt = Date.now();
     scraperPollEpoch += 1;
     const epoch = scraperPollEpoch;
-    setScraperBadge('pending', force ? 'Refreshing status…' : 'Starting cloud scraper…');
+    setScraperBadge('pending', 'Working…');
     pollScraperStatus(!!force, epoch);
   }
 
@@ -7042,11 +7066,11 @@
           status === 'starting' ||
           String(data.phase || '').toLowerCase() === 'starting'
         ) {
-          setScraperBadge('pending', 'Starting cloud scraper…');
+          setScraperBadge('pending', 'Working…');
         } else {
           setScraperBadge(
             'pending',
-            'Live extraction · ' + Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
+            'Working · ' + Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
           );
         }
 
@@ -7058,7 +7082,7 @@
         if (epoch !== scraperPollEpoch) return;
 
         /* Transient spikes are normal. Keep the last good status on the first
-           two failures and only surface "Reconnecting…" after three. */
+           two failures and only surface "Still working…" after three. */
         const failures = (Number(job && job.poll_errors) || 0) + 1;
         if (job) job.poll_errors = failures;
 
@@ -7069,11 +7093,11 @@
 
         if (job) {
           if (failures >= 3) {
-            setScraperBadge('pending', 'Reconnecting…');
+            setScraperBadge('pending', 'Still working…');
           } else {
             const phase = String(job.status || '').toLowerCase();
             if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
-              setScraperBadge('pending', 'Starting cloud scraper…');
+              setScraperBadge('pending', 'Working…');
             }
           }
           saveState();
@@ -7181,7 +7205,7 @@
 
     if (LEAD_DOWNLOAD_URL) {
       const url = LEAD_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(job.job_id);
-      toast('Requesting your .xlsx from the cloud…', 'info');
+      toast('Preparing your download…', 'info');
 
       fetch(url, { mode: 'cors', headers: authHeaders() })
         .then(function (response) {
@@ -7219,7 +7243,7 @@
       return;
     }
 
-    toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+    toast('Download unlocks when your Excel is ready.', 'warn');
   }
 
   /* ----- configuration modal ----- */
@@ -7448,7 +7472,7 @@
         '<div class="scraper-modal-error" id="scraperFormError" role="alert"></div>' +
         '<p class="scraper-shortfall" id="scraperShortfall" hidden></p>' +
         '<button type="submit" class="btn btn-activate" id="scraperStartBtn" disabled>Confirm & Spend 0 Credits · Scrape 0 Leads</button>' +
-        '<p class="fine">Credits are deducted immediately. Extraction runs in the cloud.</p>' +
+        '<p class="fine">Credits are deducted immediately. Processing your request — safe to close this tab and return anytime.</p>' +
         '</div>' +
         '</form>',
       true
@@ -8086,7 +8110,7 @@
     invoicePollStartedAt = Date.now();
     invoicePollEpoch += 1;
     const epoch = invoicePollEpoch;
-    setInvoiceBadge('pending', force ? 'Refreshing status…' : 'Starting invoice OCR…');
+    setInvoiceBadge('pending', 'Working…');
     pollInvoiceStatus(!!force, epoch);
   }
 
@@ -8229,11 +8253,11 @@
         }
 
         if (status === 'queued' || status === 'pending' || status === 'starting') {
-          setInvoiceBadge('pending', 'Starting invoice OCR…');
+          setInvoiceBadge('pending', 'Working…');
         } else {
           setInvoiceBadge(
             'pending',
-            'Extracting invoices · ' +
+            'Working · ' +
               Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
           );
         }
@@ -8255,11 +8279,11 @@
 
         if (job) {
           if (failures >= 3) {
-            setInvoiceBadge('pending', 'Reconnecting…');
+            setInvoiceBadge('pending', 'Still working…');
           } else {
             const phase = String(job.status || '').toLowerCase();
             if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
-              setInvoiceBadge('pending', 'Starting invoice OCR…');
+              setInvoiceBadge('pending', 'Working…');
             }
           }
           saveState();
@@ -8419,9 +8443,9 @@
     if (downloadSub) {
       if (complete) downloadSub.textContent = 'Ready to download';
       else if (String(job.status || '').toLowerCase() === 'completed') {
-        downloadSub.textContent = 'Finalizing Excel…';
+        downloadSub.textContent = 'Finishing up…';
       } else {
-        downloadSub.textContent = 'Live progress from the OCR backend';
+        downloadSub.textContent = 'Working — safe to close this tab and return anytime.';
       }
     }
 
@@ -8432,7 +8456,7 @@
       emailNote.textContent = sent
         ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
         : 'Excel (.xlsx) will also be emailed to ' + email +
-          ' when the backend marks it ready — safe to close this tab.';
+          ' when ready — safe to close this tab.';
       emailNote.classList.toggle('is-sent', sent);
     }
 
@@ -8440,7 +8464,7 @@
     if (tableMeta) {
       const count = (job.preview_rows || []).length;
       tableMeta.textContent =
-        'Live preview · ' + count + ' invoice' + (count === 1 ? '' : 's') +
+        'Preview · ' + count + ' invoice' + (count === 1 ? '' : 's') +
         ' ready · fixed MY/SG accounting columns';
     }
 
@@ -8589,11 +8613,11 @@
     const job = state.invoiceJob || {};
     const id = String(jobId || job.job_id || '').trim();
     if (!id || !INV_DOWNLOAD_URL) {
-      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      toast('Download unlocks when your Excel is ready.', 'warn');
       return;
     }
 
-    toast('Requesting your invoice Excel from the cloud…', 'info');
+    toast('Preparing your download…', 'info');
 
     fetch(INV_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
       mode: 'cors',
@@ -8892,7 +8916,7 @@
       '<p class="scraper-shortfall" id="invoiceShortfall" hidden></p>' +
       '<button type="submit" class="btn btn-activate" id="invoiceStartBtn" disabled>' +
       'Confirm & Spend 0 Credits · Process 0 Files</button>' +
-      '<p class="fine">Credits are deducted immediately. OCR runs in the cloud.</p>' +
+      '<p class="fine">Credits are deducted immediately. Processing your request — safe to close this tab and return anytime.</p>' +
       '</div>' +
       '</form>',
       true
@@ -9119,6 +9143,8 @@
   let leHistoryRows = 0;
   let leSelectedJobId = '';
   let leJobData = [];
+  /* Source Lead Scraper job IDs already enriched (from the history response). */
+  let leServerEnrichedIds = {};
   /* Backend contract: 'lead_job' = a finished Lead Scraper run, 'upload' = file. */
   let leSourceType = 'lead_job';
   let leStarting = false;
@@ -9308,6 +9334,23 @@
     );
   }
 
+  /* Never surface raw worker/network jargon to the user. */
+  function leFriendlyError(reason) {
+    const message = String((reason && reason.message) || reason || '').trim();
+    if (!message) return '';
+    const lower = message.toLowerCase();
+    const technical =
+      lower.indexOf('worker') !== -1 ||
+      lower.indexOf('unavailable') !== -1 ||
+      lower.indexOf('failed to fetch') !== -1 ||
+      lower.indexOf('network') !== -1 ||
+      lower.indexOf('timeout') !== -1 ||
+      lower.indexOf('timed out') !== -1 ||
+      lower.indexOf('empty status response') !== -1 ||
+      /^http\s*5\d\d$/.test(lower);
+    return technical ? 'Temporarily busy — please try again in a moment.' : message;
+  }
+
   function lePollActive(job) {
     return !!job && !leJobFailed(job) && !leIsComplete(job);
   }
@@ -9348,7 +9391,7 @@
     lePollStartedAt = Date.now();
     lePollEpoch += 1;
     const epoch = lePollEpoch;
-    setLeBadge('pending', force ? 'Refreshing status…' : 'Starting lead enrichment…');
+    setLeBadge('pending', 'Working…');
     pollLeStatus(!!force, epoch);
   }
 
@@ -9478,6 +9521,9 @@
         const active = data.active_site || data.current_site || data.active_website;
         if (active != null) job.active_site = String(active);
 
+        const sourceJobId = data.source_job_id || data.sourceJobId || data.lead_job_id;
+        if (sourceJobId) job.source_job_id = String(sourceJobId);
+
         if (data.download_ready != null) {
           job.download_ready =
             data.download_ready === true ||
@@ -9513,11 +9559,11 @@
         }
 
         if (status === 'queued' || status === 'pending' || status === 'starting') {
-          setLeBadge('pending', 'Starting lead enrichment…');
+          setLeBadge('pending', 'Working…');
         } else {
           setLeBadge(
             'pending',
-            'Checking websites · ' +
+            'Working · ' +
               Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
           );
         }
@@ -9539,11 +9585,11 @@
 
         if (job) {
           if (failures >= 3) {
-            setLeBadge('pending', 'Reconnecting…');
+            setLeBadge('pending', 'Still working…');
           } else {
             const phase = String(job.status || '').toLowerCase();
             if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
-              setLeBadge('pending', 'Starting lead enrichment…');
+              setLeBadge('pending', 'Working…');
             }
           }
           saveState();
@@ -9700,9 +9746,9 @@
     if (downloadSub) {
       if (complete) downloadSub.textContent = 'Ready to download';
       else if (String(job.status || '').toLowerCase() === 'completed') {
-        downloadSub.textContent = 'Finalizing Excel…';
+        downloadSub.textContent = 'Finishing up…';
       } else {
-        downloadSub.textContent = 'Live progress from the enrichment backend';
+        downloadSub.textContent = 'Working — safe to close this tab and return anytime.';
       }
     }
 
@@ -9713,7 +9759,7 @@
       emailNote.textContent = sent
         ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
         : 'Excel (.xlsx) will also be emailed to ' + email +
-          ' when the backend marks it ready — safe to close this tab.';
+          ' when ready — safe to close this tab.';
       emailNote.classList.toggle('is-sent', sent);
     }
 
@@ -9721,7 +9767,7 @@
     if (tableMeta) {
       const count = (job.preview_rows || []).length;
       tableMeta.textContent =
-        'Live preview · ' + count + ' website' + (count === 1 ? '' : 's') +
+        'Preview · ' + count + ' website' + (count === 1 ? '' : 's') +
         ' enriched · emails, MX, socials & openers';
     }
 
@@ -9768,22 +9814,22 @@
     const job = state.enricherJob;
     if (!job) return;
     job.status = 'failed';
-    job.error = reason || '';
+    job.error = leFriendlyError(reason) || '';
     stopLeTimer();
     saveState();
     updateLeProgress();
-    setLeBadge('fail', 'Job failed · ' + (reason || 'please try again'));
+    setLeBadge('fail', 'Job failed · ' + (job.error || 'please try again in a moment'));
   }
 
   function downloadLeExcel(jobId) {
     const job = state.enricherJob || {};
     const id = String(jobId || job.job_id || '').trim();
     if (!id || !LE_DOWNLOAD_URL) {
-      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      toast('Download unlocks when your Excel is ready.', 'warn');
       return;
     }
 
-    toast('Requesting your enriched Excel from the cloud…', 'info');
+    toast('Preparing your download…', 'info');
 
     fetch(LE_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
       mode: 'cors',
@@ -9845,6 +9891,7 @@
         preview_rows: [],
         credits_spent: known ? known.credits : 0,
         source: known && known.source ? known.source : '',
+        source_job_id: known && known.source_job_id ? known.source_job_id : '',
         email: accountEmail(),
         created_at: new Date().toISOString(),
         poll_errors: 0
@@ -9900,6 +9947,40 @@
   /* Unknown columns stay selectable — only an explicit "no website" blocks. */
   function leJobCompatible(job) {
     return leJobHasWebsiteColumn(job) !== false;
+  }
+
+  /* Source job IDs already enriched by a completed Lead Enricher run. */
+  function leEnrichedSourceIds() {
+    const ids = {};
+    Object.keys(leServerEnrichedIds).forEach(function (key) {
+      ids[key] = true;
+    });
+    const enrichers = Array.isArray(historyState.enricher) ? historyState.enricher : [];
+    enrichers.forEach(function (entry) {
+      if (!entry || !entry.source_job_id) return;
+      const status = String(entry.status || '').toLowerCase();
+      const done =
+        entry.downloadReady === true ||
+        ['completed', 'complete', 'success', 'done'].indexOf(status) !== -1;
+      if (done) ids[String(entry.source_job_id)] = true;
+    });
+    const current = state.enricherJob;
+    if (current && current.source_job_id) {
+      const status = String(current.status || '').toLowerCase();
+      if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1) {
+        ids[String(current.source_job_id)] = true;
+      }
+    }
+    return ids;
+  }
+
+  /* Only clean, ready-to-enrich jobs ever reach the dropdown. */
+  function leJobEligible(job, enrichedIds) {
+    if (!job || !job.job_id) return false;
+    if (leJobHasWebsiteColumn(job) === false) return false;
+    if (job.alreadyEnriched === true) return false;
+    if (enrichedIds && enrichedIds[String(job.job_id)]) return false;
+    return true;
   }
 
   function leFirstCompatibleJob() {
@@ -9967,7 +10048,7 @@
 
     if (!leJobData.length) {
       panel.innerHTML =
-        '<p class="le-combo-empty">No completed Lead Scraper jobs yet — upload a file instead.</p>';
+        '<p class="le-combo-empty">No un-enriched Lead Scraper jobs with Website URLs available — upload a file instead.</p>';
       return;
     }
 
@@ -9985,20 +10066,14 @@
       .map(function (job) {
         const leads = leJobLeads(job);
         const terms = job.terms && job.terms.length ? job.terms.slice(0, 3).join(', ') : '—';
-        const incompatible = !leJobCompatible(job);
-        const flag = incompatible
-          ? '<span class="le-combo-flag is-block">No Website col — cannot enrich</span>'
-          : '';
-        const active = !incompatible && job.job_id === leSelectedJobId;
+        const active = job.job_id === leSelectedJobId;
         return (
           '<button type="button" class="le-combo-option' +
-          (active ? ' is-selected' : '') +
-          (incompatible ? ' is-disabled' : '') + '"' +
+          (active ? ' is-selected' : '') + '"' +
           ' role="option" aria-selected="' + (active ? 'true' : 'false') + '"' +
-          (incompatible ? ' disabled aria-disabled="true"' : '') +
           ' data-job-id="' + escapeHtml(job.job_id) + '">' +
           '<span class="le-combo-option-main"><strong>' +
-          escapeHtml(job.country || '—') + '</strong> · ' + escapeHtml(terms) + flag + '</span>' +
+          escapeHtml(job.country || '—') + '</strong> · ' + escapeHtml(terms) + '</span>' +
           '<span class="le-combo-option-meta">' +
           (leads ? leads + ' leads' : 'Lead count unknown') +
           ' · ' + escapeHtml(job.job_id) + '</span>' +
@@ -10042,7 +10117,11 @@
   }
 
   function leRenderJobOptions(jobs) {
-    leJobData = Array.isArray(jobs) ? jobs.slice() : [];
+    /* Hide ineligible rows entirely — no disabled clutter in the dropdown. */
+    const enrichedIds = leEnrichedSourceIds();
+    leJobData = (Array.isArray(jobs) ? jobs : []).filter(function (job) {
+      return leJobEligible(job, enrichedIds);
+    });
     const input = $('#leJobSearch');
     const panel = $('#leJobList');
 
@@ -10052,7 +10131,7 @@
       if (input) {
         input.value = '';
         input.disabled = true;
-        input.placeholder = 'No completed Lead Scraper jobs — upload a file instead';
+        input.placeholder = 'No eligible Lead Scraper jobs — upload a file instead';
       }
       if (panel) {
         panel.hidden = true;
@@ -10072,9 +10151,9 @@
         : 'No completed job includes a Website column';
     }
 
-    /* Keep the current selection when still valid, else auto-pick the newest compatible job. */
+    /* Keep the current selection when still valid, else auto-pick the newest eligible job. */
     const stillThere = leJobData.some(function (job) {
-      return job.job_id === leSelectedJobId && leJobCompatible(job);
+      return job.job_id === leSelectedJobId;
     });
     if (!stillThere) {
       const first = leFirstCompatibleJob();
@@ -10149,6 +10228,28 @@
         jobs.sort(function (a, b) {
           return historyTime(b.created) - historyTime(a.created);
         });
+
+        /* Completed Lead Enricher runs tell us which scraper jobs are spent. */
+        const enricherRaw = pickArray(source, [
+          'lead_enricher',
+          'lead_enricher_jobs',
+          'enricher_jobs',
+          'enricher',
+          'enrichment_jobs'
+        ]);
+        const enrichedIds = {};
+        enricherRaw.map(normalizeEnricherJob).forEach(function (entry) {
+          if (!entry || !entry.source_job_id) return;
+          const status = String(entry.status || '').toLowerCase();
+          if (
+            entry.downloadReady === true ||
+            ['completed', 'complete', 'success', 'done'].indexOf(status) !== -1
+          ) {
+            enrichedIds[String(entry.source_job_id)] = true;
+          }
+        });
+        leServerEnrichedIds = enrichedIds;
+
         leRenderJobOptions(jobs.length ? jobs : local);
       })
       .catch(function (err) {
@@ -10286,7 +10387,7 @@
     if (btn) {
       btn.disabled = leStarting || sites <= 0 || !quote.credits || tooMany;
       btn.textContent = leStarting
-        ? 'Starting enrichment…'
+        ? 'Starting…'
         : 'Confirm & Spend ' + quote.credits + ' Credit' + (quote.credits === 1 ? '' : 's');
     }
   }
@@ -10334,8 +10435,8 @@
       '</div>' +
       '<div class="le-combo-panel" id="leJobList" role="listbox" aria-label="Completed Lead Scraper jobs" hidden></div>' +
       '</div>' +
-      '<p class="le-hint">Only completed Lead Scraper jobs that include a <strong>Website</strong> column can be enriched (50–500 leads).</p>' +
-      '<p class="le-combo-notice" id="leNoWebsiteNotice" hidden>None of your completed Lead Scraper jobs include a Website column. Run Lead Scraper with <strong>Website</strong> checked, or switch to <strong>Upload Excel / CSV</strong>.</p>' +
+      '<p class="le-hint">Only completed, un-enriched Lead Scraper jobs that include a <strong>Website</strong> column can be enriched (50–500 leads).</p>' +
+      '<p class="le-combo-notice" id="leNoWebsiteNotice" hidden>No un-enriched Lead Scraper jobs with Website URLs available. Run Lead Scraper with <strong>Website</strong> checked, or switch to <strong>Upload Excel / CSV</strong>.</p>' +
       '</div>' +
       '<div class="src-pane" id="lePaneUpload" hidden>' +
       '<label class="inv-drop" id="leDrop" for="leFileInput">' +
@@ -10381,7 +10482,7 @@
       '<p class="scraper-shortfall" id="enricherShortfall" hidden></p>' +
       '<button type="submit" class="btn btn-activate" id="enricherStartBtn" disabled>' +
       'Confirm & Spend 0 Credits</button>' +
-      '<p class="fine">Credits are deducted immediately. Enrichment runs in the cloud.</p>' +
+      '<p class="fine">Credits are deducted immediately. Processing your request — safe to close this tab and return anytime.</p>' +
       '</div>' +
       '</form>',
       true
@@ -10666,6 +10767,7 @@
           preview_rows: [],
           credits_spent: quote.credits,
           source: leSourceType,
+          source_job_id: leSourceType === 'lead_job' ? String(jobId || '') : '',
           email: email,
           created_at: new Date().toISOString(),
           poll_errors: 0
@@ -10692,8 +10794,7 @@
         leStarting = false;
         if (errEl) {
           errEl.textContent =
-            (err && err.message ? err.message : '') ||
-            'Could not start the enrichment job. Please try again.';
+            leFriendlyError(err) || 'Temporarily busy — please try again in a moment.';
         }
         updateLeQuote();
         console.warn('[LiteWork] Lead Enricher start failed.', err);
@@ -10798,7 +10899,7 @@
     rwPollStartedAt = Date.now();
     rwPollEpoch += 1;
     const epoch = rwPollEpoch;
-    setRwBadge('pending', force ? 'Refreshing status…' : 'Starting review mining…');
+    setRwBadge('pending', 'Working…');
     pollRwStatus(!!force, epoch);
   }
 
@@ -10974,11 +11075,11 @@
         }
 
         if (status === 'queued' || status === 'pending' || status === 'starting') {
-          setRwBadge('pending', 'Starting review mining…');
+          setRwBadge('pending', 'Working…');
         } else {
           setRwBadge(
             'pending',
-            'Mining reviews · ' +
+            'Working · ' +
               Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
           );
         }
@@ -11000,11 +11101,11 @@
 
         if (job) {
           if (failures >= 3) {
-            setRwBadge('pending', 'Reconnecting…');
+            setRwBadge('pending', 'Still working…');
           } else {
             const phase = String(job.status || '').toLowerCase();
             if (!phase || phase === 'queued' || phase === 'pending' || phase === 'starting') {
-              setRwBadge('pending', 'Starting review mining…');
+              setRwBadge('pending', 'Working…');
             }
           }
           saveState();
@@ -11168,9 +11269,9 @@
     if (downloadSub) {
       if (complete) downloadSub.textContent = 'Ready to download';
       else if (String(job.status || '').toLowerCase() === 'completed') {
-        downloadSub.textContent = 'Finalizing Excel…';
+        downloadSub.textContent = 'Finishing up…';
       } else {
-        downloadSub.textContent = 'Live progress from the review mining backend';
+        downloadSub.textContent = 'Working — safe to close this tab and return anytime.';
       }
     }
 
@@ -11181,7 +11282,7 @@
       emailNote.textContent = sent
         ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
         : 'Excel (.xlsx) will also be emailed to ' + email +
-          ' when the backend marks it ready — safe to close this tab.';
+          ' when ready — safe to close this tab.';
       emailNote.classList.toggle('is-sent', sent);
     }
 
@@ -11189,7 +11290,7 @@
     if (tableMeta) {
       const count = (job.preview_rows || []).length;
       tableMeta.textContent =
-        'Live preview · ' + count + ' competitor' + (count === 1 ? '' : 's') +
+        'Preview · ' + count + ' competitor' + (count === 1 ? '' : 's') +
         ' mapped · complaints, vulnerabilities & counter-pitches';
     }
 
@@ -11247,11 +11348,11 @@
     const job = state.reviewJob || {};
     const id = String(jobId || job.job_id || '').trim();
     if (!id || !RW_DOWNLOAD_URL) {
-      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      toast('Download unlocks when your Excel is ready.', 'warn');
       return;
     }
 
-    toast('Requesting your review battlecard from the cloud…', 'info');
+    toast('Preparing your download…', 'info');
 
     fetch(RW_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
       mode: 'cors',
@@ -11407,7 +11508,7 @@
     if (btn) {
       btn.disabled = rwStarting || list.length === 0 || !quote.credits;
       btn.textContent = rwStarting
-        ? 'Starting review mining…'
+        ? 'Starting…'
         : 'Confirm & Spend ' + quote.credits + ' Credit' + (quote.credits === 1 ? '' : 's');
     }
   }
@@ -11497,7 +11598,7 @@
       '<p class="scraper-shortfall" id="reviewShortfall" hidden></p>' +
       '<button type="submit" class="btn btn-activate" id="reviewStartBtn" disabled>' +
       'Confirm & Spend 0 Credits</button>' +
-      '<p class="fine">Credits are deducted immediately. Review mining runs in the cloud.</p>' +
+      '<p class="fine">Credits are deducted immediately. Processing your request — safe to close this tab and return anytime.</p>' +
       '</div>' +
       '</form>',
       true
@@ -11790,7 +11891,7 @@
     propPollStartedAt = Date.now();
     propPollEpoch += 1;
     const epoch = propPollEpoch;
-    setPropBadge('pending', force ? 'Refreshing status…' : 'Starting Deal Sniper…');
+    setPropBadge('pending', 'Working…');
     pollPropStatus(!!force, epoch);
   }
 
@@ -11987,11 +12088,11 @@
         }
 
         if (status === 'queued' || status === 'pending' || status === 'starting') {
-          setPropBadge('pending', 'Starting Deal Sniper…');
+          setPropBadge('pending', 'Working…');
         } else {
           setPropBadge(
             'pending',
-            'Scouting listings · ' +
+            'Working · ' +
               Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
           );
         }
@@ -12013,9 +12114,9 @@
 
         if (job) {
           if (failures >= 3) {
-            setPropBadge('pending', 'Reconnecting…');
+            setPropBadge('pending', 'Still working…');
           } else if (!job.status) {
-            setPropBadge('pending', 'Starting Deal Sniper…');
+            setPropBadge('pending', 'Working…');
           }
           saveState();
         }
@@ -12206,9 +12307,9 @@
     if (downloadSub) {
       if (complete) downloadSub.textContent = 'Day-0 baseline ready to download';
       else if (String(job.status || '').toLowerCase() === 'completed') {
-        downloadSub.textContent = 'Finalizing Day-0 baseline…';
+        downloadSub.textContent = 'Finishing up…';
       } else {
-        downloadSub.textContent = 'Live progress from the property backend';
+        downloadSub.textContent = 'Working — safe to close this tab and return anytime.';
       }
     }
 
@@ -12348,11 +12449,11 @@
     const job = state.propertyJob || {};
     const id = String(jobId || job.job_id || '').trim();
     if (!id || !PROP_DOWNLOAD_URL) {
-      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      toast('Download unlocks when your Excel is ready.', 'warn');
       return;
     }
 
-    toast('Requesting your Day-0 baseline Excel from the cloud…', 'info');
+    toast('Preparing your download…', 'info');
 
     fetch(PROP_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
       mode: 'cors',
@@ -12539,7 +12640,7 @@
     if (btn) {
       btn.disabled = propStarting || !loc.state || !loc.city;
       btn.textContent = propStarting
-        ? 'Starting Deal Sniper…'
+        ? 'Starting…'
         : 'Confirm & Spend ' + credits + ' Credits · Start ' +
           propDuration + '-Day Sniper';
     }
@@ -12641,7 +12742,7 @@
       '<button type="submit" class="btn btn-activate" id="propStartBtn" disabled>' +
       'Confirm & Spend ' + PROP_CREDITS + ' Credits · Start ' + PROP_DAYS +
       '-Day Sniper</button>' +
-      '<p class="fine">Day-0 baseline Excel is instant. Daily 08:00 MYT watch runs in the cloud.</p>' +
+      '<p class="fine">Day-0 baseline Excel is instant. Daily 08:00 MYT alerts run automatically.</p>' +
       '</div>' +
       '</form>',
       true
@@ -12976,7 +13077,7 @@
     if (btn) {
       btn.disabled = ctStarting || valid === 0;
       btn.textContent = ctStarting
-        ? 'Starting 7-day watch…'
+        ? 'Starting…'
         : 'Start 7-Day Watch · ' + CT_CREDITS + ' Credits';
     }
   }
@@ -13064,7 +13165,7 @@
       '<p class="scraper-shortfall" id="ctShortfall" hidden></p>' +
       '<button type="submit" class="btn btn-activate" id="ctStartBtn" disabled>' +
       'Start 7-Day Watch · ' + CT_CREDITS + ' Credits</button>' +
-      '<p class="fine">Credits are deducted immediately. Watches run daily in the cloud.</p>' +
+      '<p class="fine">Credits are deducted immediately. Daily watch alerts run automatically.</p>' +
       '</div>' +
       '</form>',
       true
