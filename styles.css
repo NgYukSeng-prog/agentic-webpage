@@ -9164,3 +9164,97 @@ table.leads-table {
     font-size: 0.76rem;
   }
 }
+
+/* ======================================================================
+   31. iOS KEYBOARD RESTORE + MOBILE #AGENTS CLEANUP
+   ====================================================================== */
+/* Text controls must stay selectable and use native manipulation gestures so
+   iOS Safari opens the virtual keyboard immediately on tap. */
+input,
+textarea,
+select {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  touch-action: manipulation;
+  font-size: 16px !important;
+}
+
+.modal input,
+.modal textarea,
+.modal select {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  touch-action: manipulation;
+  font-size: 16px !important;
+}
+
+/* Single-row swipeable category pills on phones */
+@media (max-width: 640px) {
+  .agent-filter {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 8px;
+    padding: 2px 2px 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .agent-filter::-webkit-scrollbar {
+    display: none;
+    height: 0;
+  }
+
+  .agent-filter-pill {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}
+
+/* One-line compact pagination bar on narrow phones */
+@media (max-width: 540px) {
+  .agent-pager {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 10px 12px;
+    overflow: hidden;
+  }
+
+  .agent-pager-info {
+    display: none;
+  }
+
+  .agent-pager-btn {
+    flex: 0 0 auto;
+    padding: 7px 9px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+
+  .agent-pager-nums {
+    flex: 0 1 auto;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .agent-pager-num {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 auto;
+  }
+}
+
+/* Hide the floating duplicate credits widget on mobile — the header badge
+   already shows the live balance. */
+@media (max-width: 768px) {
+  .wallet {
+    display: none !important;
+  }
+
+  /* Keep the #agents heading clear of the sticky navbar. */
+  #view-agents {
+    padding-top: 14px;
+  }
+}

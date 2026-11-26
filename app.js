@@ -2697,6 +2697,7 @@
     if (!jobDockDrag.moved) {
       if (Math.sqrt(dx * dx + dy * dy) <= JOB_DOCK_DRAG_THRESHOLD) return;
       jobDockDrag.moved = true;
+      jobDockDrag.dragging = true;
       const dock = $('#jobDock');
       if (dock) {
         dock.classList.remove('is-snapping');
@@ -2805,6 +2806,7 @@
         originLeft: rect.left,
         originTop: rect.top,
         moved: false,
+        dragging: false,
         /* Measured once per gesture — stable for 60fps tracking. */
         bounds: jobDockBounds(dock)
       };
@@ -2814,12 +2816,23 @@
       return !(target && target.closest && target.closest('[data-job-dismiss]'));
     }
 
+    /* Never intercept taps or scrolls aimed at form controls — iOS Safari
+       needs the native gesture to open the virtual keyboard. */
+    function isFormFieldTarget(target) {
+      return !!(
+        target &&
+        target.closest &&
+        target.closest('input, textarea, select, [contenteditable]')
+      );
+    }
+
     /* Touch Events: iPhone / iPad Safari track the finger on window so the
        gesture never dies when it leaves the pill. */
     dock.addEventListener(
       'touchstart',
       function (event) {
         if (dock.hidden) return;
+        if (isFormFieldTarget(event.target)) return;
         const touch = event.touches && event.touches[0];
         if (!touch || !jobDockPressAllowed(event.target)) return;
         beginJobDockDrag(touch.clientX, touch.clientY);
@@ -2831,11 +2844,12 @@
       'touchmove',
       function (event) {
         if (!jobDockDrag) return;
+        if (isFormFieldTarget(event.target)) return;
         const touch = event.touches && event.touches[0];
         if (!touch) return;
         moveJobDockTo(touch.clientX, touch.clientY);
-        /* Pin the gesture to the dock so iOS never scrolls mid-drag. */
-        if (jobDockDrag && jobDockDrag.moved && event.cancelable) {
+        /* Pin the gesture to the dock ONLY after a real drag starts. */
+        if (jobDockDrag && jobDockDrag.dragging === true && event.cancelable) {
           event.preventDefault();
         }
       },
@@ -2861,6 +2875,7 @@
 
     dock.addEventListener('mousedown', function (event) {
       if (dock.hidden || event.button !== 0) return;
+      if (isFormFieldTarget(event.target)) return;
       if (Date.now() - lastTouchAt < 700) return;
       if (!jobDockPressAllowed(event.target)) return;
       beginJobDockDrag(event.clientX, event.clientY);
@@ -2868,9 +2883,10 @@
 
     window.addEventListener('mousemove', function (event) {
       if (!jobDockDrag) return;
+      if (isFormFieldTarget(event.target)) return;
       if (Date.now() - lastTouchAt < 700) return;
       moveJobDockTo(event.clientX, event.clientY);
-      if (jobDockDrag && jobDockDrag.moved && event.cancelable) {
+      if (jobDockDrag && jobDockDrag.dragging === true && event.cancelable) {
         event.preventDefault();
       }
     });
