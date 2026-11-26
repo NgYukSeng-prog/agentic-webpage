@@ -8786,3 +8786,381 @@ table.leads-table {
     overflow-wrap: break-word;
   }
 }
+
+/* ======================================================================
+   26. AGENT DIRECTORY · 3-PER-PAGE PAGINATION
+   ====================================================================== */
+.agent-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  margin: 4px 0 18px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.agent-pager[hidden] {
+  display: none;
+}
+
+.agent-pager-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.agent-pager-btn:hover:not(:disabled) {
+  background: rgba(34, 211, 238, 0.22);
+  border-color: rgba(34, 211, 238, 0.6);
+  transform: translateY(-1px);
+}
+
+.agent-pager-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.agent-pager-info {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.agent-pager-nums {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-pager-num {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.07);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.agent-pager-num:hover {
+  background: rgba(34, 211, 238, 0.2);
+}
+
+.agent-pager-num.is-active {
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  border-color: transparent;
+  color: #06121f;
+}
+
+/* ======================================================================
+   27. PROPERTY DEAL SCOUT (WORKER #6)
+   ====================================================================== */
+.agent-card-property .agent-visual,
+.agent-visual-property {
+  background:
+    radial-gradient(circle at 72% 18%, rgba(34, 211, 238, 0.18), transparent 55%),
+    linear-gradient(150deg, #0b1220 0%, #0f2438 55%, #0b1a2a 100%);
+}
+
+.agent-visual-glow-property {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.38), transparent 68%);
+}
+
+.price-tag-property {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+/* Country / mode segmented pills (modal) */
+.prop-mode,
+.prop-country {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.prop-pill {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--slate-200);
+  background: var(--slate-50);
+  color: var(--slate-700);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.prop-pill small {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--slate-400);
+}
+
+.prop-pill:hover {
+  border-color: var(--slate-300);
+}
+
+.prop-pill.is-active {
+  border-color: #6366f1;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.14), rgba(99, 102, 241, 0.18));
+  color: #0f172a;
+}
+
+.prop-pill.is-active small {
+  color: #4338ca;
+}
+
+.prop-location-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.prop-budget-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prop-currency {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #e0f2fe;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.prop-budget-wrap input {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 640px) {
+  .prop-mode,
+  .prop-country,
+  .prop-location-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ======================================================================
+   28. COMPETITOR CHANGE TRACKER (WORKER #7)
+   ====================================================================== */
+.agent-card-competitor .agent-visual,
+.agent-visual-competitor {
+  background:
+    radial-gradient(circle at 74% 20%, rgba(245, 158, 11, 0.2), transparent 55%),
+    linear-gradient(150deg, #0b1220 0%, #211a0c 55%, #120f08 100%);
+}
+
+.agent-visual-glow-competitor {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.34), transparent 68%);
+}
+
+.price-tag-competitor {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.ct-rows {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ct-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.ct-row input {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--slate-200);
+  border-radius: 11px;
+  background: #fff;
+  color: var(--slate-900);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.ct-row input:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+}
+
+.ct-row .rw-remove {
+  justify-self: center;
+}
+
+.ct-note {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--slate-200);
+  color: var(--slate-500);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+/* Crisp confirmation state after starting a watch */
+.watch-confirm {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin: 12px 0 4px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(99, 102, 241, 0.1));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.watch-confirm h3 {
+  margin: 0;
+  font-size: 1.02rem;
+  color: #0f172a;
+}
+
+.watch-confirm p {
+  margin: 0;
+  color: var(--slate-600);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.watch-confirm-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e0f2fe;
+  font-size: 0.78rem;
+}
+
+.watch-confirm-id code {
+  color: #a5f3fc;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .ct-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ct-row .rw-remove {
+    justify-self: end;
+  }
+}
+
+/* 7-day watch progress bar in #plans */
+.watch-progress {
+  height: 8px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.watch-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22d3ee, #6366f1);
+}
+
+/* ======================================================================
+   30. iOS / iPadOS FORM AUTO-ZOOM GUARD
+   ====================================================================== */
+/* Safari zooms the whole page when a focused control's font-size is below
+   16px. On phones, tablets and any coarse pointer, keep every form control at
+   16px so tapping an input, select or textarea never shifts the layout. */
+@media (max-width: 1024px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  .modal input:not([type="checkbox"]):not([type="radio"]),
+  .modal select,
+  .modal textarea,
+  .modal .field input,
+  .modal .field select,
+  .modal .field textarea,
+  form input:not([type="checkbox"]):not([type="radio"]),
+  form select,
+  form textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* ======================================================================
+   29. PROPERTY RESULTS TABLE
+   ====================================================================== */
+.prop-preview-table td,
+.prop-preview-table th {
+  white-space: nowrap;
+}
+
+.prop-listing-link {
+  color: #0891b2;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prop-listing-link:hover {
+  color: #0e7490;
+}
+
+@media (max-width: 540px) {
+  .agent-pager {
+    padding: 8px 10px;
+    gap: 8px 10px;
+  }
+
+  .agent-pager-btn {
+    padding: 7px 12px;
+    font-size: 0.76rem;
+  }
+}

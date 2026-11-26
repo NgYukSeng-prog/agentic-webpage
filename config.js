@@ -503,6 +503,60 @@ window.CONFIG = {
     'Raw Reviews'
   ],
 
+  /* --- Property Deal Scout (6th live worker) ------------------------------
+     5 credits per launch · up to 50 deduplicated listings per run.
+     Country → State/Region → Full City cascading picker below. */
+  PROPERTY_SCOUT_AGENT_ID: 'property-deal-scout',
+  PROPERTY_SCOUT_AGENT_NAME: 'Property Deal Scout (MY & SG)',
+  PROPERTY_SCOUT_CREDITS: 5,
+  PROPERTY_SCOUT_MAX_DEALS: 50,
+  PROPERTY_SCOUT_POLL_MS: 2500,
+  PROPERTY_SCOUT_START_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/property-scout-start',
+  PROPERTY_SCOUT_STATUS_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/property-scout-status',
+  PROPERTY_SCOUT_DOWNLOAD_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-property-deals',
+
+  /* Complete MY & SG location hierarchy — full city/district names only. */
+  PROPERTY_LOCATIONS: {
+    Malaysia: {
+      Johor: ['Johor Bahru', 'Iskandar Puteri', 'Skudai', 'Pasir Gudang', 'Kulai', 'Ulu Tiram', 'Senai', 'Kluang', 'Batu Pahat', 'Muar', 'Segamat', 'Pontian', 'Kota Tinggi'],
+      Selangor: ['Petaling Jaya', 'Subang Jaya', 'Shah Alam', 'Puchong', 'Cyberjaya', 'Cheras', 'Kajang', 'Seri Kembangan', 'Klang', 'Ampang', 'Damansara', 'Rawang', 'Sepang', 'Bangi', 'Sunway', 'Setia Alam'],
+      'Kuala Lumpur': ['KLCC', 'Bukit Bintang', 'Mont Kiara', 'Bangsar', 'Cheras (KL)', 'Kepong', 'Setapak', 'Wangsa Maju', 'Sentul', 'Sri Petaling', 'Bukit Jalil', 'Taman Tun Dr Ismail', 'Desa ParkCity', 'Old Klang Road'],
+      Penang: ['George Town', 'Bayan Lepas', 'Jelutong', 'Tanjung Tokong', 'Gelugor', 'Butterworth', 'Bukit Mertajam', 'Batu Kawan', 'Perai', 'Nibong Tebal'],
+      Perak: ['Ipoh', 'Taiping', 'Seri Iskandar', 'Kampar', 'Teluk Intan', 'Sitiawan', 'Lumut', 'Batu Gajah'],
+      'Negeri Sembilan': ['Seremban', 'Nilai', 'Port Dickson', 'Senawang', 'Bahau'],
+      Melaka: ['Melaka City', 'Ayer Keroh', 'Batu Berendam', 'Alor Gajah', 'Jasin'],
+      Pahang: ['Kuantan', 'Bentong', 'Genting Highlands', 'Temerloh', 'Raub', 'Cameron Highlands'],
+      Kedah: ['Alor Setar', 'Sungai Petani', 'Kulim', 'Langkawi', 'Jitra'],
+      Kelantan: ['Kota Bharu', 'Pasir Mas', 'Tanah Merah'],
+      Terengganu: ['Kuala Terengganu', 'Kemaman', 'Dungun'],
+      Perlis: ['Kangar', 'Arau', 'Padang Besar'],
+      Sabah: ['Kota Kinabalu', 'Penampang', 'Sandakan', 'Tawau', 'Lahad Datu'],
+      Sarawak: ['Kuching', 'Miri', 'Sibu', 'Bintulu', 'Kota Samarahan'],
+      Putrajaya: ['Putrajaya'],
+      Labuan: ['Labuan']
+    },
+    Singapore: {
+      'Central Region': ['Orchard', 'Marina Bay', 'River Valley', 'Novena', 'Bukit Timah', 'Bishan', 'Toa Payoh', 'Queenstown', 'Tiong Bahru', 'Kallang', 'Geylang', 'Marine Parade', 'Tanjong Pagar', 'Sentosa'],
+      'East Region': ['Tampines', 'Bedok', 'Pasir Ris', 'Paya Lebar', 'Changi', 'Simei'],
+      'North-East Region': ['Punggol', 'Sengkang', 'Hougang', 'Serangoon', 'Ang Mo Kio', 'Potong Pasir'],
+      'North Region': ['Woodlands', 'Yishun', 'Sembawang', 'Admiralty'],
+      'West Region': ['Jurong East', 'Jurong West', 'Clementi', 'Bukit Batok', 'Bukit Panjang', 'Choa Chu Kang', 'Boon Lay', 'Tengah']
+    }
+  },
+
+  /* --- Competitor Change Tracker (7th live worker) ------------------------
+     5 credits / 7 days · monitors up to 3 competitor URLs for real changes. */
+  COMPETITOR_TRACKER_AGENT_ID: 'competitor-change-tracker',
+  COMPETITOR_TRACKER_AGENT_NAME: 'Competitor Website & Promo Change Tracker',
+  COMPETITOR_TRACKER_CREDITS: 5,
+  COMPETITOR_TRACKER_DAYS: 7,
+  COMPETITOR_TRACKER_MAX_URLS: 3,
+  COMPETITOR_TRACKER_START_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/competitor-tracker-start',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [

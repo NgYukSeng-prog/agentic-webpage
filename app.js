@@ -262,6 +262,32 @@
       ? CFG.REVIEW_MINER_SHEETS
       : ['Executive Battlecard', 'Complaint Breakdown', 'Raw Reviews'];
 
+  /* --- Property Deal Scout (6th live worker) -----------------------------
+     5 credits per launch · up to 50 deduplicated listings. */
+  const PROP_AGENT_ID = CFG.PROPERTY_SCOUT_AGENT_ID || 'property-deal-scout';
+  const PROP_AGENT_NAME = CFG.PROPERTY_SCOUT_AGENT_NAME || 'Property Deal Scout (MY & SG)';
+  const PROP_CREDITS = toPositiveInt(CFG.PROPERTY_SCOUT_CREDITS, 5);
+  const PROP_MAX_DEALS = toPositiveInt(CFG.PROPERTY_SCOUT_MAX_DEALS, 50);
+  const PROP_POLL_MS = toPositiveInt(CFG.PROPERTY_SCOUT_POLL_MS, 2500);
+  const PROP_START_URL = CFG.PROPERTY_SCOUT_START_URL || '';
+  const PROP_STATUS_URL = CFG.PROPERTY_SCOUT_STATUS_URL || '';
+  const PROP_DOWNLOAD_URL = CFG.PROPERTY_SCOUT_DOWNLOAD_URL || '';
+  const PROPERTY_LOCATIONS =
+    CFG.PROPERTY_LOCATIONS && typeof CFG.PROPERTY_LOCATIONS === 'object'
+      ? CFG.PROPERTY_LOCATIONS
+      : { Malaysia: {}, Singapore: {} };
+  const PROP_COUNTRY_CURRENCY = { Malaysia: 'MYR', Singapore: 'SGD' };
+
+  /* --- Competitor Change Tracker (7th live worker) -----------------------
+     5 credits / 7 days · up to 3 competitor URLs. */
+  const CT_AGENT_ID = CFG.COMPETITOR_TRACKER_AGENT_ID || 'competitor-change-tracker';
+  const CT_AGENT_NAME =
+    CFG.COMPETITOR_TRACKER_AGENT_NAME || 'Competitor Website & Promo Change Tracker';
+  const CT_CREDITS = toPositiveInt(CFG.COMPETITOR_TRACKER_CREDITS, 5);
+  const CT_DAYS = toPositiveInt(CFG.COMPETITOR_TRACKER_DAYS, 7);
+  const CT_MAX_URLS = toPositiveInt(CFG.COMPETITOR_TRACKER_MAX_URLS, 3);
+  const CT_START_URL = CFG.COMPETITOR_TRACKER_START_URL || '';
+
   const INV_EXPORT_FORMATS =
     Array.isArray(CFG.INVOICE_OCR_EXPORT_FORMATS) && CFG.INVOICE_OCR_EXPORT_FORMATS.length
       ? CFG.INVOICE_OCR_EXPORT_FORMATS
@@ -650,7 +676,7 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — Stock Brief, Lead Scraper and Invoice OCR',
+    agents: 'AI Agents — 7 Live Workers, One Credit Wallet',
     plans: 'Manage My Plan — Subscriptions & History',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
@@ -659,6 +685,7 @@
     'invoice-results': 'Invoice Results — LiteWork',
     'enricher-results': 'Lead Enricher Results — LiteWork',
     'review-results': 'Review Miner Results — LiteWork',
+    'property-results': 'Property Scout Results — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -674,7 +701,9 @@
       scraperJob: null,
       invoiceJob: null,
       enricherJob: null,
-      reviewJob: null
+      reviewJob: null,
+      propertyJob: null,
+      trackerJob: null
     };
   }
 
@@ -714,6 +743,14 @@
         reviewJob:
           parsed.reviewJob && typeof parsed.reviewJob === 'object'
             ? parsed.reviewJob
+            : null,
+        propertyJob:
+          parsed.propertyJob && typeof parsed.propertyJob === 'object'
+            ? parsed.propertyJob
+            : null,
+        trackerJob:
+          parsed.trackerJob && typeof parsed.trackerJob === 'object'
+            ? parsed.trackerJob
             : null
       };
     } catch (err) {
@@ -731,7 +768,9 @@
           scraperJob: state.scraperJob || null,
           invoiceJob: state.invoiceJob || null,
           enricherJob: state.enricherJob || null,
-          reviewJob: state.reviewJob || null
+          reviewJob: state.reviewJob || null,
+          propertyJob: state.propertyJob || null,
+          trackerJob: state.trackerJob || null
         })
       );
     } catch (err) {
@@ -2139,6 +2178,7 @@
     'invoice-results',
     'enricher-results',
     'review-results',
+    'property-results',
     'success'
   ];
 
@@ -2163,7 +2203,8 @@
         route === 'scraper-results' ||
         route === 'invoice-results' ||
         route === 'enricher-results' ||
-        route === 'review-results';
+        route === 'review-results' ||
+        route === 'property-results';
       const active = r === route || (agentRoutes && r === 'agents');
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
@@ -2185,6 +2226,7 @@
     ensureInvoiceRunning();
     ensureLeRunning();
     ensureRwRunning();
+    ensurePropRunning();
 
     if (route === 'configure') {
       /* #configure is now a modal: show #agents underneath, then open it. */
@@ -2200,6 +2242,7 @@
     if (route === 'invoice-results') renderInvoiceResults();
     if (route === 'enricher-results') renderLeResults();
     if (route === 'review-results') renderRwResults();
+    if (route === 'property-results') renderPropertyResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -2285,7 +2328,14 @@
   function findJobById(id) {
     const key = String(id || '');
     if (!key) return null;
-    const jobs = [state.scraperJob, state.invoiceJob, state.enricherJob, state.reviewJob];
+    const jobs = [
+      state.scraperJob,
+      state.invoiceJob,
+      state.enricherJob,
+      state.reviewJob,
+      state.propertyJob,
+      state.trackerJob
+    ];
     for (let i = 0; i < jobs.length; i += 1) {
       if (jobs[i] && String(jobs[i].job_id) === key) return jobs[i];
     }
@@ -2338,6 +2388,18 @@
         route: 'review-results',
         name: 'Review Miner',
         percent: jobDockNumber(state.reviewJob && state.reviewJob.percent)
+      },
+      {
+        job: state.propertyJob,
+        route: 'property-results',
+        name: 'Property Scout',
+        percent: jobDockNumber(state.propertyJob && state.propertyJob.percent)
+      },
+      {
+        job: state.trackerJob,
+        route: 'plans',
+        name: 'Competitor Tracker',
+        percent: 100
       }
     ];
 
@@ -2574,6 +2636,10 @@
   }
 
   function updateJobDock() {
+    /* Never rewrite the dock DOM mid-gesture: the 2.5s status poll would
+       destroy the node currently under the finger on iPhone / iPad. */
+    if (jobDockDrag) return;
+
     const dock = $('#jobDock');
     const rowsEl = $('#jobDockRows');
     if (!dock || !rowsEl) return;
@@ -2621,11 +2687,12 @@
     }
   }
 
-  function moveJobDock(event) {
-    if (!jobDockDrag || event.pointerId !== jobDockDrag.pointerId) return;
+  /* Track the dock at 60fps for whichever input started the gesture. */
+  function moveJobDockTo(clientX, clientY) {
+    if (!jobDockDrag) return;
 
-    const dx = event.clientX - jobDockDrag.startX;
-    const dy = event.clientY - jobDockDrag.startY;
+    const dx = clientX - jobDockDrag.startX;
+    const dy = clientY - jobDockDrag.startY;
 
     if (!jobDockDrag.moved) {
       if (Math.sqrt(dx * dx + dy * dy) <= JOB_DOCK_DRAG_THRESHOLD) return;
@@ -2634,19 +2701,9 @@
       if (dock) {
         dock.classList.remove('is-snapping');
         dock.classList.add('is-dragging');
-        /* Capture only after the 6px threshold so a simple tap/click keeps
-           its original target (View/Open/× must still receive the click). */
-        if (dock.setPointerCapture) {
-          try {
-            dock.setPointerCapture(event.pointerId);
-          } catch (err) {
-            /* capture unsupported — window listeners still track the drag */
-          }
-        }
       }
     }
 
-    if (event.cancelable) event.preventDefault();
     const applied = setJobDockPosition(
       jobDockDrag.originLeft + dx,
       jobDockDrag.originTop + dy,
@@ -2661,25 +2718,16 @@
     }
   }
 
-  /* Finish a pointer gesture: persist + snap only if it became a drag. */
-  function endJobDockDrag(event) {
+  /* Finish a gesture: persist + snap only if it became a drag. */
+  function endJobDockDrag() {
     if (!jobDockDrag) return;
-    if (event && event.pointerId != null && event.pointerId !== jobDockDrag.pointerId) return;
 
     const dock = $('#jobDock');
     const moved = jobDockDrag.moved;
-    const pointerId = jobDockDrag.pointerId;
     jobDockDrag = null;
 
     if (dock) {
       dock.classList.remove('is-dragging');
-      if (dock.releasePointerCapture && pointerId != null) {
-        try {
-          dock.releasePointerCapture(pointerId);
-        } catch (err) {
-          /* capture already released */
-        }
-      }
       if (moved) snapJobDockToEdge();
     }
 
@@ -2689,6 +2737,8 @@
       window.setTimeout(function () {
         jobDockSuppressClick = false;
       }, 350);
+      /* DOM updates were paused during the gesture — refresh after release. */
+      window.setTimeout(updateJobDock, 0);
     }
   }
 
@@ -2715,7 +2765,12 @@
         return;
       }
 
-      const openBtn = event.target.closest ? event.target.closest('[data-job-open]') : null;
+      let openBtn = event.target.closest ? event.target.closest('[data-job-open]') : null;
+      if (!openBtn) {
+        /* Tapping the pill body (grip, name, %) opens its View → link. */
+        const row = event.target.closest ? event.target.closest('[data-job-row]') : null;
+        openBtn = row && row.querySelector ? row.querySelector('[data-job-open]') : null;
+      }
       if (!openBtn) return;
 
       event.preventDefault();
@@ -2728,16 +2783,13 @@
       window.location.hash = '#' + route;
     });
 
-    /* Unified Pointer Events: mouse, trackpad and touch behave the same. */
-    dock.addEventListener('pointerdown', function (event) {
+    /* A press anywhere on the dock (except ×) starts a drag. Movement past
+       6px suppresses the click; a tap still opens View → immediately. */
+    function beginJobDockDrag(clientX, clientY) {
       if (dock.hidden) return;
-      if (event.pointerType === 'mouse' && event.button !== 0) return;
 
       /* Any fresh press clears the previous drag's click guard. */
       jobDockSuppressClick = false;
-
-      /* Buttons always click — never start a drag from View/Open/×. */
-      if (event.target.closest && event.target.closest('button')) return;
 
       /* Freeze any in-flight snap animation at the current visual spot. */
       const rect = dock.getBoundingClientRect();
@@ -2748,44 +2800,86 @@
       dock.style.bottom = 'auto';
 
       jobDockDrag = {
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
+        startX: clientX,
+        startY: clientY,
         originLeft: rect.left,
         originTop: rect.top,
         moved: false,
-        /* Measured once per gesture — stable for 60fps pointer tracking. */
+        /* Measured once per gesture — stable for 60fps tracking. */
         bounds: jobDockBounds(dock)
       };
-      /* No setPointerCapture here: a simple tap must keep its button target. */
-    });
+    }
 
-    /* iOS Safari only applies preventDefault() from non-passive touch
-       listeners on the element itself. Without these, the first vertical
-       move is claimed as a page scroll (pointercancel) and the dock stops
-       following the finger mid-drag. They stay inert for taps on buttons
-       because pointerdown skips buttons and never sets jobDockDrag. */
+    function jobDockPressAllowed(target) {
+      return !(target && target.closest && target.closest('[data-job-dismiss]'));
+    }
+
+    /* Touch Events: iPhone / iPad Safari track the finger on window so the
+       gesture never dies when it leaves the pill. */
     dock.addEventListener(
       'touchstart',
       function (event) {
-        if (jobDockDrag && event.cancelable) event.preventDefault();
+        if (dock.hidden) return;
+        const touch = event.touches && event.touches[0];
+        if (!touch || !jobDockPressAllowed(event.target)) return;
+        beginJobDockDrag(touch.clientX, touch.clientY);
       },
-      { passive: false }
+      { passive: true }
     );
 
-    dock.addEventListener(
+    window.addEventListener(
       'touchmove',
       function (event) {
-        if (jobDockDrag && event.cancelable) event.preventDefault();
+        if (!jobDockDrag) return;
+        const touch = event.touches && event.touches[0];
+        if (!touch) return;
+        moveJobDockTo(touch.clientX, touch.clientY);
+        /* Pin the gesture to the dock so iOS never scrolls mid-drag. */
+        if (jobDockDrag && jobDockDrag.moved && event.cancelable) {
+          event.preventDefault();
+        }
       },
       { passive: false }
     );
 
-    /* Window-level tracking works with or without pointer capture. */
-    window.addEventListener('pointermove', moveJobDock);
-    window.addEventListener('pointerup', endJobDockDrag);
-    window.addEventListener('pointercancel', endJobDockDrag);
-    dock.addEventListener('lostpointercapture', endJobDockDrag);
+    window.addEventListener('touchend', endJobDockDrag);
+    window.addEventListener('touchcancel', endJobDockDrag);
+
+    /* Mouse Events (desktop + trackpad), ignoring the synthetic pair that
+       follows a real touch. */
+    let lastTouchAt = 0;
+    dock.addEventListener(
+      'touchstart',
+      function () { lastTouchAt = Date.now(); },
+      { passive: true }
+    );
+    dock.addEventListener(
+      'touchend',
+      function () { lastTouchAt = Date.now(); },
+      { passive: true }
+    );
+
+    dock.addEventListener('mousedown', function (event) {
+      if (dock.hidden || event.button !== 0) return;
+      if (Date.now() - lastTouchAt < 700) return;
+      if (!jobDockPressAllowed(event.target)) return;
+      beginJobDockDrag(event.clientX, event.clientY);
+    });
+
+    window.addEventListener('mousemove', function (event) {
+      if (!jobDockDrag) return;
+      if (Date.now() - lastTouchAt < 700) return;
+      moveJobDockTo(event.clientX, event.clientY);
+      if (jobDockDrag && jobDockDrag.moved && event.cancelable) {
+        event.preventDefault();
+      }
+    });
+
+    window.addEventListener('mouseup', function () {
+      if (!jobDockDrag) return;
+      if (Date.now() - lastTouchAt < 700) return;
+      endJobDockDrag();
+    });
 
     /* Keep the whole stack on-screen after resize / iPad rotation. */
     window.addEventListener('resize', reclampJobDockPosition);
@@ -3130,9 +3224,19 @@
     b2b: [],
     invoice: [],
     enricher: [],
-    review: []
+    review: [],
+    property: [],
+    tracker: []
   };
-  let historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
+  let historyPages = {
+    stock: 1,
+    b2b: 1,
+    invoice: 1,
+    enricher: 1,
+    review: 1,
+    property: 1,
+    tracker: 1
+  };
 
   function historySource(body) {
     if (body && typeof body === 'object' && body.data && typeof body.data === 'object') {
@@ -3466,12 +3570,79 @@
       competitors: competitors,
       reviews: reviews,
       credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
+      status: String(firstValue(job, ['status', 'job_status'], 'completed')).toLowerCase(),
+      created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
+      downloadReady:
+        job.download_ready === true ||
+        job.download_ready === 'true' ||
+        job.download_ready === 1
+    };
+  }
+
+  function normalizePropertyJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const dealsRaw = firstValue(
+      job,
+      ['unique_deals', 'deals_found', 'deals_count', 'listings_count', 'total_deals', 'deals'],
+      0
+    );
+    return {
+      job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      country: String(firstValue(job, ['country', 'region'], '')),
+      state: String(firstValue(job, ['state', 'state_region', 'region_state'], '')),
+      city: String(firstValue(job, ['city', 'district', 'area'], '')),
+      listingType: String(firstValue(job, ['listing_type', 'mode', 'deal_type'], '')),
+      deals: Array.isArray(dealsRaw) ? dealsRaw.length : Number(dealsRaw) || 0,
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
       status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
       created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
       downloadReady:
         job.download_ready === true ||
         job.download_ready === 'true' ||
         job.download_ready === 1
+    };
+  }
+
+  function normalizeTrackerJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const urlsRaw = firstValue(
+      job,
+      ['urls', 'competitor_urls', 'websites', 'targets', 'tracked_urls'],
+      0
+    );
+    const daysRaw = firstValue(
+      job,
+      ['days_left', 'days_remaining', 'watch_days_left'],
+      null
+    );
+    const daysLeft =
+      daysRaw === null || daysRaw === ''
+        ? CT_DAYS
+        : clamp(Number(daysRaw) || 0, 0, CT_DAYS);
+    const expiresAt = firstValue(
+      job,
+      ['expires_at', 'expiresAt', 'end_date', 'watch_ends_at'],
+      ''
+    );
+    const startedAt = firstValue(
+      job,
+      ['started_at', 'created_at', 'createdAt', 'date'],
+      ''
+    );
+    const percent = expiresAt
+      ? subscriptionValidity(expiresAt, startedAt).percent
+      : (daysLeft / CT_DAYS) * 100;
+    return {
+      job_id: String(firstValue(job, ['job_id', 'watch_id', 'id'], '')),
+      urls: Array.isArray(urlsRaw) ? urlsRaw.length : Number(urlsRaw) || 0,
+      changes: Number(firstValue(job, ['changes_detected', 'changes', 'change_count'], 0)) || 0,
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
+      status: String(firstValue(job, ['status', 'job_status'], 'active')).toLowerCase(),
+      created: startedAt,
+      expiresAt: expiresAt,
+      daysLeft: daysLeft,
+      percent: clamp(Number(percent) || 0, 0, 100),
+      downloadReady: false
     };
   }
 
@@ -3757,22 +3928,110 @@
     );
   }
 
+  function renderPropertyHistoryCard(job) {
+    const badge = historyBadgeInfo(job.status);
+    const dealText = job.deals
+      ? job.deals + ' unique deal' + (job.deals === 1 ? '' : 's')
+      : '—';
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    const location =
+      [job.city, job.state, job.country].filter(function (part) { return !!part; }).join(', ') ||
+      '—';
+    const mode = job.listingType
+      ? job.listingType.toLowerCase() === 'rent'
+        ? 'Rent'
+        : 'Buy'
+      : '—';
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Property Scout</strong>' +
+      '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(location) + ' · ' + escapeHtml(dealText) + '</p>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Deals found</dt><dd>' + escapeHtml(dealText) + '</dd></div>' +
+      '<div><dt>Listing type</dt><dd>' + escapeHtml(mode) + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Created</dt><dd>' +
+      escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
+      '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-property-resume="' +
+      escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') +
+      '>View Results</button>' +
+      (job.downloadReady && job.job_id
+        ? '<button type="button" class="btn btn-primary btn-sm" data-property-download="' +
+          escapeHtml(job.job_id) + '">Download .xlsx</button>'
+        : '') +
+      '</div>' +
+      '</article>'
+    );
+  }
+
+  function renderTrackerHistoryCard(job) {
+    const badge = historyBadgeInfo(job.status === 'active' ? 'running' : job.status);
+    const urlText = job.urls
+      ? job.urls + ' URL' + (job.urls === 1 ? '' : 's')
+      : '—';
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    const changes = Number(job.changes) || 0;
+    const daysLeft = Number(job.daysLeft) || 0;
+    const percent = clamp(Number(job.percent) || 0, 2, 100);
+    const label = job.status === 'active' ? 'Watching' : badge.label;
+
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Competitor Tracker</strong>' +
+      '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(urlText) + ' · ' + escapeHtml(creditText) + '</p>' +
+      '<div class="hist-trading">' +
+      '<span class="hist-trading-label"><strong>' + daysLeft + ' / ' + CT_DAYS +
+      '</strong> days left</span>' +
+      '<span class="hist-badge ' + (changes > 0 ? 'warn' : 'ok') + '">' +
+      (changes > 0
+        ? changes + ' change' + (changes === 1 ? '' : 's') + ' detected'
+        : 'No changes yet') +
+      '</span>' +
+      '</div>' +
+      '<div class="watch-progress"><span style="width:' + percent + '%"></span></div>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>URLs watched</dt><dd>' + escapeHtml(urlText) + '</dd></div>' +
+      '<div><dt>Changes detected</dt><dd>' + changes + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
+      '<div><dt>Watch ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Started</dt><dd>' +
+      escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
+      '</dl>' +
+      '</article>'
+    );
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
     const invoicePane = $('#historyInvoice');
     const enricherPane = $('#historyEnricher');
     const reviewPane = $('#historyReview');
+    const propertyPane = $('#historyProperty');
+    const trackerPane = $('#historyTracker');
     const stockCount = historyState.stock.length;
     const b2bCount = historyState.b2b.length;
     const invoiceCount = historyState.invoice.length;
     const enricherCount = historyState.enricher.length;
     const reviewCount = historyState.review.length;
+    const propertyCount = historyState.property.length;
+    const trackerCount = historyState.tracker.length;
     const stockPage = historyPageSlice('stock', historyState.stock);
     const b2bPage = historyPageSlice('b2b', historyState.b2b);
     const invoicePage = historyPageSlice('invoice', historyState.invoice);
     const enricherPage = historyPageSlice('enricher', historyState.enricher);
     const reviewPage = historyPageSlice('review', historyState.review);
+    const propertyPage = historyPageSlice('property', historyState.property);
+    const trackerPage = historyPageSlice('tracker', historyState.tracker);
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
@@ -3834,13 +4093,39 @@
           '</div>';
     }
 
+    if (propertyPane) {
+      propertyPane.innerHTML = propertyCount
+        ? renderHistoryPager('property', 'Property Scout jobs', propertyPage.page, propertyPage.pages, propertyCount) +
+          '<div class="hist-list">' +
+          propertyPage.items.map(renderPropertyHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No property scout jobs yet. Launch Property Deal Scout and the ranked deals history will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Launch Property Scout</a>' +
+          '</div>';
+    }
+
+    if (trackerPane) {
+      trackerPane.innerHTML = trackerCount
+        ? renderHistoryPager('tracker', 'Competitor Tracker watches', trackerPage.page, trackerPage.pages, trackerCount) +
+          '<div class="hist-list">' +
+          trackerPage.items.map(renderTrackerHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No competitor watches yet. Start a 7-day watch and every real price or text change will appear here.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Start 7-Day Watch</a>' +
+          '</div>';
+    }
+
     /* Keep tab + section counters in sync. */
     const counts = {
       stock: stockCount,
       b2b: b2bCount,
       invoice: invoiceCount,
       enricher: enricherCount,
-      review: reviewCount
+      review: reviewCount,
+      property: propertyCount,
+      tracker: trackerCount
     };
     $$('[data-hist-count]').forEach(function (el) {
       const key = el.getAttribute('data-hist-count');
@@ -3849,7 +4134,7 @@
     $$('[data-hist-count-label="stock"]').forEach(function (el) {
       el.textContent = stockCount + ' subscription' + (stockCount === 1 ? '' : 's');
     });
-    ['b2b', 'invoice', 'enricher', 'review'].forEach(function (key) {
+    ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker'].forEach(function (key) {
       $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
         el.textContent = counts[key] + ' job' + (counts[key] === 1 ? '' : 's');
       });
@@ -3860,7 +4145,8 @@
   function applyHistoryFilter(name) {
     const filter =
       name === 'stock' || name === 'b2b' || name === 'invoice' ||
-      name === 'enricher' || name === 'review'
+      name === 'enricher' || name === 'review' ||
+      name === 'property' || name === 'tracker'
         ? name
         : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
@@ -3873,7 +4159,15 @@
     });
 
     /* Switching agent filters always returns every list to page 1. */
-    historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
+    historyPages = {
+      stock: 1,
+      b2b: 1,
+      invoice: 1,
+      enricher: 1,
+      review: 1,
+      property: 1,
+      tracker: 1
+    };
     if (isLoggedIn() && !historyState.loading) paintHistory();
   }
 
@@ -3883,10 +4177,27 @@
     const invoicePane = $('#historyInvoice');
     const enricherPane = $('#historyEnricher');
     const reviewPane = $('#historyReview');
-    if (!stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane) return;
+    const propertyPane = $('#historyProperty');
+    const trackerPane = $('#historyTracker');
+    if (
+      !stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane &&
+      !propertyPane && !trackerPane
+    ) {
+      return;
+    }
 
     /* Refresh (and every fresh fetch) starts from page 1. */
-    if (force) historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
+    if (force) {
+      historyPages = {
+        stock: 1,
+        b2b: 1,
+        invoice: 1,
+        enricher: 1,
+        review: 1,
+        property: 1,
+        tracker: 1
+      };
+    }
 
     if (!isLoggedIn()) {
       historyState = {
@@ -3896,11 +4207,13 @@
         b2b: [],
         invoice: [],
         enricher: [],
-        review: []
+        review: [],
+        property: [],
+        tracker: []
       };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, lead scraper runs, invoice batches, lead enrichment runs and review battlecards are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property scouts and competitor watches are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
@@ -3908,9 +4221,11 @@
       if (invoicePane) invoicePane.innerHTML = loginCard;
       if (enricherPane) enricherPane.innerHTML = loginCard;
       if (reviewPane) reviewPane.innerHTML = loginCard;
+      if (propertyPane) propertyPane.innerHTML = loginCard;
+      if (trackerPane) trackerPane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
-      ['b2b', 'invoice', 'enricher', 'review'].forEach(function (key) {
+      ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker'].forEach(function (key) {
         $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
           el.textContent = '0 jobs';
         });
@@ -3930,6 +4245,8 @@
     if (invoicePane) invoicePane.innerHTML = '<p class="empty-note">Loading your invoice jobs…</p>';
     if (enricherPane) enricherPane.innerHTML = '<p class="empty-note">Loading your enrichment jobs…</p>';
     if (reviewPane) reviewPane.innerHTML = '<p class="empty-note">Loading your review mining jobs…</p>';
+    if (propertyPane) propertyPane.innerHTML = '<p class="empty-note">Loading your property scout jobs…</p>';
+    if (trackerPane) trackerPane.innerHTML = '<p class="empty-note">Loading your competitor watches…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -3989,18 +4306,39 @@
           'review',
           'battlecards'
         ]);
+        const propertyRaw = pickArray(source, [
+          'property_scout',
+          'property_scout_jobs',
+          'property_jobs',
+          'property',
+          'deals'
+        ]);
+        const trackerRaw = pickArray(source, [
+          'competitor_tracker',
+          'competitor_tracker_jobs',
+          'competitor_trackers',
+          'tracker_jobs',
+          'tracker',
+          'watches'
+        ]);
         const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
         const stockExtra = [];
         const b2bExtra = [];
         const invoiceExtra = [];
         const enricherExtra = [];
         const reviewExtra = [];
+        const propertyExtra = [];
+        const trackerExtra = [];
 
         combined.forEach(function (item) {
           const kind = String(
             (item && (item.agent || item.agent_id || item.type || item.kind)) || ''
           ).toLowerCase();
-          if (kind.indexOf('enrich') !== -1) {
+          if (kind.indexOf('track') !== -1 || kind.indexOf('monitor') !== -1) {
+            trackerExtra.push(item);
+          } else if (kind.indexOf('property') !== -1 || kind.indexOf('scout') !== -1) {
+            propertyExtra.push(item);
+          } else if (kind.indexOf('enrich') !== -1) {
             enricherExtra.push(item);
           } else if (kind.indexOf('review') !== -1 || kind.indexOf('competitor') !== -1) {
             reviewExtra.push(item);
@@ -4022,6 +4360,8 @@
         historyState.invoice = invoiceRaw.concat(invoiceExtra).map(normalizeInvoiceJob);
         historyState.enricher = enricherRaw.concat(enricherExtra).map(normalizeEnricherJob);
         historyState.review = reviewRaw.concat(reviewExtra).map(normalizeReviewJob);
+        historyState.property = propertyRaw.concat(propertyExtra).map(normalizePropertyJob);
+        historyState.tracker = trackerRaw.concat(trackerExtra).map(normalizeTrackerJob);
 
         /* Fall back to the locally cached activations when the server has
            nothing recorded yet for this browser. */
@@ -4043,6 +4383,8 @@
         historyState.invoice = sortNewestFirst(historyState.invoice, 'created');
         historyState.enricher = sortNewestFirst(historyState.enricher, 'created');
         historyState.review = sortNewestFirst(historyState.review, 'created');
+        historyState.property = sortNewestFirst(historyState.property, 'created');
+        historyState.tracker = sortNewestFirst(historyState.tracker, 'created');
 
         historyState.loaded = true;
         paintHistory();
@@ -4064,6 +4406,8 @@
         if (invoicePane) invoicePane.innerHTML = note;
         if (enricherPane) enricherPane.innerHTML = note;
         if (reviewPane) reviewPane.innerHTML = note;
+        if (propertyPane) propertyPane.innerHTML = note;
+        if (trackerPane) trackerPane.innerHTML = note;
         console.warn('[LiteWork] Account history unavailable.', message);
       });
   }
@@ -5337,32 +5681,122 @@
         const rwDownload = event.target.closest('[data-review-download]');
         if (rwDownload) {
           downloadRwExcel(rwDownload.getAttribute('data-review-download'));
+          return;
+        }
+
+        const propResume = event.target.closest('[data-property-resume]');
+        if (propResume) {
+          openPropHistoryJob(propResume.getAttribute('data-property-resume'));
+          return;
+        }
+
+        const propDownload = event.target.closest('[data-property-download]');
+        if (propDownload) {
+          downloadPropExcel(propDownload.getAttribute('data-property-download'));
         }
       });
     }
 
-    /* Category filter pills on #agents (live client-side filtering) */
+    /* Category filter pills + strict 3-agents-per-page pagination */
     (function bindAgentFilters() {
       const pills = $$('[data-agent-filter]');
       const cards = $$('#agentGrid [data-agent-cat]');
       if (!pills.length || !cards.length) return;
 
+      const PAGE_SIZE = 3;
+      let filter = 'all';
+      let page = 1;
+
+      const pager = $('#agentPager');
+      const info = $('#agentPageInfo');
+      const nums = $('#agentPageNums');
+      const prev = $('#agentPrev');
+      const next = $('#agentNext');
+
+      function filteredCards() {
+        if (filter === 'all') return cards;
+        return cards.filter(function (card) {
+          const cats = String(card.getAttribute('data-agent-cat') || '')
+            .split(/\s+/)
+            .filter(function (c) { return !!c; });
+          return cats.indexOf(filter) !== -1;
+        });
+      }
+
+      function paintPages() {
+        const list = filteredCards();
+        const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+        page = clamp(page, 1, pages);
+
+        cards.forEach(function (card) { card.hidden = true; });
+        list
+          .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+          .forEach(function (card) { card.hidden = false; });
+
+        /* Filtered categories with <= 3 agents need no pagination. */
+        if (pager) pager.hidden = list.length <= PAGE_SIZE;
+        if (info) info.textContent = 'Page ' + page + ' of ' + pages;
+
+        if (nums) {
+          let html = '';
+          for (let i = 1; i <= pages; i += 1) {
+            html +=
+              '<button type="button" class="agent-pager-num' +
+              (i === page ? ' is-active' : '') + '" data-agent-page="' + i +
+              '" aria-label="Page ' + i + '"' +
+              (i === page ? ' aria-current="page"' : '') + '>' + i + '</button>';
+          }
+          nums.innerHTML = html;
+        }
+
+        if (prev) {
+          const off = page <= 1;
+          prev.disabled = off;
+          prev.setAttribute('aria-disabled', off ? 'true' : 'false');
+        }
+        if (next) {
+          const off = page >= pages;
+          next.disabled = off;
+          next.setAttribute('aria-disabled', off ? 'true' : 'false');
+        }
+      }
+
       pills.forEach(function (pill) {
         pill.addEventListener('click', function () {
-          const filter = pill.getAttribute('data-agent-filter') || 'all';
+          filter = pill.getAttribute('data-agent-filter') || 'all';
+          page = 1;
           pills.forEach(function (other) {
             const on = other === pill;
             other.classList.toggle('is-active', on);
             other.setAttribute('aria-selected', on ? 'true' : 'false');
           });
-          cards.forEach(function (card) {
-            const cats = String(card.getAttribute('data-agent-cat') || '')
-              .split(/\s+/)
-              .filter(function (c) { return !!c; });
-            card.hidden = filter !== 'all' && cats.indexOf(filter) === -1;
-          });
+          paintPages();
         });
       });
+
+      if (prev) {
+        prev.addEventListener('click', function () {
+          if (page <= 1) return;
+          page -= 1;
+          paintPages();
+        });
+      }
+      if (next) {
+        next.addEventListener('click', function () {
+          page += 1;
+          paintPages();
+        });
+      }
+      if (nums) {
+        nums.addEventListener('click', function (event) {
+          const btn = event.target.closest ? event.target.closest('[data-agent-page]') : null;
+          if (!btn) return;
+          page = toPositiveInt(btn.getAttribute('data-agent-page'), 1);
+          paintPages();
+        });
+      }
+
+      paintPages();
     })();
 
     /* Coming-soon waitlist buttons */
@@ -5522,6 +5956,50 @@
         downloadRwExcel();
       });
     }
+
+    /* Property Deal Scout (Worker #6): launch, resume + download */
+    $$('[data-open-property]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openPropertyModal();
+      });
+    });
+
+    const propResumeBtn = $('#propResumeBtn');
+    if (propResumeBtn) {
+      propResumeBtn.addEventListener('click', function () {
+        const input = $('#propResumeId');
+        const value = input ? input.value.trim() : '';
+        if (!value) {
+          toast('Enter a Property Scout Job ID to check.', 'warn');
+          return;
+        }
+        openPropHistoryJob(value);
+      });
+    }
+
+    const propResumeInput = $('#propResumeId');
+    if (propResumeInput) {
+      propResumeInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (propResumeBtn) propResumeBtn.click();
+        }
+      });
+    }
+
+    const propDownloadBtn = $('#propDownloadBtn');
+    if (propDownloadBtn) {
+      propDownloadBtn.addEventListener('click', function () {
+        downloadPropExcel();
+      });
+    }
+
+    /* Competitor Change Tracker (Worker #7): launch */
+    $$('[data-open-competitor]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openCompetitorTrackerModal();
+      });
+    });
 
     /* Scraper results: resume + download */
     const resumeBtn = $('#resumeBtn');
@@ -11122,6 +11600,1382 @@
       });
   }
 
+  /* ================= O. PROPERTY DEAL SCOUT (WORKER #6) ================= */
+  let propStarting = false;
+  let propCountry = 'Malaysia';
+  let propMode = 'buy';
+  let propPollTimer = null;
+  let propPollInFlight = false;
+  let propPollController = null;
+  let propPollEpoch = 0;
+  let propPollStartedAt = 0;
+
+  function propJobFailed(job) {
+    const status = String((job && job.status) || '').toLowerCase();
+    return (
+      status === 'failed' ||
+      status === 'error' ||
+      status === 'cancelled' ||
+      status === 'canceled'
+    );
+  }
+
+  function propIsComplete(job) {
+    return (
+      !!job &&
+      String(job.status || '').toLowerCase() === 'completed' &&
+      job.download_ready === true
+    );
+  }
+
+  function propPollActive(job) {
+    return !!job && !propJobFailed(job) && !propIsComplete(job);
+  }
+
+  function stopPropTimer() {
+    propPollEpoch += 1;
+    if (propPollTimer) {
+      window.clearTimeout(propPollTimer);
+      propPollTimer = null;
+    }
+    propPollStartedAt = 0;
+    if (propPollController) {
+      try {
+        propPollController.abort();
+      } catch (err) {
+        /* already settled */
+      }
+      propPollController = null;
+    }
+    propPollInFlight = false;
+  }
+
+  function setPropBadge(kind, text) {
+    const badge = $('#propStatus');
+    if (!badge) return;
+    badge.classList.remove('is-pending', 'is-ok', 'is-fail');
+    if (kind) badge.classList.add('is-' + kind);
+    const label = $('.webhook-text', badge);
+    if (label) label.textContent = text;
+  }
+
+  function startPropPolling(job, force) {
+    if (!job || !PROP_STATUS_URL) return;
+    if (propPollTimer || propPollInFlight) return;
+    if (!force && !propPollActive(job)) return;
+
+    propPollStartedAt = Date.now();
+    propPollEpoch += 1;
+    const epoch = propPollEpoch;
+    setPropBadge('pending', force ? 'Refreshing status…' : 'Starting property scout…');
+    pollPropStatus(!!force, epoch);
+  }
+
+  function forcePropPollNow() {
+    const job = state.propertyJob;
+    if (!job || !PROP_STATUS_URL) return;
+    if (propPollTimer) {
+      window.clearTimeout(propPollTimer);
+      propPollTimer = null;
+    }
+    if (propPollInFlight) return;
+    if (!propPollStartedAt) propPollStartedAt = Date.now();
+    pollPropStatus(true, propPollEpoch);
+  }
+
+  function scheduleNextPropPoll(delay, epoch) {
+    if (epoch !== propPollEpoch) return;
+    if (propPollTimer) window.clearTimeout(propPollTimer);
+    propPollTimer = window.setTimeout(function () {
+      propPollTimer = null;
+      pollPropStatus(false, epoch);
+    }, Math.max(0, delay));
+  }
+
+  function ensurePropRunning() {
+    const job = state.propertyJob;
+    if (!job || propJobFailed(job) || propIsComplete(job)) return;
+    if (!isLoggedIn()) return;
+    startPropPolling(job);
+  }
+
+  function extractPropPreview(data) {
+    if (!data || typeof data !== 'object') return [];
+    const lists = [];
+    const preview = data.preview;
+    if (Array.isArray(preview)) {
+      lists.push(preview);
+    } else if (preview && typeof preview === 'object') {
+      if (Array.isArray(preview.rows)) lists.push(preview.rows);
+      if (Array.isArray(preview.deals)) lists.push(preview.deals);
+      if (Array.isArray(preview.listings)) lists.push(preview.listings);
+    }
+    if (Array.isArray(data.preview_rows)) lists.push(data.preview_rows);
+    if (Array.isArray(data.rows)) lists.push(data.rows);
+    if (Array.isArray(data.results)) lists.push(data.results);
+    if (Array.isArray(data.deals)) lists.push(data.deals);
+    if (Array.isArray(data.listings)) lists.push(data.listings);
+
+    for (let i = 0; i < lists.length; i += 1) {
+      if (lists[i].length) return lists[i];
+    }
+    return [];
+  }
+
+  function pollPropStatus(force, expectedEpoch) {
+    const job = state.propertyJob;
+    if (!job || !PROP_STATUS_URL) return;
+    const epoch = expectedEpoch == null ? propPollEpoch : expectedEpoch;
+    if (epoch !== propPollEpoch) return;
+    if (propPollInFlight) return;
+    if (!force && !propPollActive(job)) return;
+    if (!propPollStartedAt) propPollStartedAt = Date.now();
+
+    propPollInFlight = true;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    propPollController = controller;
+    /* 12s timeout + 3-strike tolerance, same policy as the other workers. */
+    const timer = controller
+      ? window.setTimeout(function () { controller.abort(); }, 12000)
+      : null;
+
+    const request = fetch(PROP_STATUS_URL + '?job_id=' + encodeURIComponent(job.job_id), {
+      mode: 'cors',
+      headers: authHeaders(),
+      signal: controller ? controller.signal : undefined
+    })
+      .then(function (response) {
+        if (epoch !== propPollEpoch) return null;
+        if (response.status === 401) {
+          stopPropTimer();
+          handleAuthExpired(
+            'Your session expired. Log in again to check this property scout job.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          failPropJob('Insufficient credits');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        if (epoch !== propPollEpoch) return;
+        if (typeof data !== 'object') throw new Error('Empty status response');
+
+        if (setLiveCredits(extractRemaining(data))) syncCreditUI();
+
+        const toNumber = function (value) {
+          if (value === null || value === undefined || value === '') return null;
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
+        const firstNumber = function () {
+          for (let i = 0; i < arguments.length; i += 1) {
+            const n = toNumber(arguments[i]);
+            if (n !== null) return n;
+          }
+          return null;
+        };
+
+        const percent = toNumber(data.percent);
+        if (percent !== null) job.percent = clamp(percent, 0, 100);
+
+        const deals = firstNumber(
+          data.unique_deals,
+          data.deals_found,
+          data.deals_count,
+          data.listings_count,
+          data.total_deals,
+          data.count
+        );
+        if (deals !== null) job.unique_deals = Math.max(0, Math.floor(deals));
+
+        const scanned = firstNumber(
+          data.scanned,
+          data.checked,
+          data.listings_scanned,
+          data.processed
+        );
+        if (scanned !== null) job.scanned = Math.max(0, Math.floor(scanned));
+
+        const active = data.active_listing || data.current_listing || data.active_deal;
+        if (active != null) job.active_listing = String(active);
+
+        if (data.download_ready != null) {
+          job.download_ready =
+            data.download_ready === true ||
+            data.download_ready === 'true' ||
+            data.download_ready === 1;
+        }
+        if (data.email_sent != null) {
+          job.email_sent = data.email_sent === true || data.email_sent === 'true';
+        }
+
+        const previewRows = extractPropPreview(data);
+        if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
+
+        const status = String(data.status || job.status || 'processing').toLowerCase();
+        job.status = status;
+        job.poll_errors = 0;
+
+        if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
+          failPropJob(data.error ? String(data.error) : '');
+          return;
+        }
+
+        if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1) {
+          if (job.download_ready === true) {
+            completePropJob(true);
+          } else {
+            setPropBadge('pending', 'Completed — finalizing Excel…');
+            saveState();
+            updatePropProgress();
+            renderPropTable();
+          }
+          return;
+        }
+
+        if (status === 'queued' || status === 'pending' || status === 'starting') {
+          setPropBadge('pending', 'Starting property scout…');
+        } else {
+          setPropBadge(
+            'pending',
+            'Scouting listings · ' +
+              Math.floor(clamp(Number(job.percent) || 0, 0, 100)) + '%'
+          );
+        }
+
+        saveState();
+        updatePropProgress();
+        renderPropTable();
+      })
+      .catch(function (err) {
+        if (epoch !== propPollEpoch) return;
+
+        const failures = (Number(job && job.poll_errors) || 0) + 1;
+        if (job) job.poll_errors = failures;
+
+        console.warn(
+          '[LiteWork] Property Scout status check failed (' + failures + ').',
+          err && err.message ? err.message : err
+        );
+
+        if (job) {
+          if (failures >= 3) {
+            setPropBadge('pending', 'Reconnecting…');
+          } else if (!job.status) {
+            setPropBadge('pending', 'Starting property scout…');
+          }
+          saveState();
+        }
+        updatePropProgress();
+      });
+
+    request.finally(function () {
+      if (timer) window.clearTimeout(timer);
+      if (propPollController === controller) propPollController = null;
+      if (epoch !== propPollEpoch) return;
+
+      propPollInFlight = false;
+      const activeJob = state.propertyJob;
+      if (!activeJob || !propPollActive(activeJob)) return;
+
+      if (!propPollStartedAt) propPollStartedAt = Date.now();
+      if (Date.now() - propPollStartedAt >= STATUS_POLL_WINDOW_MS) {
+        setPropBadge('pending', 'Still running — click Check to refresh');
+        saveState();
+        updatePropProgress();
+        return;
+      }
+      scheduleNextPropPoll(PROP_POLL_MS, epoch);
+    });
+  }
+
+  function renderPropertyResults() {
+    const empty = $('#propertyEmpty');
+    const main = $('#propertyMain');
+    if (!empty || !main) return;
+
+    const job = state.propertyJob;
+    if (!job) {
+      empty.hidden = false;
+      main.hidden = true;
+      return;
+    }
+
+    empty.hidden = true;
+    main.hidden = false;
+
+    const resume = $('#propResumeId');
+    if (resume) resume.value = job.job_id || '';
+
+    renderPropJobSummary();
+    renderPropTable();
+    updatePropProgress();
+
+    if (propIsComplete(job)) {
+      completePropJob(true);
+      return;
+    }
+    if (propJobFailed(job)) {
+      setPropBadge('fail', 'Job failed · ' + (job.error || job.status || 'start a new run'));
+      return;
+    }
+    ensurePropRunning();
+  }
+
+  function renderPropJobSummary() {
+    const job = state.propertyJob;
+    if (!job) return;
+    const meta = $('#propJobMeta');
+    const summary = $('#propJobSummary');
+    const deals = Number(job.unique_deals) || (job.preview_rows || []).length;
+    const credits = Number(job.credits_spent) || PROP_CREDITS;
+    const location =
+      [job.city, job.state, job.country]
+        .filter(function (part) { return !!part; })
+        .join(', ') || 'MY & SG';
+
+    if (meta) {
+      meta.textContent =
+        location + ' · ' + deals + ' unique deal' + (deals === 1 ? '' : 's') +
+        ' · ' + credits + ' credits';
+    }
+
+    if (summary) {
+      const mode = String(job.listing_type || '').toLowerCase() === 'rent' ? 'Rent' : 'Buy';
+      summary.innerHTML =
+        '<div class="summary-row"><dt>Location</dt><dd>' +
+        escapeHtml(location) + '</dd></div>' +
+        '<div class="summary-row"><dt>Mode</dt><dd>' + escapeHtml(mode) + '</dd></div>' +
+        '<div class="summary-row"><dt>Property type</dt><dd>' +
+        escapeHtml(job.property_type || 'All') + '</dd></div>' +
+        '<div class="summary-row"><dt>Max budget</dt><dd>' +
+        escapeHtml(
+          job.max_budget
+            ? (job.currency || 'MYR') + ' ' +
+              Number(job.max_budget).toLocaleString('en-US')
+            : 'Any'
+        ) + '</dd></div>' +
+        '<div class="summary-row"><dt>Unique deals</dt><dd><strong>' +
+        deals + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' +
+        credits + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Delivery email</dt><dd>' +
+        escapeHtml(job.email || accountEmail() || '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Started</dt><dd>' +
+        escapeHtml(job.started_at ? fmtMYT(job.started_at) : '—') + '</dd></div>' +
+        '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
+        escapeHtml(job.job_id) + '</code></dd></div>';
+    }
+  }
+
+  function updatePropProgress() {
+    const job = state.propertyJob;
+    if (!job) return;
+
+    const deals = Number(job.unique_deals) || (job.preview_rows || []).length;
+    const complete = propIsComplete(job);
+    const percent = complete
+      ? 100
+      : Math.floor(clamp(Number(job.percent) || 0, 0, 100));
+
+    const fill = $('#propRingFill');
+    if (fill) fill.style.strokeDashoffset = String(RING_LENGTH - (RING_LENGTH * percent) / 100);
+
+    const percentEl = $('#propRingPercent');
+    if (percentEl) percentEl.textContent = percent + '%';
+
+    const countEl = $('#propRingCount');
+    if (countEl) {
+      countEl.textContent = deals + ' unique deal' + (deals === 1 ? '' : 's') + ' found';
+    }
+
+    const activeEl = $('#propRingActive');
+    if (activeEl) {
+      const activeListing = String(job.active_listing || '').trim();
+      const phase = String(job.status || '').toLowerCase();
+      const terminal =
+        complete || phase === 'completed' || phase === 'failed' || phase === 'error';
+      if (activeListing && !terminal) {
+        activeEl.hidden = false;
+        activeEl.textContent = 'Scanning "' + activeListing + '"…';
+      } else {
+        activeEl.hidden = true;
+        activeEl.textContent = '';
+      }
+    }
+
+    const card = $('#propRingCard');
+    if (card) card.classList.toggle('is-complete', complete);
+
+    const downloadBtn = $('#propDownloadBtn');
+    if (downloadBtn) downloadBtn.disabled = !complete;
+
+    const downloadTitle = $('#propDownloadTitle');
+    if (downloadTitle) {
+      downloadTitle.textContent =
+        complete && deals
+          ? 'Property Deals Excel (.xlsx) · ' + deals + ' deals'
+          : 'Property Deals Excel (.xlsx)';
+    }
+
+    const downloadSub = $('#propDownloadSub');
+    if (downloadSub) {
+      if (complete) downloadSub.textContent = 'Ready to download';
+      else if (String(job.status || '').toLowerCase() === 'completed') {
+        downloadSub.textContent = 'Finalizing Excel…';
+      } else {
+        downloadSub.textContent = 'Live progress from the property backend';
+      }
+    }
+
+    const emailNote = $('#propEmailNote');
+    if (emailNote) {
+      const email = job.email || accountEmail() || 'your delivery email';
+      const sent = complete && job.email_sent === true;
+      emailNote.textContent = sent
+        ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
+        : 'Excel (.xlsx) will also be emailed to ' + email +
+          ' when the backend marks it ready — safe to close this tab.';
+      emailNote.classList.toggle('is-sent', sent);
+    }
+
+    const tableMeta = $('#propTableMeta');
+    if (tableMeta) {
+      const count = (job.preview_rows || []).length;
+      tableMeta.textContent =
+        'Top ' + count + ' ranked deal' + (count === 1 ? '' : 's') +
+        ' · price per sqft & deal rating';
+    }
+
+    renderPropJobSummary();
+  }
+
+  function renderPropTable() {
+    const table = $('#propTable');
+    if (!table || !state.propertyJob) return;
+    const job = state.propertyJob;
+    const rows = Array.isArray(job.preview_rows) ? job.preview_rows.slice(0, 25) : [];
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    if (thead) {
+      thead.innerHTML =
+        '<tr>' +
+        ['Rank', 'Property', 'City', 'Price', 'Size', 'Price/sqft', 'vs Median', 'Deal Rating', 'Source', 'View Listing']
+          .map(function (label) { return '<th>' + label + '</th>'; })
+          .join('') +
+        '</tr>';
+    }
+    if (!tbody) return;
+
+    if (!rows.length) {
+      const message =
+        String(job.status || '').toLowerCase() === 'completed'
+          ? 'Preview unavailable — download the .xlsx for every ranked deal.'
+          : 'Waiting for the first ranked deal…';
+      tbody.innerHTML =
+        '<tr><td colspan="10" class="table-empty">' + escapeHtml(message) + '</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows
+      .map(function (row, index) {
+        const rank = previewFieldValue(row, ['rank']) || String(index + 1);
+        const property =
+          previewFieldValue(row, ['property', 'property_name', 'title', 'name', 'listing_title']) ||
+          '—';
+        const city = previewFieldValue(row, ['city', 'district', 'area', 'location']) || '—';
+        const price =
+          previewFieldValue(row, ['price', 'asking_price', 'monthly_rent', 'rent', 'price_text']) ||
+          '—';
+        const size =
+          previewFieldValue(row, ['size', 'built_up', 'built_up_sqft', 'size_sqft', 'area_sqft']) ||
+          '—';
+        const psf =
+          previewFieldValue(row, ['price_per_sqft', 'psf', 'price_psf', 'price_sqft']) || '—';
+        const vs =
+          previewFieldValue(row, ['vs_median', 'vs_median_percent', 'median_diff', 'vs_median_pct']) ||
+          '—';
+        const rating =
+          previewFieldValue(row, ['deal_rating', 'rating', 'deal_score', 'score']) || '—';
+        const source =
+          previewFieldValue(row, ['source', 'portal', 'site', 'source_name']) || '—';
+        const urlRaw = previewFieldValue(row, ['listing_url', 'url', 'link', 'property_url']);
+        const link =
+          urlRaw && /^https?:\/\//i.test(urlRaw)
+            ? '<a class="prop-listing-link" href="' + escapeHtml(urlRaw) +
+              '" target="_blank" rel="noopener noreferrer">View Listing</a>'
+            : '—';
+
+        return (
+          '<tr>' +
+          '<td class="cell-strong">' + escapeHtml(rank) + '</td>' +
+          '<td class="cell-strong">' + escapeHtml(property) + '</td>' +
+          '<td>' + escapeHtml(city) + '</td>' +
+          '<td>' + escapeHtml(price) + '</td>' +
+          '<td>' + escapeHtml(size) + '</td>' +
+          '<td>' + escapeHtml(psf) + '</td>' +
+          '<td>' + escapeHtml(vs) + '</td>' +
+          '<td>' + escapeHtml(rating) + '</td>' +
+          '<td>' + escapeHtml(source) + '</td>' +
+          '<td>' + link + '</td>' +
+          '</tr>'
+        );
+      })
+      .join('');
+
+    const pill = $('#propPreviewPill');
+    if (pill) {
+      pill.textContent = rows.length + ' deal' + (rows.length === 1 ? '' : 's');
+    }
+  }
+
+  function completePropJob(silent) {
+    const job = state.propertyJob;
+    if (!job) return;
+
+    job.status = 'completed';
+    job.download_ready = true;
+    job.percent = 100;
+
+    updatePropProgress();
+    renderPropTable();
+
+    stopPropTimer();
+    historyState.loaded = false;
+    saveState();
+
+    setPropBadge('ok', 'Completed · .xlsx ready');
+    if (!silent) toast('Property deals Excel is ready to download.', 'success');
+  }
+
+  function failPropJob(reason) {
+    const job = state.propertyJob;
+    if (!job) return;
+    job.status = 'failed';
+    job.error = reason || '';
+    stopPropTimer();
+    saveState();
+    updatePropProgress();
+    setPropBadge('fail', 'Job failed · ' + (reason || 'please try again'));
+  }
+
+  function downloadPropExcel(jobId) {
+    const job = state.propertyJob || {};
+    const id = String(jobId || job.job_id || '').trim();
+    if (!id || !PROP_DOWNLOAD_URL) {
+      toast('Download unlocks when the backend marks the Excel ready.', 'warn');
+      return;
+    }
+
+    toast('Requesting your property deals Excel from the cloud…', 'info');
+
+    fetch(PROP_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
+      mode: 'cors',
+      headers: authHeaders()
+    })
+      .then(function (response) {
+        if (response.status === 401) {
+          handleAuthExpired(
+            'Your session expired. Log in again to download your deals.',
+            null
+          );
+          return null;
+        }
+        if (response.status === 402) {
+          toast('Insufficient credits for this download.', 'warn');
+          return null;
+        }
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.blob();
+      })
+      .then(function (blob) {
+        if (!blob) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download =
+          'litework-property-deals-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
+        toast('Property deals Excel download ready.', 'success');
+      })
+      .catch(function (err) {
+        console.warn('[LiteWork] Property Scout download failed.', err);
+        toast('Could not download the property deals Excel. Please try again.', 'warn');
+      });
+  }
+
+  function openPropHistoryJob(jobId) {
+    const id = String(jobId || '').trim();
+    if (!id) return;
+
+    stopPropTimer();
+    const known = (historyState.property || []).filter(function (entry) {
+      return String(entry.job_id || '') === id;
+    })[0];
+    const current = state.propertyJob;
+    const sameJob = !!current && String(current.job_id || '') === id;
+
+    if (!sameJob) {
+      state.propertyJob = {
+        job_id: id,
+        agent_id: PROP_AGENT_ID,
+        status: 'processing',
+        percent: 0,
+        country: known ? known.country : '',
+        state: known ? known.state : '',
+        city: known ? known.city : '',
+        listing_type: known ? known.listingType : '',
+        unique_deals: known ? known.deals : 0,
+        preview_rows: [],
+        download_ready: false,
+        credits_spent: known ? known.credits : PROP_CREDITS,
+        email: accountEmail(),
+        started_at: new Date().toISOString(),
+        poll_errors: 0
+      };
+    } else {
+      current.poll_errors = 0;
+      current.error = '';
+      if (propJobFailed(current)) current.status = 'processing';
+    }
+    saveState();
+
+    if (currentRoute() === 'property-results') {
+      renderPropertyResults();
+      startPropPolling(state.propertyJob, true);
+    } else {
+      window.location.hash = '#property-results';
+    }
+  }
+
+  function propStates(country) {
+    const table = PROPERTY_LOCATIONS[country];
+    return table && typeof table === 'object' ? Object.keys(table) : [];
+  }
+
+  function propCities(country, stateName) {
+    const table = PROPERTY_LOCATIONS[country];
+    const cities = table ? table[stateName] : null;
+    return Array.isArray(cities) ? cities : [];
+  }
+
+  function fillPropCities(country, stateName) {
+    const citySel = $('#propCity');
+    if (!citySel) return;
+    const cities = propCities(country, stateName);
+    citySel.innerHTML = cities.length
+      ? cities
+          .map(function (city) {
+            return '<option value="' + escapeHtml(city) + '">' + escapeHtml(city) + '</option>';
+          })
+          .join('')
+      : '<option value="">Select a state first</option>';
+    citySel.disabled = !cities.length;
+  }
+
+  function fillPropStates(country) {
+    const stateSel = $('#propState');
+    if (!stateSel) return;
+    const states = propStates(country);
+    stateSel.innerHTML = states
+      .map(function (stateName) {
+        return '<option value="' + escapeHtml(stateName) + '">' +
+          escapeHtml(stateName) + '</option>';
+      })
+      .join('');
+    stateSel.disabled = !states.length;
+    fillPropCities(country, stateSel.value);
+    updatePropQuote();
+  }
+
+  function propSelectedLocation() {
+    const stateSel = $('#propState');
+    const citySel = $('#propCity');
+    return {
+      state: stateSel ? stateSel.value : '',
+      city: citySel ? citySel.value : ''
+    };
+  }
+
+  function updatePropQuote() {
+    const loc = propSelectedLocation();
+    const currency = PROP_COUNTRY_CURRENCY[propCountry] || 'MYR';
+
+    const availableEl = $('#propAvailable');
+    if (availableEl) availableEl.textContent = state.credits + ' Credits';
+
+    const costEl = $('#propCost');
+    if (costEl) costEl.textContent = PROP_CREDITS + ' Credits';
+
+    const currencyEl = $('#propCurrency');
+    if (currencyEl) currencyEl.textContent = currency;
+    const currencyBadge = $('#propCurrencyBadge');
+    if (currencyBadge) currencyBadge.textContent = currency;
+
+    const regionEl = $('#propRegion');
+    if (regionEl) {
+      regionEl.textContent = loc.state
+        ? propCountry + ' · ' + loc.state + (loc.city ? ' · ' + loc.city : '')
+        : propCountry + ' · Select state';
+    }
+
+    const shortfall = PROP_CREDITS - state.credits;
+    const shortEl = $('#propShortfall');
+    if (shortEl) {
+      if (shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this launch. Top up credits to continue.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+
+    const btn = $('#propStartBtn');
+    if (btn) {
+      btn.disabled = propStarting || !loc.state || !loc.city;
+      btn.textContent = propStarting
+        ? 'Starting property scout…'
+        : 'Confirm & Spend ' + PROP_CREDITS + ' Credits · Scout Deals';
+    }
+  }
+
+  function openPropertyModal() {
+    if (!requireAuth({ action: 'property' })) return;
+
+    propStarting = false;
+    propCountry = 'Malaysia';
+    propMode = 'buy';
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Property Deal Scout (MY & SG)</h2>' +
+      '<p class="modal-sub">Rank live property listings by price per sqft and deal quality · ' +
+      PROP_CREDITS + ' credits per launch · up to ' + PROP_MAX_DEALS + ' unique deals</p>' +
+      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="propAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Region</span>' +
+      '<span class="calc-value" id="propRegion">Malaysia · Select state</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Max unique deals</span>' +
+      '<span class="calc-value">' + PROP_MAX_DEALS + '</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="propCost">' + PROP_CREDITS + ' Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="propertyForm" novalidate>' +
+      '<div class="field"><label for="propEmail">Delivery email</label>' +
+      '<input type="email" id="propEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
+      '<div class="modal-section"><h3>Country</h3>' +
+      '<span class="fine">MYR / SGD switches automatically</span></div>' +
+      '<div class="prop-country" id="propCountryGroup">' +
+      '<button type="button" class="prop-pill is-active" data-prop-country="Malaysia">' +
+      'Malaysia<small>MYR listings</small></button>' +
+      '<button type="button" class="prop-pill" data-prop-country="Singapore">' +
+      'Singapore<small>SGD listings</small></button>' +
+      '</div>' +
+      '<div class="modal-section"><h3>Location</h3>' +
+      '<span class="fine">Country → State / Region → City / District</span></div>' +
+      '<div class="prop-location-grid">' +
+      '<div class="field"><label for="propState">State / Region</label>' +
+      '<select id="propState"></select></div>' +
+      '<div class="field"><label for="propCity">City / District</label>' +
+      '<select id="propCity"></select></div>' +
+      '<div class="field"><label for="propBudget">Max budget</label>' +
+      '<div class="prop-budget-wrap"><span class="prop-currency" id="propCurrencyBadge">MYR</span>' +
+      '<input type="number" id="propBudget" min="0" step="1000" placeholder="e.g. 500000" /></div></div>' +
+      '</div>' +
+      '<div class="modal-section"><h3>Deal filters</h3>' +
+      '<span class="fine">Rent or buy</span></div>' +
+      '<div class="prop-mode" id="propModeGroup">' +
+      '<button type="button" class="prop-pill is-active" data-prop-mode="buy">' +
+      'Buy<small>Purchase listings</small></button>' +
+      '<button type="button" class="prop-pill" data-prop-mode="rent">' +
+      'Rent<small>Monthly rental listings</small></button>' +
+      '</div>' +
+      '<div class="prop-location-grid">' +
+      '<div class="field"><label for="propType">Property type</label>' +
+      '<select id="propType">' +
+      '<option value="All">All</option>' +
+      '<option value="Condo / Serviced Residence">Condo / Serviced Residence</option>' +
+      '<option value="Landed House">Landed House</option>' +
+      '<option value="Room">Room</option>' +
+      '</select></div>' +
+      '<div class="field"><label for="propBeds">Min bedrooms</label>' +
+      '<select id="propBeds">' +
+      '<option value="">Any</option>' +
+      '<option value="1">1+</option>' +
+      '<option value="2">2+</option>' +
+      '<option value="3">3+</option>' +
+      '<option value="4">4+</option>' +
+      '</select></div>' +
+      '</div>' +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="propertyFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="propShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="propStartBtn" disabled>' +
+      'Confirm & Spend ' + PROP_CREDITS + ' Credits · Scout Deals</button>' +
+      '<p class="fine">Credits are deducted immediately. Scouting runs in the cloud.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    const countryGroup = $('#propCountryGroup');
+    if (countryGroup) {
+      countryGroup.addEventListener('click', function (event) {
+        const btn = event.target.closest('[data-prop-country]');
+        if (!btn) return;
+        propCountry = btn.getAttribute('data-prop-country') === 'Singapore'
+          ? 'Singapore'
+          : 'Malaysia';
+        $$('#propCountryGroup [data-prop-country]').forEach(function (el) {
+          el.classList.toggle('is-active', el === btn);
+        });
+        fillPropStates(propCountry);
+      });
+    }
+
+    const modeGroup = $('#propModeGroup');
+    if (modeGroup) {
+      modeGroup.addEventListener('click', function (event) {
+        const btn = event.target.closest('[data-prop-mode]');
+        if (!btn) return;
+        propMode = btn.getAttribute('data-prop-mode') === 'rent' ? 'rent' : 'buy';
+        $$('#propModeGroup [data-prop-mode]').forEach(function (el) {
+          el.classList.toggle('is-active', el === btn);
+        });
+      });
+    }
+
+    const stateSel = $('#propState');
+    if (stateSel) {
+      stateSel.addEventListener('change', function () {
+        fillPropCities(propCountry, stateSel.value);
+        updatePropQuote();
+      });
+    }
+    const citySel = $('#propCity');
+    if (citySel) citySel.addEventListener('change', updatePropQuote);
+    const budgetEl = $('#propBudget');
+    if (budgetEl) budgetEl.addEventListener('input', updatePropQuote);
+
+    const form = $('#propertyForm');
+    if (form) form.addEventListener('submit', handlePropertyStart);
+
+    fillPropStates(propCountry);
+  }
+
+  function handlePropertyStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'property' });
+      return;
+    }
+
+    const errEl = $('#propertyFormError');
+    const loc = propSelectedLocation();
+    const budgetEl = $('#propBudget');
+    const typeEl = $('#propType');
+    const bedsEl = $('#propBeds');
+    const budget = budgetEl && budgetEl.value ? Number(budgetEl.value) : 0;
+
+    if (!loc.state || !loc.city) {
+      if (errEl) errEl.textContent = 'Choose a state / region and a city / district to continue.';
+      return;
+    }
+    if (budgetEl && budgetEl.value && (!Number.isFinite(budget) || budget <= 0)) {
+      if (errEl) errEl.textContent = 'Enter a valid maximum budget or leave it blank.';
+      return;
+    }
+    if (state.credits < PROP_CREDITS) {
+      const shortfall = PROP_CREDITS - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this launch. Top up credits to continue.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    propStarting = true;
+    updatePropQuote();
+
+    const email = accountEmail();
+    const currency = PROP_COUNTRY_CURRENCY[propCountry] || 'MYR';
+    const job = {
+      job_id: 'prop_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      agent_id: PROP_AGENT_ID,
+      country: propCountry,
+      state: loc.state,
+      city: loc.city,
+      listing_type: propMode,
+      property_type: typeEl ? typeEl.value : 'All',
+      min_bedrooms: bedsEl && bedsEl.value ? Number(bedsEl.value) : null,
+      max_budget: budget > 0 ? budget : null,
+      currency: currency,
+      max_deals: PROP_MAX_DEALS,
+      credits_spent: PROP_CREDITS,
+      email: email,
+      status: 'starting',
+      percent: 0,
+      unique_deals: 0,
+      preview_rows: [],
+      download_ready: false,
+      started_at: new Date().toISOString(),
+      poll_errors: 0
+    };
+
+    apiFetch(
+      PROP_START_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          job_id: job.job_id,
+          agent_id: PROP_AGENT_ID,
+          email: email,
+          country: propCountry,
+          state: loc.state,
+          state_region: loc.state,
+          city: loc.city,
+          listing_type: propMode,
+          mode: propMode,
+          property_type: job.property_type,
+          min_bedrooms: job.min_bedrooms,
+          max_budget: job.max_budget,
+          budget: job.max_budget,
+          currency: currency,
+          max_deals: PROP_MAX_DEALS,
+          credits: PROP_CREDITS,
+          credits_spent: PROP_CREDITS
+        })
+      },
+      60000
+    )
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          propStarting = false;
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to launch Property Deal Scout.',
+            { action: 'property' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            propStarting = false;
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this launch. Top up credits to continue.';
+            }
+            updatePropQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const returnedId =
+          outer.job_id || outer.jobId || outer.id || inner.job_id || inner.id || '';
+
+        if (returnedId) job.job_id = String(returnedId);
+        job.status = String(outer.status || inner.status || 'running').toLowerCase();
+
+        state.propertyJob = job;
+        saveState();
+
+        propStarting = false;
+        closeModal(false);
+        toast('Property Scout started — ranking ' + propCountry + ' deals now.', 'success');
+
+        if (currentRoute() === 'property-results') {
+          renderPropertyResults();
+          startPropPolling(job);
+        } else {
+          window.location.hash = '#property-results';
+        }
+      })
+      .catch(function (err) {
+        propStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the property scout job. Please try again.';
+        }
+        updatePropQuote();
+        console.warn('[LiteWork] Property Scout start failed.', err);
+      });
+  }
+
+  /* ============ P. COMPETITOR CHANGE TRACKER (WORKER #7) ================ */
+  let ctStarting = false;
+
+  function isHttpUrl(value) {
+    return /^https?:\/\/[^\s.]+\.[^\s]+/i.test(String(value || '').trim());
+  }
+
+  function ctRows() {
+    const rows = [];
+    $$('#ctRows [data-ct-row]').forEach(function (row) {
+      const urlEl = row.querySelector('[data-ct-url]');
+      const labelEl = row.querySelector('[data-ct-label]');
+      const url = urlEl ? String(urlEl.value || '').trim() : '';
+      if (!url) return;
+      rows.push({
+        url: url,
+        label: labelEl ? String(labelEl.value || '').trim() : ''
+      });
+    });
+    return rows;
+  }
+
+  function updateCtQuote() {
+    const rows = ctRows();
+    const valid = rows.filter(function (row) { return isHttpUrl(row.url); }).length;
+    const rowCount = $$('#ctRows [data-ct-row]').length;
+
+    const availableEl = $('#ctAvailable');
+    if (availableEl) availableEl.textContent = state.credits + ' Credits';
+
+    const countEl = $('#ctUrlCount');
+    if (countEl) {
+      countEl.textContent = valid + ' / ' + CT_MAX_URLS;
+      countEl.classList.toggle('is-zero', valid === 0);
+    }
+
+    const totalEl = $('#ctCost');
+    if (totalEl) totalEl.textContent = CT_CREDITS + ' Credits';
+
+    const addBtn = $('#ctAddBtn');
+    if (addBtn) {
+      const full = rowCount >= CT_MAX_URLS;
+      addBtn.disabled = full;
+      addBtn.textContent = full ? 'Maximum ' + CT_MAX_URLS + ' URLs' : '+ Add URL';
+    }
+
+    const hint = $('#ctCountHint');
+    if (hint) hint.textContent = rowCount + ' of ' + CT_MAX_URLS;
+
+    const shortfall = CT_CREDITS - state.credits;
+    const shortEl = $('#ctShortfall');
+    if (shortEl) {
+      if (valid > 0 && shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this watch. Top up credits to continue.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+
+    const btn = $('#ctStartBtn');
+    if (btn) {
+      btn.disabled = ctStarting || valid === 0;
+      btn.textContent = ctStarting
+        ? 'Starting 7-day watch…'
+        : 'Start 7-Day Watch · ' + CT_CREDITS + ' Credits';
+    }
+  }
+
+  function addCtRow(url, label) {
+    const rowsWrap = $('#ctRows');
+    if (!rowsWrap) return;
+    if ($$('#ctRows [data-ct-row]').length >= CT_MAX_URLS) {
+      toast('Up to ' + CT_MAX_URLS + ' competitor URLs per watch.', 'warn');
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'ct-row';
+    row.setAttribute('data-ct-row', '');
+    row.innerHTML =
+      '<input type="url" data-ct-url autocomplete="off" spellcheck="false" ' +
+      'placeholder="https://competitor.com/pricing" />' +
+      '<input type="text" data-ct-label autocomplete="off" placeholder="Label (optional)" />' +
+      '<button type="button" class="rw-remove" data-ct-remove aria-label="Remove URL">×</button>';
+    rowsWrap.appendChild(row);
+
+    const urlInput = row.querySelector('[data-ct-url]');
+    const labelInput = row.querySelector('[data-ct-label]');
+    if (urlInput) {
+      urlInput.value = url || '';
+      urlInput.addEventListener('input', updateCtQuote);
+    }
+    if (labelInput) {
+      labelInput.value = label || '';
+      labelInput.addEventListener('input', updateCtQuote);
+    }
+    const removeBtn = row.querySelector('[data-ct-remove]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        if ($$('#ctRows [data-ct-row]').length <= 1) return;
+        row.parentNode.removeChild(row);
+        updateCtQuote();
+      });
+    }
+
+    updateCtQuote();
+    if (urlInput && !url) urlInput.focus();
+  }
+
+  function openCompetitorTrackerModal() {
+    if (!requireAuth({ action: 'tracker' })) return;
+
+    ctStarting = false;
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Competitor Website & Promo Change Tracker</h2>' +
+      '<p class="modal-sub">Monitor up to ' + CT_MAX_URLS +
+      ' competitor pages for real price, promo or copy changes · ' +
+      CT_CREDITS + ' credits / ' + CT_DAYS + ' days</p>' +
+      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="ctAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">URLs</span>' +
+      '<span class="calc-value is-zero" id="ctUrlCount">0 / ' + CT_MAX_URLS + '</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Duration</span>' +
+      '<span class="calc-value">' + CT_DAYS + ' Days</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="ctCost">' + CT_CREDITS + ' Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="trackerForm" novalidate>' +
+      '<div class="field"><label for="ctEmail">Delivery email</label>' +
+      '<input type="email" id="ctEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
+      '<div class="modal-section"><h3>Competitor URLs</h3>' +
+      '<span class="fine">1–' + CT_MAX_URLS +
+      ' pages · pricing or promo pages work best</span></div>' +
+      '<div class="ct-rows" id="ctRows"></div>' +
+      '<div class="rw-add-row">' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="ctAddBtn">+ Add URL</button>' +
+      '<span class="fine" id="ctCountHint">1 of ' + CT_MAX_URLS + '</span>' +
+      '</div>' +
+      '<div class="field"><label for="ctWatchFor">What to watch for (optional)</label>' +
+      '<input type="text" id="ctWatchFor" autocomplete="off" ' +
+      'placeholder="e.g. price drops, new promo codes, plan changes" /></div>' +
+      '<p class="ct-note">Daily automated check for ' + CT_DAYS +
+      ' days · Instant baseline confirmation email · Change alert emailed only when real text/price changes are detected.</p>' +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="trackerFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="ctShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="ctStartBtn" disabled>' +
+      'Start 7-Day Watch · ' + CT_CREDITS + ' Credits</button>' +
+      '<p class="fine">Credits are deducted immediately. Watches run daily in the cloud.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    const addBtn = $('#ctAddBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        addCtRow('');
+      });
+    }
+
+    const form = $('#trackerForm');
+    if (form) form.addEventListener('submit', handleTrackerStart);
+
+    addCtRow('');
+  }
+
+  function handleTrackerStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'tracker' });
+      return;
+    }
+
+    const errEl = $('#trackerFormError');
+    const rows = ctRows();
+    const validRows = rows.filter(function (row) { return isHttpUrl(row.url); });
+
+    if (!rows.length) {
+      if (errEl) errEl.textContent = 'Add at least one competitor URL to continue.';
+      return;
+    }
+    if (validRows.length !== rows.length) {
+      if (errEl) errEl.textContent =
+        'Every competitor URL must start with http:// or https://.';
+      return;
+    }
+    if (rows.length > CT_MAX_URLS) {
+      if (errEl) errEl.textContent =
+        'Maximum ' + CT_MAX_URLS + ' competitor URLs per watch.';
+      return;
+    }
+    if (state.credits < CT_CREDITS) {
+      const shortfall = CT_CREDITS - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this watch. Top up credits to continue.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    ctStarting = true;
+    updateCtQuote();
+
+    const email = accountEmail();
+    const watchEl = $('#ctWatchFor');
+
+    apiFetch(
+      CT_START_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          agent_id: CT_AGENT_ID,
+          email: email,
+          urls: rows.map(function (row) { return row.url; }),
+          targets: rows,
+          url_labels: rows.map(function (row) { return row.label; }),
+          watch_for: watchEl ? String(watchEl.value || '').trim() : '',
+          duration_days: CT_DAYS,
+          days: CT_DAYS,
+          max_urls: CT_MAX_URLS,
+          credits: CT_CREDITS,
+          credits_spent: CT_CREDITS
+        })
+      },
+      60000
+    )
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          ctStarting = false;
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to start a competitor watch.',
+            { action: 'tracker' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            ctStarting = false;
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this watch. Top up credits to continue.';
+            }
+            updateCtQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const watchId = String(
+          outer.watch_id ||
+          outer.id ||
+          outer.job_id ||
+          inner.watch_id ||
+          inner.id ||
+          inner.job_id ||
+          'watch_' + Date.now()
+        );
+        const expiresAt = String(
+          outer.expires_at ||
+          inner.expires_at ||
+          new Date(Date.now() + CT_DAYS * 86400000).toISOString()
+        );
+
+        state.trackerJob = {
+          job_id: watchId,
+          agent_id: CT_AGENT_ID,
+          status: 'completed',
+          urls: rows.length,
+          changes_detected: 0,
+          credits_spent: CT_CREDITS,
+          email: email,
+          started_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          days_left: CT_DAYS,
+          percent: 100
+        };
+        activeJobIds.add(watchId);
+        saveState();
+        updateJobDock();
+        historyState.loaded = false;
+
+        ctStarting = false;
+
+        const modalBody = $('#modalBody');
+        if (modalBody) {
+          modalBody.innerHTML =
+            '<h2 class="modal-title" id="modalTitle">Your 7-day watch is live</h2>' +
+            '<div class="watch-confirm">' +
+            '<h3>✓ Baseline captured for ' + rows.length + ' competitor URL' +
+            (rows.length === 1 ? '' : 's') + '</h3>' +
+            '<p>Daily automated checks run for ' + CT_DAYS +
+            ' days. A confirmation email is on its way, and you will only be alerted when real text or price changes are detected.</p>' +
+            '<div class="watch-confirm-id">Watch ID <code>' +
+            escapeHtml(watchId) + '</code></div>' +
+            '<div class="modal-actions">' +
+            '<a class="btn btn-primary" href="#plans" data-modal-close>Manage My Plan (#plans)</a>' +
+            '</div>' +
+            '</div>';
+        }
+
+        toast('Competitor watch started — baseline captured.', 'success');
+      })
+      .catch(function (err) {
+        ctStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the competitor watch. Please try again.';
+        }
+        updateCtQuote();
+        console.warn('[LiteWork] Competitor Tracker start failed.', err);
+      });
+  }
+
   /* Returning to the tab should never wait for the next 2.5s tick. */
   function resumePollingOnFocus() {
     if (document.visibilityState === 'hidden') return;
@@ -11129,6 +12983,7 @@
     if (invoicePollActive(state.invoiceJob)) forceInvoicePollNow();
     if (lePollActive(state.enricherJob)) forceLePollNow();
     if (rwPollActive(state.reviewJob)) forceRwPollNow();
+    if (propPollActive(state.propertyJob)) forcePropPollNow();
     updateJobDock();
   }
 
