@@ -262,11 +262,15 @@
       ? CFG.REVIEW_MINER_SHEETS
       : ['Executive Battlecard', 'Complaint Breakdown', 'Raw Reviews'];
 
-  /* --- Property Deal Scout (6th live worker) -----------------------------
-     5 credits per launch · up to 50 deduplicated listings. */
+  /* --- Property Deal Sniper (6th live worker) ----------------------------
+     Instant Day-0 baseline + daily 08:00 MYT below-market watch.
+     7 days = 5 credits · 14 days = 8 credits. */
   const PROP_AGENT_ID = CFG.PROPERTY_SCOUT_AGENT_ID || 'property-deal-scout';
-  const PROP_AGENT_NAME = CFG.PROPERTY_SCOUT_AGENT_NAME || 'Property Deal Scout (MY & SG)';
+  const PROP_AGENT_NAME = CFG.PROPERTY_SCOUT_AGENT_NAME || 'Property Deal Sniper (MY & SG)';
   const PROP_CREDITS = toPositiveInt(CFG.PROPERTY_SCOUT_CREDITS, 5);
+  const PROP_CREDITS_14 = toPositiveInt(CFG.PROPERTY_SCOUT_CREDITS_14, 8);
+  const PROP_DAYS = toPositiveInt(CFG.PROPERTY_SCOUT_DURATION_DAYS, 7);
+  const PROP_MAX_DAYS = toPositiveInt(CFG.PROPERTY_SCOUT_MAX_DURATION_DAYS, 14);
   const PROP_MAX_DEALS = toPositiveInt(CFG.PROPERTY_SCOUT_MAX_DEALS, 50);
   const PROP_POLL_MS = toPositiveInt(CFG.PROPERTY_SCOUT_POLL_MS, 2500);
   const PROP_START_URL = CFG.PROPERTY_SCOUT_START_URL || '';
@@ -685,7 +689,7 @@
     'invoice-results': 'Invoice Results — LiteWork',
     'enricher-results': 'Lead Enricher Results — LiteWork',
     'review-results': 'Review Miner Results — LiteWork',
-    'property-results': 'Property Scout Results — LiteWork',
+    'property-results': 'Property Sniper Results — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -2392,7 +2396,7 @@
       {
         job: state.propertyJob,
         route: 'property-results',
-        name: 'Property Scout',
+        name: 'Property Sniper',
         percent: jobDockNumber(state.propertyJob && state.propertyJob.percent)
       },
       {
@@ -3602,6 +3606,45 @@
       ['unique_deals', 'deals_found', 'deals_count', 'listings_count', 'total_deals', 'deals'],
       0
     );
+    const durationDays = clamp(
+      Number(
+        firstValue(job, ['duration_days', 'watch_days', 'watch_duration', 'days'], PROP_DAYS)
+      ) || PROP_DAYS,
+      1,
+      PROP_MAX_DAYS
+    );
+    const belowMarketPct = propParseThreshold(
+      firstValue(job, ['below_market_pct', 'alert_threshold', 'threshold'], 10)
+    );
+    const expiresAt = firstValue(
+      job,
+      ['expires_at', 'expiresAt', 'watch_ends_at', 'end_date'],
+      ''
+    );
+    const startedAt = firstValue(
+      job,
+      ['started_at', 'created_at', 'createdAt', 'date'],
+      ''
+    );
+    const explicitDays = firstValue(
+      job,
+      ['days_left', 'days_remaining', 'watch_days_left'],
+      null
+    );
+    let daysLeft;
+    if (explicitDays !== null && String(explicitDays).trim() !== '') {
+      daysLeft = clamp(Number(explicitDays) || 0, 0, durationDays);
+    } else if (expiresAt) {
+      daysLeft = clamp(
+        Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400000),
+        0,
+        durationDays
+      );
+    } else {
+      daysLeft = durationDays;
+    }
+    const percent = clamp((daysLeft / durationDays) * 100, 2, 100);
+
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
       country: String(firstValue(job, ['country', 'region'], '')),
@@ -3609,9 +3652,17 @@
       city: String(firstValue(job, ['city', 'district', 'area'], '')),
       listingType: String(firstValue(job, ['listing_type', 'mode', 'deal_type'], '')),
       deals: Array.isArray(dealsRaw) ? dealsRaw.length : Number(dealsRaw) || 0,
+      durationDays: durationDays,
+      belowMarketPct: belowMarketPct,
+      alerts: Number(firstValue(job, ['alerts_sent', 'alerts', 'alert_count'], 0)) || 0,
+      sniped:
+        Number(firstValue(job, ['deals_sniped', 'deals_sniped_count', 'deals_alerted'], 0)) || 0,
+      daysLeft: daysLeft,
+      percent: percent,
+      expiresAt: expiresAt,
       credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
-      status: String(firstValue(job, ['status', 'state'], 'completed')).toLowerCase(),
-      created: firstValue(job, ['created_at', 'createdAt', 'started_at', 'date'], ''),
+      status: String(firstValue(job, ['status', 'job_status'], 'completed')).toLowerCase(),
+      created: startedAt,
       downloadReady:
         job.download_ready === true ||
         job.download_ready === 'true' ||
@@ -3945,38 +3996,59 @@
   }
 
   function renderPropertyHistoryCard(job) {
-    const badge = historyBadgeInfo(job.status);
-    const dealText = job.deals
-      ? job.deals + ' unique deal' + (job.deals === 1 ? '' : 's')
-      : '—';
+    const active = job.status === 'active' || job.status === 'watching';
+    const badge = active
+      ? { label: 'Sniper Active', tone: 'ok' }
+      : historyBadgeInfo(job.status);
+    const deals = Number(job.deals) || 0;
+    const duration = clamp(Number(job.durationDays) || PROP_DAYS, 1, PROP_MAX_DAYS);
+    const daysLeft = clamp(Number(job.daysLeft) || 0, 0, duration);
+    const percent = clamp(Number(job.percent) || 0, 2, 100);
+    const alerts = Number(job.alerts) || 0;
+    const sniped = Number(job.sniped) || 0;
     const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    const baselineText = deals
+      ? deals + ' baseline deal' + (deals === 1 ? '' : 's')
+      : '—';
     const location =
       [job.city, job.state, job.country].filter(function (part) { return !!part; }).join(', ') ||
       '—';
-    const mode = job.listingType
-      ? job.listingType.toLowerCase() === 'rent'
-        ? 'Rent'
-        : 'Buy'
-      : '—';
+    const alertBadge =
+      alerts > 0 || sniped > 0
+        ? alerts + ' alert' + (alerts === 1 ? '' : 's') +
+          (sniped ? ' · ' + sniped + ' sniped' : '')
+        : 'No alerts yet';
+
     return (
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
-      '<strong>Property Scout</strong>' +
+      '<strong>Property Sniper</strong>' +
       '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
       '</div>' +
-      '<p class="hist-sub">' + escapeHtml(location) + ' · ' + escapeHtml(dealText) + '</p>' +
+      '<p class="hist-sub">' + escapeHtml(location) + ' · ' + duration +
+      '-day watch · ' + escapeHtml(propAlertLabel(job.belowMarketPct)) + '</p>' +
+      '<div class="hist-trading">' +
+      '<span class="hist-trading-label"><strong>' + daysLeft + ' / ' + duration +
+      '</strong> days left</span>' +
+      '<span class="hist-badge ' + (alerts > 0 || sniped > 0 ? 'warn' : 'ok') + '">' +
+      escapeHtml(alertBadge) + '</span>' +
+      '</div>' +
+      '<div class="watch-progress"><span style="width:' + percent + '%"></span></div>' +
       '<dl class="hist-meta">' +
-      '<div><dt>Deals found</dt><dd>' + escapeHtml(dealText) + '</dd></div>' +
-      '<div><dt>Listing type</dt><dd>' + escapeHtml(mode) + '</dd></div>' +
+      '<div><dt>Baseline deals</dt><dd>' + escapeHtml(baselineText) + '</dd></div>' +
+      '<div><dt>Alert trigger</dt><dd>' +
+      escapeHtml(propAlertLabel(job.belowMarketPct)) + '</dd></div>' +
+      '<div><dt>Alerts sent</dt><dd>' + alerts + '</dd></div>' +
+      '<div><dt>Deals sniped</dt><dd>' + sniped + '</dd></div>' +
       '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
       '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
-      '<div><dt>Created</dt><dd>' +
+      '<div><dt>Started</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
       '<div class="hist-actions">' +
       '<button type="button" class="btn btn-ghost btn-sm" data-property-resume="' +
       escapeHtml(job.job_id) + '"' + (job.job_id ? '' : ' disabled') +
-      '>View Results</button>' +
+      '>View Baseline</button>' +
       (job.downloadReady && job.job_id
         ? '<button type="button" class="btn btn-primary btn-sm" data-property-download="' +
           escapeHtml(job.job_id) + '">Download .xlsx</button>'
@@ -4111,13 +4183,13 @@
 
     if (propertyPane) {
       propertyPane.innerHTML = propertyCount
-        ? renderHistoryPager('property', 'Property Scout jobs', propertyPage.page, propertyPage.pages, propertyCount) +
+        ? renderHistoryPager('property', 'Property Sniper watches', propertyPage.page, propertyPage.pages, propertyCount) +
           '<div class="hist-list">' +
           propertyPage.items.map(renderPropertyHistoryCard).join('') +
           '</div>'
         : '<div class="hist-empty">' +
-          '<p class="empty-note">No property scout jobs yet. Launch Property Deal Scout and the ranked deals history will appear here.</p>' +
-          '<a class="btn btn-primary btn-sm" href="#agents">Launch Property Scout</a>' +
+          '<p class="empty-note">No sniper watches yet. Start the Property Deal Sniper for an instant baseline plus daily below-market alerts.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Start Deal Sniper</a>' +
           '</div>';
     }
 
@@ -4229,7 +4301,7 @@
       };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property scouts and competitor watches are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property sniper watches and competitor watches are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
@@ -4261,7 +4333,7 @@
     if (invoicePane) invoicePane.innerHTML = '<p class="empty-note">Loading your invoice jobs…</p>';
     if (enricherPane) enricherPane.innerHTML = '<p class="empty-note">Loading your enrichment jobs…</p>';
     if (reviewPane) reviewPane.innerHTML = '<p class="empty-note">Loading your review mining jobs…</p>';
-    if (propertyPane) propertyPane.innerHTML = '<p class="empty-note">Loading your property scout jobs…</p>';
+    if (propertyPane) propertyPane.innerHTML = '<p class="empty-note">Loading your sniper watches…</p>';
     if (trackerPane) trackerPane.innerHTML = '<p class="empty-note">Loading your competitor watches…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
@@ -5973,7 +6045,7 @@
       });
     }
 
-    /* Property Deal Scout (Worker #6): launch, resume + download */
+    /* Property Deal Sniper (Worker #6): launch, resume + download */
     $$('[data-open-property]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openPropertyModal();
@@ -5986,7 +6058,7 @@
         const input = $('#propResumeId');
         const value = input ? input.value.trim() : '';
         if (!value) {
-          toast('Enter a Property Scout Job ID to check.', 'warn');
+          toast('Enter a Property Sniper Job ID to check.', 'warn');
           return;
         }
         openPropHistoryJob(value);
@@ -11616,10 +11688,41 @@
       });
   }
 
-  /* ================= O. PROPERTY DEAL SCOUT (WORKER #6) ================= */
+  /* ================= O. PROPERTY DEAL SNIPER (WORKER #6) ================ */
   let propStarting = false;
   let propCountry = 'Malaysia';
   let propMode = 'buy';
+  let propDuration = PROP_DAYS;
+  let propAlertPct = 10;
+
+  function propCreditsFor(days) {
+    return Number(days) >= 14 ? PROP_CREDITS_14 : PROP_CREDITS;
+  }
+
+  function propDurationFor(job) {
+    return clamp(Number(job && job.duration_days) || PROP_DAYS, 1, PROP_MAX_DAYS);
+  }
+
+  function propAlertLabel(pct) {
+    const n = Number(pct);
+    if (!Number.isFinite(n) || n <= 0) return 'Any New Listing';
+    return '≥' + n + '% Below Median';
+  }
+
+  function propAlertShortLabel(pct) {
+    const n = Number(pct);
+    if (!Number.isFinite(n) || n <= 0) return 'Any new listing';
+    return '≥' + n + '% below';
+  }
+
+  /* Accepts 10, '10', '10%', 'any', or 0 (any new listing). */
+  function propParseThreshold(raw) {
+    if (raw === null || raw === undefined || String(raw).trim() === '') return 10;
+    const text = String(raw).toLowerCase();
+    if (text.indexOf('any') !== -1) return 0;
+    const n = Number(text.replace(/[^0-9.]/g, ''));
+    return Number.isFinite(n) && n >= 0 ? n : 10;
+  }
   let propPollTimer = null;
   let propPollInFlight = false;
   let propPollController = null;
@@ -11637,10 +11740,14 @@
   }
 
   function propIsComplete(job) {
+    if (!job || job.download_ready !== true) return false;
+    const status = String(job.status || '').toLowerCase();
     return (
-      !!job &&
-      String(job.status || '').toLowerCase() === 'completed' &&
-      job.download_ready === true
+      status === 'completed' ||
+      status === 'complete' ||
+      status === 'success' ||
+      status === 'active' ||
+      status === 'watching'
     );
   }
 
@@ -11683,7 +11790,7 @@
     propPollStartedAt = Date.now();
     propPollEpoch += 1;
     const epoch = propPollEpoch;
-    setPropBadge('pending', force ? 'Refreshing status…' : 'Starting property scout…');
+    setPropBadge('pending', force ? 'Refreshing status…' : 'Starting Deal Sniper…');
     pollPropStatus(!!force, epoch);
   }
 
@@ -11765,7 +11872,7 @@
         if (response.status === 401) {
           stopPropTimer();
           handleAuthExpired(
-            'Your session expired. Log in again to check this property scout job.',
+            'Your session expired. Log in again to check this sniper watch.',
             null
           );
           return null;
@@ -11831,6 +11938,27 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
+        const duration = firstNumber(data.duration_days, data.watch_days, data.days);
+        if (duration !== null) {
+          job.duration_days = clamp(Math.floor(duration), 1, PROP_MAX_DAYS);
+        }
+        const thresholdRaw =
+          data.below_market_pct != null ? data.below_market_pct : data.alert_threshold;
+        if (thresholdRaw != null) {
+          job.below_market_pct = propParseThreshold(thresholdRaw);
+        }
+        const alerts = firstNumber(data.alerts_sent, data.alerts, data.alert_count);
+        if (alerts !== null) job.alerts_sent = Math.max(0, Math.floor(alerts));
+        const sniped = firstNumber(
+          data.deals_sniped,
+          data.deals_sniped_count,
+          data.deals_alerted
+        );
+        if (sniped !== null) job.deals_sniped = Math.max(0, Math.floor(sniped));
+        const daysLeft = firstNumber(data.days_left, data.days_remaining, data.watch_days_left);
+        if (daysLeft !== null) job.days_left = Math.max(0, Math.floor(daysLeft));
+        if (data.expires_at) job.expires_at = String(data.expires_at);
+
         const previewRows = extractPropPreview(data);
         if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
 
@@ -11843,7 +11971,10 @@
           return;
         }
 
-        if (['completed', 'complete', 'success', 'done'].indexOf(status) !== -1) {
+        if (
+          ['completed', 'complete', 'success', 'done', 'active', 'watching'].indexOf(status) !==
+          -1
+        ) {
           if (job.download_ready === true) {
             completePropJob(true);
           } else {
@@ -11856,7 +11987,7 @@
         }
 
         if (status === 'queued' || status === 'pending' || status === 'starting') {
-          setPropBadge('pending', 'Starting property scout…');
+          setPropBadge('pending', 'Starting Deal Sniper…');
         } else {
           setPropBadge(
             'pending',
@@ -11876,7 +12007,7 @@
         if (job) job.poll_errors = failures;
 
         console.warn(
-          '[LiteWork] Property Scout status check failed (' + failures + ').',
+          '[LiteWork] Property Sniper status check failed (' + failures + ').',
           err && err.message ? err.message : err
         );
 
@@ -11884,7 +12015,7 @@
           if (failures >= 3) {
             setPropBadge('pending', 'Reconnecting…');
           } else if (!job.status) {
-            setPropBadge('pending', 'Starting property scout…');
+            setPropBadge('pending', 'Starting Deal Sniper…');
           }
           saveState();
         }
@@ -11950,7 +12081,10 @@
     const meta = $('#propJobMeta');
     const summary = $('#propJobSummary');
     const deals = Number(job.unique_deals) || (job.preview_rows || []).length;
-    const credits = Number(job.credits_spent) || PROP_CREDITS;
+    const duration = propDurationFor(job);
+    const credits = Number(job.credits_spent) || propCreditsFor(duration);
+    const alerts = Number(job.alerts_sent) || 0;
+    const sniped = Number(job.deals_sniped) || 0;
     const location =
       [job.city, job.state, job.country]
         .filter(function (part) { return !!part; })
@@ -11958,8 +12092,8 @@
 
     if (meta) {
       meta.textContent =
-        location + ' · ' + deals + ' unique deal' + (deals === 1 ? '' : 's') +
-        ' · ' + credits + ' credits';
+        location + ' · ' + duration + '-day watch · ' + deals + ' baseline deal' +
+        (deals === 1 ? '' : 's') + ' · ' + credits + ' credits';
     }
 
     if (summary) {
@@ -11977,8 +12111,14 @@
               Number(job.max_budget).toLocaleString('en-US')
             : 'Any'
         ) + '</dd></div>' +
-        '<div class="summary-row"><dt>Unique deals</dt><dd><strong>' +
+        '<div class="summary-row"><dt>Day-0 baseline deals</dt><dd><strong>' +
         deals + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Watch duration</dt><dd>' +
+        duration + ' days</dd></div>' +
+        '<div class="summary-row"><dt>Alert trigger</dt><dd>' +
+        escapeHtml(propAlertLabel(job.below_market_pct)) + '</dd></div>' +
+        '<div class="summary-row"><dt>Alerts sent</dt><dd>' + alerts + '</dd></div>' +
+        '<div class="summary-row"><dt>Deals sniped</dt><dd>' + sniped + '</dd></div>' +
         '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' +
         credits + '</strong></dd></div>' +
         '<div class="summary-row"><dt>Delivery email</dt><dd>' +
@@ -12008,7 +12148,7 @@
 
     const countEl = $('#propRingCount');
     if (countEl) {
-      countEl.textContent = deals + ' unique deal' + (deals === 1 ? '' : 's') + ' found';
+      countEl.textContent = deals + ' baseline deal' + (deals === 1 ? '' : 's') + ' found';
     }
 
     const activeEl = $('#propRingActive');
@@ -12029,6 +12169,28 @@
     const card = $('#propRingCard');
     if (card) card.classList.toggle('is-complete', complete);
 
+    const duration = propDurationFor(job);
+    const credits = Number(job.credits_spent) || propCreditsFor(duration);
+    const alertPct = Number(job.below_market_pct);
+    const banner = $('#propWatchBanner');
+    const bannerText = $('#propWatchBannerText');
+    if (banner && bannerText) {
+      banner.hidden = !complete;
+      bannerText.textContent =
+        'Daily 08:00 MYT watch active for ' + duration +
+        ' days — we\'ll email you only when new deals drop ' +
+        (alertPct > 0
+          ? '≥' + alertPct + '% below market.'
+          : 'below market (any new listing in budget).');
+    }
+
+    const rule = $('#propRingRule');
+    if (rule) {
+      rule.textContent =
+        duration + ' days · ' + credits + ' credits · ' +
+        propAlertLabel(job.below_market_pct);
+    }
+
     const downloadBtn = $('#propDownloadBtn');
     if (downloadBtn) downloadBtn.disabled = !complete;
 
@@ -12036,15 +12198,15 @@
     if (downloadTitle) {
       downloadTitle.textContent =
         complete && deals
-          ? 'Property Deals Excel (.xlsx) · ' + deals + ' deals'
-          : 'Property Deals Excel (.xlsx)';
+          ? 'Day-0 Baseline Excel (.xlsx) · ' + deals + ' deals'
+          : 'Day-0 Baseline Excel (.xlsx)';
     }
 
     const downloadSub = $('#propDownloadSub');
     if (downloadSub) {
-      if (complete) downloadSub.textContent = 'Ready to download';
+      if (complete) downloadSub.textContent = 'Day-0 baseline ready to download';
       else if (String(job.status || '').toLowerCase() === 'completed') {
-        downloadSub.textContent = 'Finalizing Excel…';
+        downloadSub.textContent = 'Finalizing Day-0 baseline…';
       } else {
         downloadSub.textContent = 'Live progress from the property backend';
       }
@@ -12055,9 +12217,9 @@
       const email = job.email || accountEmail() || 'your delivery email';
       const sent = complete && job.email_sent === true;
       emailNote.textContent = sent
-        ? '✓ Excel (.xlsx) emailed to ' + email + ' & ready to download below.'
-        : 'Excel (.xlsx) will also be emailed to ' + email +
-          ' when the backend marks it ready — safe to close this tab.';
+        ? '✓ Day-0 baseline Excel emailed to ' + email + ' & ready to download below.'
+        : 'Day-0 baseline Excel will also be emailed to ' + email +
+          ' when ready — daily 08:00 MYT alerts follow automatically.';
       emailNote.classList.toggle('is-sent', sent);
     }
 
@@ -12065,7 +12227,7 @@
     if (tableMeta) {
       const count = (job.preview_rows || []).length;
       tableMeta.textContent =
-        'Top ' + count + ' ranked deal' + (count === 1 ? '' : 's') +
+        'Day-0 baseline · top ' + count + ' ranked deal' + (count === 1 ? '' : 's') +
         ' · price per sqft & deal rating';
     }
 
@@ -12167,8 +12329,8 @@
     historyState.loaded = false;
     saveState();
 
-    setPropBadge('ok', 'Completed · .xlsx ready');
-    if (!silent) toast('Property deals Excel is ready to download.', 'success');
+    setPropBadge('ok', 'Day-0 baseline ready · sniper watch active');
+    if (!silent) toast('Day-0 baseline Excel is ready to download.', 'success');
   }
 
   function failPropJob(reason) {
@@ -12190,7 +12352,7 @@
       return;
     }
 
-    toast('Requesting your property deals Excel from the cloud…', 'info');
+    toast('Requesting your Day-0 baseline Excel from the cloud…', 'info');
 
     fetch(PROP_DOWNLOAD_URL + '?job_id=' + encodeURIComponent(id), {
       mode: 'cors',
@@ -12217,16 +12379,16 @@
         const anchor = document.createElement('a');
         anchor.href = objectUrl;
         anchor.download =
-          'litework-property-deals-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
+          'litework-property-baseline-' + id.replace(/[^A-Za-z0-9_-]/g, '') + '.xlsx';
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
         window.setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 4000);
-        toast('Property deals Excel download ready.', 'success');
+        toast('Day-0 baseline Excel download ready.', 'success');
       })
       .catch(function (err) {
-        console.warn('[LiteWork] Property Scout download failed.', err);
-        toast('Could not download the property deals Excel. Please try again.', 'warn');
+        console.warn('[LiteWork] Property Sniper download failed.', err);
+        toast('Could not download the Day-0 baseline Excel. Please try again.', 'warn');
       });
   }
 
@@ -12245,15 +12407,21 @@
       state.propertyJob = {
         job_id: id,
         agent_id: PROP_AGENT_ID,
-        status: 'processing',
-        percent: 0,
+        status: known && known.status ? known.status : 'processing',
+        percent: Number(known && known.percent) || 0,
         country: known ? known.country : '',
         state: known ? known.state : '',
         city: known ? known.city : '',
         listing_type: known ? known.listingType : '',
         unique_deals: known ? known.deals : 0,
         preview_rows: [],
-        download_ready: false,
+        download_ready: !!(known && known.downloadReady),
+        duration_days: known ? known.durationDays : PROP_DAYS,
+        below_market_pct: known ? known.belowMarketPct : 10,
+        alerts_sent: known ? known.alerts : 0,
+        deals_sniped: known ? known.sniped : 0,
+        days_left: known ? known.daysLeft : PROP_DAYS,
+        expires_at: known ? known.expiresAt : '',
         credits_spent: known ? known.credits : PROP_CREDITS,
         email: accountEmail(),
         started_at: new Date().toISOString(),
@@ -12326,12 +12494,20 @@
   function updatePropQuote() {
     const loc = propSelectedLocation();
     const currency = PROP_COUNTRY_CURRENCY[propCountry] || 'MYR';
+    const credits = propCreditsFor(propDuration);
+    const alertStrip =
+      propAlertPct > 0 ? '≥' + propAlertPct + '% Below' : 'Any New Listing';
 
     const availableEl = $('#propAvailable');
     if (availableEl) availableEl.textContent = state.credits + ' Credits';
 
     const costEl = $('#propCost');
-    if (costEl) costEl.textContent = PROP_CREDITS + ' Credits';
+    if (costEl) costEl.textContent = credits + ' Credits';
+
+    const durationEl = $('#propDurationCalc');
+    if (durationEl) durationEl.textContent = propDuration + ' Days';
+    const alertEl = $('#propAlertCalc');
+    if (alertEl) alertEl.textContent = alertStrip;
 
     const currencyEl = $('#propCurrency');
     if (currencyEl) currencyEl.textContent = currency;
@@ -12345,7 +12521,7 @@
         : propCountry + ' · Select state';
     }
 
-    const shortfall = PROP_CREDITS - state.credits;
+    const shortfall = credits - state.credits;
     const shortEl = $('#propShortfall');
     if (shortEl) {
       if (shortfall > 0) {
@@ -12363,8 +12539,9 @@
     if (btn) {
       btn.disabled = propStarting || !loc.state || !loc.city;
       btn.textContent = propStarting
-        ? 'Starting property scout…'
-        : 'Confirm & Spend ' + PROP_CREDITS + ' Credits · Scout Deals';
+        ? 'Starting Deal Sniper…'
+        : 'Confirm & Spend ' + credits + ' Credits · Start ' +
+          propDuration + '-Day Sniper';
     }
   }
 
@@ -12374,18 +12551,19 @@
     propStarting = false;
     propCountry = 'Malaysia';
     propMode = 'buy';
+    propDuration = PROP_DAYS;
+    propAlertPct = 10;
 
     openModal(
-      '<h2 class="modal-title" id="modalTitle">Property Deal Scout (MY & SG)</h2>' +
-      '<p class="modal-sub">Rank live property listings by price per sqft and deal quality · ' +
-      PROP_CREDITS + ' credits per launch · up to ' + PROP_MAX_DEALS + ' unique deals</p>' +
+      '<h2 class="modal-title" id="modalTitle">Property Deal Sniper (MY & SG)</h2>' +
+      '<p class="modal-sub">Runs an instant market baseline Excel today, then watches MY & SG portals every morning at 08:00 MYT — emailing you only when a brand-new unit drops below market median.</p>' +
       '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
       '<div class="calc-cell"><span class="calc-label">Available</span>' +
       '<span class="calc-value" id="propAvailable">' + state.credits + ' Credits</span></div>' +
-      '<div class="calc-cell"><span class="calc-label">Region</span>' +
-      '<span class="calc-value" id="propRegion">Malaysia · Select state</span></div>' +
-      '<div class="calc-cell"><span class="calc-label">Max unique deals</span>' +
-      '<span class="calc-value">' + PROP_MAX_DEALS + '</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Duration</span>' +
+      '<span class="calc-value" id="propDurationCalc">' + PROP_DAYS + ' Days</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Alert</span>' +
+      '<span class="calc-value" id="propAlertCalc">≥10% Below</span></div>' +
       '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
       '<span class="calc-value" id="propCost">' + PROP_CREDITS + ' Credits</span></div>' +
       '</div></div>' +
@@ -12437,12 +12615,33 @@
       '<option value="4">4+</option>' +
       '</select></div>' +
       '</div>' +
+      '<div class="modal-section"><h3>Sniper duration</h3>' +
+      '<span class="fine">Day-0 baseline is instant · daily alerts follow</span></div>' +
+      '<div class="prop-mode" id="propDurationGroup">' +
+      '<button type="button" class="prop-pill is-active" data-prop-days="7">' +
+      '7 Days<small>5 Credits · Standard</small></button>' +
+      '<button type="button" class="prop-pill" data-prop-days="14">' +
+      '14 Days<small>8 Credits · Best value</small></button>' +
+      '</div>' +
+      '<div class="modal-section"><h3>Alert trigger threshold</h3>' +
+      '<span class="fine">When should we email you?</span></div>' +
+      '<div class="prop-alert-grid" id="propAlertGroup">' +
+      '<button type="button" class="prop-pill is-active" data-prop-alert="10">' +
+      '≥10% Below Median<small>Only true bargains</small></button>' +
+      '<button type="button" class="prop-pill" data-prop-alert="5">' +
+      '≥5% Below Median<small>Good deals</small></button>' +
+      '<button type="button" class="prop-pill" data-prop-alert="15">' +
+      '≥15% Below Median<small>Deep discounts only</small></button>' +
+      '<button type="button" class="prop-pill" data-prop-alert="0">' +
+      'Any New Listing<small>All new units in budget</small></button>' +
+      '</div>' +
       '<div class="modal-actions">' +
       '<div class="scraper-modal-error" id="propertyFormError" role="alert"></div>' +
       '<p class="scraper-shortfall" id="propShortfall" hidden></p>' +
       '<button type="submit" class="btn btn-activate" id="propStartBtn" disabled>' +
-      'Confirm & Spend ' + PROP_CREDITS + ' Credits · Scout Deals</button>' +
-      '<p class="fine">Credits are deducted immediately. Scouting runs in the cloud.</p>' +
+      'Confirm & Spend ' + PROP_CREDITS + ' Credits · Start ' + PROP_DAYS +
+      '-Day Sniper</button>' +
+      '<p class="fine">Day-0 baseline Excel is instant. Daily 08:00 MYT watch runs in the cloud.</p>' +
       '</div>' +
       '</form>',
       true
@@ -12472,6 +12671,34 @@
         $$('#propModeGroup [data-prop-mode]').forEach(function (el) {
           el.classList.toggle('is-active', el === btn);
         });
+      });
+    }
+
+    const durationGroup = $('#propDurationGroup');
+    if (durationGroup) {
+      durationGroup.addEventListener('click', function (event) {
+        const btn = event.target.closest('[data-prop-days]');
+        if (!btn) return;
+        propDuration = toPositiveInt(btn.getAttribute('data-prop-days'), PROP_DAYS) >= 14
+          ? 14
+          : 7;
+        $$('#propDurationGroup [data-prop-days]').forEach(function (el) {
+          el.classList.toggle('is-active', el === btn);
+        });
+        updatePropQuote();
+      });
+    }
+
+    const alertGroup = $('#propAlertGroup');
+    if (alertGroup) {
+      alertGroup.addEventListener('click', function (event) {
+        const btn = event.target.closest('[data-prop-alert]');
+        if (!btn) return;
+        propAlertPct = propParseThreshold(btn.getAttribute('data-prop-alert'));
+        $$('#propAlertGroup [data-prop-alert]').forEach(function (el) {
+          el.classList.toggle('is-active', el === btn);
+        });
+        updatePropQuote();
       });
     }
 
@@ -12507,6 +12734,7 @@
     const typeEl = $('#propType');
     const bedsEl = $('#propBeds');
     const budget = budgetEl && budgetEl.value ? Number(budgetEl.value) : 0;
+    const credits = propCreditsFor(propDuration);
 
     if (!loc.state || !loc.city) {
       if (errEl) errEl.textContent = 'Choose a state / region and a city / district to continue.';
@@ -12516,12 +12744,12 @@
       if (errEl) errEl.textContent = 'Enter a valid maximum budget or leave it blank.';
       return;
     }
-    if (state.credits < PROP_CREDITS) {
-      const shortfall = PROP_CREDITS - state.credits;
+    if (state.credits < credits) {
+      const shortfall = credits - state.credits;
       if (errEl) {
         errEl.textContent =
           'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
-          ' for this launch. Top up credits to continue.';
+          ' for this sniper watch. Top up credits to continue.';
       }
       return;
     }
@@ -12544,7 +12772,13 @@
       max_budget: budget > 0 ? budget : null,
       currency: currency,
       max_deals: PROP_MAX_DEALS,
-      credits_spent: PROP_CREDITS,
+      duration_days: propDuration,
+      below_market_pct: propAlertPct,
+      alerts_sent: 0,
+      deals_sniped: 0,
+      days_left: propDuration,
+      expires_at: new Date(Date.now() + propDuration * 86400000).toISOString(),
+      credits_spent: credits,
       email: email,
       status: 'starting',
       percent: 0,
@@ -12575,8 +12809,12 @@
           budget: job.max_budget,
           currency: currency,
           max_deals: PROP_MAX_DEALS,
-          credits: PROP_CREDITS,
-          credits_spent: PROP_CREDITS
+          duration_days: propDuration,
+          watch_days: propDuration,
+          below_market_pct: propAlertPct,
+          alert_threshold: propAlertLabel(propAlertPct),
+          credits: credits,
+          credits_spent: credits
         })
       },
       60000
@@ -12587,7 +12825,7 @@
           propStarting = false;
           closeModal(false);
           handleAuthExpired(
-            'Your session expired. Log in again to launch Property Deal Scout.',
+            'Your session expired. Log in again to start the Property Deal Sniper.',
             { action: 'property' }
           );
           return null;
@@ -12599,7 +12837,7 @@
             if (errEl) {
               errEl.textContent =
                 (body && (body.error || body.message)) ||
-                'Not enough credits for this launch. Top up credits to continue.';
+                'Not enough credits for this sniper watch. Top up credits to continue.';
             }
             updatePropQuote();
             return null;
@@ -12624,13 +12862,33 @@
 
         if (returnedId) job.job_id = String(returnedId);
         job.status = String(outer.status || inner.status || 'running').toLowerCase();
+        if (outer.duration_days || inner.duration_days) {
+          job.duration_days = toPositiveInt(
+            outer.duration_days || inner.duration_days,
+            job.duration_days
+          );
+        }
+        if (outer.below_market_pct != null || inner.below_market_pct != null) {
+          job.below_market_pct = propParseThreshold(
+            outer.below_market_pct != null
+              ? outer.below_market_pct
+              : inner.below_market_pct
+          );
+        }
+        if (outer.expires_at || inner.expires_at) {
+          job.expires_at = String(outer.expires_at || inner.expires_at);
+        }
+        job.days_left = propDurationFor(job);
 
         state.propertyJob = job;
         saveState();
 
         propStarting = false;
         closeModal(false);
-        toast('Property Scout started — ranking ' + propCountry + ' deals now.', 'success');
+        toast(
+          'Deal Sniper started — Day-0 baseline is building, daily 08:00 MYT watch active.',
+          'success'
+        );
 
         if (currentRoute() === 'property-results') {
           renderPropertyResults();
@@ -12644,10 +12902,10 @@
         if (errEl) {
           errEl.textContent =
             (err && err.message ? err.message : '') ||
-            'Could not start the property scout job. Please try again.';
+            'Could not start the Deal Sniper. Please try again.';
         }
         updatePropQuote();
-        console.warn('[LiteWork] Property Scout start failed.', err);
+        console.warn('[LiteWork] Property Sniper start failed.', err);
       });
   }
 

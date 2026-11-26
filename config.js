@@ -503,12 +503,15 @@ window.CONFIG = {
     'Raw Reviews'
   ],
 
-  /* --- Property Deal Scout (6th live worker) ------------------------------
-     5 credits per launch · up to 50 deduplicated listings per run.
-     Country → State/Region → Full City cascading picker below. */
+  /* --- Property Deal Sniper (6th live worker) -----------------------------
+     Instant Day-0 baseline Excel + daily 08:00 MYT below-market watch.
+     7 days = 5 credits · 14 days = 8 credits · up to 50 deals. */
   PROPERTY_SCOUT_AGENT_ID: 'property-deal-scout',
-  PROPERTY_SCOUT_AGENT_NAME: 'Property Deal Scout (MY & SG)',
+  PROPERTY_SCOUT_AGENT_NAME: 'Property Deal Sniper (MY & SG)',
   PROPERTY_SCOUT_CREDITS: 5,
+  PROPERTY_SCOUT_CREDITS_14: 8,
+  PROPERTY_SCOUT_DURATION_DAYS: 7,
+  PROPERTY_SCOUT_MAX_DURATION_DAYS: 14,
   PROPERTY_SCOUT_MAX_DEALS: 50,
   PROPERTY_SCOUT_POLL_MS: 2500,
   PROPERTY_SCOUT_START_URL:
