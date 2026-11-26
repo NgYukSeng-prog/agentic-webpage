@@ -9361,3 +9361,63 @@ select {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ======================================================================
+   34. LIVE ACTIVITY HISTORY TABS + REFRESH CONTRAST
+   ====================================================================== */
+/* Rounded rectangle container so wrapped tabs never look like a stretched
+   oval. Scoped to #historyPanel so other page styles are untouched. */
+#historyPanel .history-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 14px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+#historyPanel .history-tab {
+  flex: 0 1 auto;
+  width: auto;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #475569;
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+#historyPanel .history-tab:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+}
+
+#historyPanel .history-tab.is-active {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
+/* The Refresh control sits on a white card, so give it explicit dark text
+   and a visible border instead of the faint ghost-on-dark defaults. */
+#historyRefresh {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  font-weight: 600;
+}
+
+#historyRefresh:hover:not(:disabled) {
+  color: #0f172a;
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
