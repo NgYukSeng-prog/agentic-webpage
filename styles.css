@@ -6023,6 +6023,21 @@ table.leads-table {
   color: #64748b;
 }
 
+/* Crisp public job reference (display_id) */
+.hist-id {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 /* 7-day remaining validity bar */
 .hist-validity {
   height: 6px;

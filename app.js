@@ -3408,6 +3408,7 @@
 
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
       country: String(firstValue(job, ['country', 'location', 'region'], '—')),
       terms: terms,
       scraped:
@@ -3536,6 +3537,36 @@
     });
   }
 
+  /* Human-friendly reference shown in the UI; internal IDs stay for API calls. */
+  function formatJobRef(item) {
+    if (!item) return '';
+    return item.display_id || item.job_id || item.watch_id || item.id || '';
+  }
+
+  /* Compact display_id chip for the history cards. */
+  function histIdBadge(job) {
+    const ref = formatJobRef(job);
+    return ref ? '<span class="hist-id">' + escapeHtml(ref) + '</span>' : '';
+  }
+
+  /* Resolve a typed reference (display_id or internal id) to a history entry. */
+  function findHistoryJob(list, ref) {
+    const wanted = String(ref || '').trim();
+    if (!wanted) return null;
+    const entries = Array.isArray(list) ? list : [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
+      if (!entry) continue;
+      if (
+        String(entry.job_id || '') === wanted ||
+        String(entry.display_id || '') === wanted
+      ) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
   function normalizeInvoiceJob(raw) {
     const job = raw && typeof raw === 'object' ? raw : {};
     const filesRaw = firstValue(
@@ -3547,6 +3578,7 @@
 
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
       files: files,
       processed:
         Number(firstValue(job, ['files_processed', 'processed_files', 'completed_files'], 0)) || 0,
@@ -3571,6 +3603,7 @@
     const sites = Array.isArray(sitesRaw) ? sitesRaw.length : Number(sitesRaw) || 0;
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
       sites: sites,
       checked:
         Number(firstValue(job, ['sites_checked', 'checked_sites', 'websites_checked'], 0)) || 0,
@@ -3611,6 +3644,7 @@
     const reviews = Array.isArray(reviewsRaw) ? reviewsRaw.length : Number(reviewsRaw) || 0;
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
       competitors: competitors,
       reviews: reviews,
       credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
@@ -3671,6 +3705,7 @@
 
     return {
       job_id: String(firstValue(job, ['job_id', 'id', 'jobId'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
       country: String(firstValue(job, ['country', 'region'], '')),
       state: String(firstValue(job, ['state', 'state_region', 'region_state'], '')),
       city: String(firstValue(job, ['city', 'district', 'area'], '')),
@@ -3725,6 +3760,7 @@
       : (daysLeft / CT_DAYS) * 100;
     return {
       job_id: String(firstValue(job, ['job_id', 'watch_id', 'id'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
       urls: Array.isArray(urlsRaw) ? urlsRaw.length : Number(urlsRaw) || 0,
       changes: Number(firstValue(job, ['changes_detected', 'changes', 'change_count'], 0)) || 0,
       credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 0)) || 0,
@@ -3809,6 +3845,7 @@
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>Lead Scraper Agent</strong>' +
+      histIdBadge(job) +
       '<span class="hist-badge ' + tone + '">' + escapeHtml(label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(subtitle) + '</p>' +
@@ -3816,7 +3853,7 @@
       '<div><dt>Leads</dt><dd>' + escapeHtml(leadText) + '</dd></div>' +
       '<div><dt>Credits spent</dt><dd>' + job.credits + ' credit' +
       (job.credits === 1 ? '' : 's') + '</dd></div>' +
-      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '<div><dt>Created</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
@@ -3897,13 +3934,14 @@
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>Invoice OCR Agent</strong>' +
+      histIdBadge(job) +
       '<span class="hist-badge ' + tone + '">' + escapeHtml(label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(fileText) + ' · ' + escapeHtml(creditText) + '</p>' +
       '<dl class="hist-meta">' +
       '<div><dt>Files</dt><dd>' + escapeHtml(fileText) + '</dd></div>' +
       '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
-      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '<div><dt>Created</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
@@ -3961,13 +3999,14 @@
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>Lead Enricher</strong>' +
+      histIdBadge(job) +
       '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(siteText) + ' · ' + escapeHtml(creditText) + '</p>' +
       '<dl class="hist-meta">' +
       '<div><dt>Websites</dt><dd>' + escapeHtml(siteText) + '</dd></div>' +
       '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
-      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '<div><dt>Created</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
@@ -3995,6 +4034,7 @@
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>Review Miner</strong>' +
+      histIdBadge(job) +
       '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(competitorText) + ' · ' + escapeHtml(reviewText) +
@@ -4002,7 +4042,7 @@
       '<dl class="hist-meta">' +
       '<div><dt>Competitors</dt><dd>' + escapeHtml(competitorText) + '</dd></div>' +
       '<div><dt>Reviews</dt><dd>' + escapeHtml(reviewText) + '</dd></div>' +
-      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '<div><dt>Created</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
@@ -4047,6 +4087,7 @@
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>Property Sniper</strong>' +
+      histIdBadge(job) +
       '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(location) + ' · ' + duration +
@@ -4065,7 +4106,7 @@
       '<div><dt>Alerts sent</dt><dd>' + alerts + '</dd></div>' +
       '<div><dt>Deals sniped</dt><dd>' + sniped + '</dd></div>' +
       '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
-      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Job ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '<div><dt>Started</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
@@ -4097,6 +4138,7 @@
       '<article class="hist-card">' +
       '<div class="hist-card-top">' +
       '<strong>Competitor Tracker</strong>' +
+      histIdBadge(job) +
       '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(label) + '</span>' +
       '</div>' +
       '<p class="hist-sub">' + escapeHtml(urlText) + ' · ' + escapeHtml(creditText) + '</p>' +
@@ -4114,7 +4156,7 @@
       '<div><dt>URLs watched</dt><dd>' + escapeHtml(urlText) + '</dd></div>' +
       '<div><dt>Changes detected</dt><dd>' + changes + '</dd></div>' +
       '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
-      '<div><dt>Watch ID</dt><dd><code>' + escapeHtml(job.job_id || '—') + '</code></dd></div>' +
+      '<div><dt>Watch ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '<div><dt>Started</dt><dd>' +
       escapeHtml(job.created ? fmtMYT(job.created) : '—') + '</dd></div>' +
       '</dl>' +
@@ -4525,17 +4567,17 @@
   }
 
   function openHistoryJob(jobId) {
-    const id = String(jobId || '').trim();
-    if (!id) return;
+    const ref = String(jobId || '').trim();
+    if (!ref) return;
 
     stopScraperTimers();
-    const known = (historyState.b2b || []).filter(function (entry) {
-      return String(entry.job_id || '') === id;
-    })[0];
+    const known = findHistoryJob(historyState.b2b, ref);
+    const id = String((known && known.job_id) || ref);
     const current = state.scraperJob;
     if (!current || String(current.job_id || '') !== id) {
       state.scraperJob = {
         job_id: id,
+        display_id: known ? String(known.display_id || '') : (ref !== id ? ref : ''),
         mode: 'live',
         status: 'running',
         starting: false,
@@ -6377,7 +6419,7 @@
     main.hidden = false;
 
     const resume = $('#resumeJobId');
-    if (resume) resume.value = job.job_id || '';
+    if (resume) resume.value = formatJobRef(job) || '';
     const resumeBtn = $('#resumeBtn');
     if (resumeBtn) {
       resumeBtn.disabled = false;
@@ -6443,7 +6485,7 @@
         '<div class="summary-row"><dt>Credits spent</dt><dd><strong>' + (job.credits_spent || 0) + '</strong></dd></div>' +
         '<div class="summary-row"><dt>Columns</dt><dd>' + cols.length + '</dd></div>' +
         '<div class="summary-row"><dt>Started</dt><dd>' + escapeHtml(fmtMYT(job.started_at)) + '</dd></div>' +
-        '<div class="summary-row"><dt>Job ID</dt><dd><code>' + escapeHtml(job.job_id) + '</code></dd></div>';
+        '<div class="summary-row"><dt>Job ID</dt><dd><code>' + escapeHtml(formatJobRef(job)) + '</code></dd></div>';
     }
   }
 
@@ -6861,6 +6903,7 @@
         if (body.job_id && String(body.job_id) !== String(job.job_id)) {
           job.job_id = String(body.job_id);
         }
+        if (body.display_id) job.display_id = String(body.display_id);
         job.starting = false;
         job.posted = true;
         job.status = status || 'running';
@@ -7042,6 +7085,7 @@
         job.status = status;
         job.status_warned = false;
         job.poll_errors = 0;
+        if (data.display_id) job.display_id = String(data.display_id);
 
         if (['failed', 'error', 'cancelled', 'canceled'].indexOf(status) !== -1) {
           failScraperJob(data.error ? String(data.error) : '');
@@ -7132,12 +7176,25 @@
     const input = $('#resumeJobId');
     if (!input) return;
 
-    const value = input.value.trim();
-    if (!value) {
+    const entered = input.value.trim();
+    if (!entered) {
       toast('Enter a Job ID to check.', 'warn');
       input.focus();
       return;
     }
+
+    const current = state.scraperJob;
+    /* Accept a display_id or the internal job_id; API calls need the internal one. */
+    const knownJob =
+      findHistoryJob(historyState.b2b, entered) ||
+      (current && String(formatJobRef(current)) === entered ? current : null);
+    const value = String((knownJob && knownJob.job_id) || entered);
+    const displayRef =
+      knownJob && knownJob.display_id
+        ? String(knownJob.display_id)
+        : entered !== value
+        ? entered
+        : '';
 
     const resumeBtn = $('#resumeBtn');
     if (resumeBtn) {
@@ -7146,7 +7203,6 @@
       resumeBtn.setAttribute('aria-disabled', 'false');
     }
 
-    const current = state.scraperJob;
     const sameJob = !!current && String(current.job_id || '') === value;
 
     stopScraperTimers();
@@ -7155,6 +7211,7 @@
     if (!sameJob) {
       job = {
         job_id: value,
+        display_id: displayRef,
         name: state.name || '',
         email: accountEmail(),
         country: '',
@@ -7179,6 +7236,7 @@
       state.scraperJob = job;
     } else {
       job.job_id = value;
+      if (displayRef) job.display_id = displayRef;
       job.mode = 'live';
       job.starting = false;
       job.posted = true;
@@ -8228,6 +8286,8 @@
         const liveFormat = data.export_format || data.exportFormat;
         if (liveFormat && !job.export_format) job.export_format = String(liveFormat);
 
+        if (data.display_id) job.display_id = String(data.display_id);
+
         const previewRows = extractInvoicePreview(data);
         if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
 
@@ -8329,7 +8389,7 @@
     main.hidden = false;
 
     const resume = $('#invoiceResumeId');
-    if (resume) resume.value = job.job_id || '';
+    if (resume) resume.value = formatJobRef(job) || '';
     const resumeBtn = $('#invoiceResumeBtn');
     if (resumeBtn) {
       resumeBtn.disabled = false;
@@ -8381,7 +8441,7 @@
         '<div class="summary-row"><dt>Started</dt><dd>' +
         escapeHtml(job.created_at ? fmtMYT(job.created_at) : '—') + '</dd></div>' +
         '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
-        escapeHtml(job.job_id) + '</code></dd></div>';
+        escapeHtml(formatJobRef(job)) + '</code></dd></div>';
     }
   }
 
@@ -8657,19 +8717,21 @@
   }
 
   function openInvoiceHistoryJob(jobId) {
-    const id = String(jobId || '').trim();
-    if (!id) return;
+    const ref = String(jobId || '').trim();
+    if (!ref) return;
 
     stopInvoiceTimer();
-    const known = (historyState.invoice || []).filter(function (entry) {
-      return String(entry.job_id || '') === id;
-    })[0];
     const current = state.invoiceJob;
+    const known =
+      findHistoryJob(historyState.invoice, ref) ||
+      (current && String(formatJobRef(current)) === ref ? current : null);
+    const id = String((known && known.job_id) || ref);
     const sameJob = !!current && String(current.job_id || '') === id;
 
     if (!sameJob) {
       state.invoiceJob = {
         job_id: id,
+        display_id: known ? String(known.display_id || '') : (ref !== id ? ref : ''),
         status: 'processing',
         percent: 0,
         files_total: known ? known.files : 0,
@@ -9091,6 +9153,7 @@
 
         state.invoiceJob = {
           job_id: String(jobId || 'inv_' + Date.now()),
+          display_id: String(payload.display_id || inner.display_id || ''),
           status: String(payload.status || inner.status || 'processing').toLowerCase(),
           percent: 0,
           files_total:
@@ -9523,6 +9586,7 @@
 
         const sourceJobId = data.source_job_id || data.sourceJobId || data.lead_job_id;
         if (sourceJobId) job.source_job_id = String(sourceJobId);
+        if (data.display_id) job.display_id = String(data.display_id);
 
         if (data.download_ready != null) {
           job.download_ready =
@@ -9634,7 +9698,7 @@
     main.hidden = false;
 
     const resume = $('#leResumeId');
-    if (resume) resume.value = job.job_id || '';
+    if (resume) resume.value = formatJobRef(job) || '';
     const resumeBtn = $('#leResumeBtn');
     if (resumeBtn) {
       resumeBtn.disabled = false;
@@ -9685,7 +9749,7 @@
         '<div class="summary-row"><dt>Started</dt><dd>' +
         escapeHtml(job.created_at ? fmtMYT(job.created_at) : '—') + '</dd></div>' +
         '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
-        escapeHtml(job.job_id) + '</code></dd></div>';
+        escapeHtml(formatJobRef(job)) + '</code></dd></div>';
     }
   }
 
@@ -9869,19 +9933,21 @@
   }
 
   function openLeHistoryJob(jobId) {
-    const id = String(jobId || '').trim();
-    if (!id) return;
+    const ref = String(jobId || '').trim();
+    if (!ref) return;
 
     stopLeTimer();
-    const known = (historyState.enricher || []).filter(function (entry) {
-      return String(entry.job_id || '') === id;
-    })[0];
     const current = state.enricherJob;
+    const known =
+      findHistoryJob(historyState.enricher, ref) ||
+      (current && String(formatJobRef(current)) === ref ? current : null);
+    const id = String((known && known.job_id) || ref);
     const sameJob = !!current && String(current.job_id || '') === id;
 
     if (!sameJob) {
       state.enricherJob = {
         job_id: id,
+        display_id: known ? String(known.display_id || '') : (ref !== id ? ref : ''),
         status: 'processing',
         percent: 0,
         sites_total: known ? known.sites : 0,
@@ -9999,7 +10065,8 @@
     const leads = leJobLeads(job);
     const terms = job.terms && job.terms.length ? job.terms.slice(0, 2).join(', ') : '—';
     return (
-      (job.country || '—') + ' · ' + terms + ' · ' + (leads || '—') + ' leads · ' + job.job_id
+      (job.country || '—') + ' · ' + terms + ' · ' + (leads || '—') + ' leads · ' +
+      formatJobRef(job)
     );
   }
 
@@ -10009,6 +10076,7 @@
     const haystack = [
       job.country || '',
       job.job_id || '',
+      job.display_id || '',
       (job.terms || []).join(' ')
     ]
       .join(' ')
@@ -10076,7 +10144,7 @@
           escapeHtml(job.country || '—') + '</strong> · ' + escapeHtml(terms) + '</span>' +
           '<span class="le-combo-option-meta">' +
           (leads ? leads + ' leads' : 'Lead count unknown') +
-          ' · ' + escapeHtml(job.job_id) + '</span>' +
+          ' · ' + escapeHtml(formatJobRef(job)) + '</span>' +
           '</button>'
         );
       })
@@ -10757,6 +10825,7 @@
 
         state.enricherJob = {
           job_id: String(returnedId || 'enr_' + Date.now()),
+          display_id: String(outer.display_id || inner.display_id || ''),
           status: String(outer.status || inner.status || 'processing').toLowerCase(),
           percent: 0,
           sites_total:
@@ -11050,6 +11119,8 @@
           job.email_sent = data.email_sent === true || data.email_sent === 'true';
         }
 
+        if (data.display_id) job.display_id = String(data.display_id);
+
         const previewRows = extractRwPreview(data);
         if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
 
@@ -11150,7 +11221,7 @@
     main.hidden = false;
 
     const resume = $('#rwResumeId');
-    if (resume) resume.value = job.job_id || '';
+    if (resume) resume.value = formatJobRef(job) || '';
     const resumeBtn = $('#rwResumeBtn');
     if (resumeBtn) {
       resumeBtn.disabled = false;
@@ -11204,7 +11275,7 @@
         '<div class="summary-row"><dt>Started</dt><dd>' +
         escapeHtml(job.created_at ? fmtMYT(job.created_at) : '—') + '</dd></div>' +
         '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
-        escapeHtml(job.job_id) + '</code></dd></div>';
+        escapeHtml(formatJobRef(job)) + '</code></dd></div>';
     }
   }
 
@@ -11392,19 +11463,21 @@
   }
 
   function openRwHistoryJob(jobId) {
-    const id = String(jobId || '').trim();
-    if (!id) return;
+    const ref = String(jobId || '').trim();
+    if (!ref) return;
 
     stopRwTimer();
-    const known = (historyState.review || []).filter(function (entry) {
-      return String(entry.job_id || '') === id;
-    })[0];
     const current = state.reviewJob;
+    const known =
+      findHistoryJob(historyState.review, ref) ||
+      (current && String(formatJobRef(current)) === ref ? current : null);
+    const id = String((known && known.job_id) || ref);
     const sameJob = !!current && String(current.job_id || '') === id;
 
     if (!sameJob) {
       state.reviewJob = {
         job_id: id,
+        display_id: known ? String(known.display_id || '') : (ref !== id ? ref : ''),
         status: 'processing',
         percent: 0,
         competitors_total: known ? known.competitors : 0,
@@ -11744,6 +11817,7 @@
 
         state.reviewJob = {
           job_id: String(returnedId || 'rev_' + Date.now()),
+          display_id: String(outer.display_id || inner.display_id || ''),
           status: String(outer.status || inner.status || 'processing').toLowerCase(),
           percent: 0,
           competitors_total:
@@ -12060,6 +12134,8 @@
         if (daysLeft !== null) job.days_left = Math.max(0, Math.floor(daysLeft));
         if (data.expires_at) job.expires_at = String(data.expires_at);
 
+        if (data.display_id) job.display_id = String(data.display_id);
+
         const previewRows = extractPropPreview(data);
         if (previewRows.length) job.preview_rows = previewRows.slice(0, 100);
 
@@ -12159,7 +12235,7 @@
     main.hidden = false;
 
     const resume = $('#propResumeId');
-    if (resume) resume.value = job.job_id || '';
+    if (resume) resume.value = formatJobRef(job) || '';
 
     renderPropJobSummary();
     renderPropTable();
@@ -12227,7 +12303,7 @@
         '<div class="summary-row"><dt>Started</dt><dd>' +
         escapeHtml(job.started_at ? fmtMYT(job.started_at) : '—') + '</dd></div>' +
         '<div class="summary-row"><dt>Job ID</dt><dd><code>' +
-        escapeHtml(job.job_id) + '</code></dd></div>';
+        escapeHtml(formatJobRef(job)) + '</code></dd></div>';
     }
   }
 
@@ -12494,19 +12570,21 @@
   }
 
   function openPropHistoryJob(jobId) {
-    const id = String(jobId || '').trim();
-    if (!id) return;
+    const ref = String(jobId || '').trim();
+    if (!ref) return;
 
     stopPropTimer();
-    const known = (historyState.property || []).filter(function (entry) {
-      return String(entry.job_id || '') === id;
-    })[0];
     const current = state.propertyJob;
+    const known =
+      findHistoryJob(historyState.property, ref) ||
+      (current && String(formatJobRef(current)) === ref ? current : null);
+    const id = String((known && known.job_id) || ref);
     const sameJob = !!current && String(current.job_id || '') === id;
 
     if (!sameJob) {
       state.propertyJob = {
         job_id: id,
+        display_id: known ? String(known.display_id || '') : (ref !== id ? ref : ''),
         agent_id: PROP_AGENT_ID,
         status: known && known.status ? known.status : 'processing',
         percent: Number(known && known.percent) || 0,
@@ -12962,6 +13040,9 @@
           outer.job_id || outer.jobId || outer.id || inner.job_id || inner.id || '';
 
         if (returnedId) job.job_id = String(returnedId);
+        if (outer.display_id || inner.display_id) {
+          job.display_id = String(outer.display_id || inner.display_id);
+        }
         job.status = String(outer.status || inner.status || 'running').toLowerCase();
         if (outer.duration_days || inner.duration_days) {
           job.duration_days = toPositiveInt(
@@ -13294,6 +13375,7 @@
           inner.job_id ||
           'watch_' + Date.now()
         );
+        const displayId = String(outer.display_id || inner.display_id || '');
         const expiresAt = String(
           outer.expires_at ||
           inner.expires_at ||
@@ -13302,6 +13384,7 @@
 
         state.trackerJob = {
           job_id: watchId,
+          display_id: displayId,
           agent_id: CT_AGENT_ID,
           status: 'completed',
           urls: rows.length,
@@ -13330,7 +13413,7 @@
             '<p>Daily automated checks run for ' + CT_DAYS +
             ' days. A confirmation email is on its way, and you will only be alerted when real text or price changes are detected.</p>' +
             '<div class="watch-confirm-id">Watch ID <code>' +
-            escapeHtml(watchId) + '</code></div>' +
+            escapeHtml(displayId || watchId) + '</code></div>' +
             '<div class="modal-actions">' +
             '<a class="btn btn-primary" href="#plans" data-modal-close>Manage My Plan (#plans)</a>' +
             '</div>' +
