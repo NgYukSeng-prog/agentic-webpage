@@ -2400,13 +2400,20 @@
     return headerEl ? headerEl.getBoundingClientRect().bottom : 72;
   }
 
+  /* iOS Safari shrinks the visual viewport when the address bar collapses or
+     the keyboard opens — clamp against the area the user can actually see. */
+  function jobDockViewportHeight() {
+    return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  }
+
   /* Bounds cover the ENTIRE stack height, so the last row can never clip off
      the bottom and the first row can never hide behind the navbar. */
   function jobDockBounds(dock) {
     const width = dock.offsetWidth;
     const height = dock.offsetHeight;
+    const viewportHeight = jobDockViewportHeight();
     const minTop = Math.ceil(jobDockHeaderBottom() + JOB_DOCK_MARGIN);
-    const maxTop = Math.max(minTop, window.innerHeight - height - JOB_DOCK_MARGIN);
+    const maxTop = Math.max(minTop, viewportHeight - height - JOB_DOCK_MARGIN);
     const maxLeft = Math.max(JOB_DOCK_MARGIN, window.innerWidth - width - JOB_DOCK_MARGIN);
     return { width: width, height: height, minTop: minTop, maxTop: maxTop, maxLeft: maxLeft };
   }
@@ -2489,7 +2496,7 @@
 
     setJobDockPosition(
       bounds.maxLeft,
-      clampJobDockTop(window.innerHeight - bounds.height - JOB_DOCK_DEFAULT_GAP, bounds)
+      clampJobDockTop(jobDockViewportHeight() - bounds.height - JOB_DOCK_DEFAULT_GAP, bounds)
     );
   }
 
@@ -2752,6 +2759,27 @@
       };
       /* No setPointerCapture here: a simple tap must keep its button target. */
     });
+
+    /* iOS Safari only applies preventDefault() from non-passive touch
+       listeners on the element itself. Without these, the first vertical
+       move is claimed as a page scroll (pointercancel) and the dock stops
+       following the finger mid-drag. They stay inert for taps on buttons
+       because pointerdown skips buttons and never sets jobDockDrag. */
+    dock.addEventListener(
+      'touchstart',
+      function (event) {
+        if (jobDockDrag && event.cancelable) event.preventDefault();
+      },
+      { passive: false }
+    );
+
+    dock.addEventListener(
+      'touchmove',
+      function (event) {
+        if (jobDockDrag && event.cancelable) event.preventDefault();
+      },
+      { passive: false }
+    );
 
     /* Window-level tracking works with or without pointer capture. */
     window.addEventListener('pointermove', moveJobDock);
