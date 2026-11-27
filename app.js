@@ -1944,13 +1944,17 @@
 
     openModal(
       '<div class="acc-modal">' +
+        '<div class="acc-header">' +
+        '  <h2 class="modal-title" id="modalTitle">Account Settings</h2>' +
+        '  <p class="acc-header-sub">Profile, live credit wallet, animated avatar &amp; session security</p>' +
+        '</div>' +
         '<div class="acc-hero">' +
         '  <div class="acc-hero-avatar" id="avatarPreview">' +
         avatarMarkup(currentId, 'avatar--preview') +
         '  </div>' +
         '  <div class="acc-hero-info">' +
         '    <div class="acc-hero-top">' +
-        '      <h2 class="acc-hero-name" id="modalTitle">' + escapeHtml(displayName) + '</h2>' +
+        '      <strong class="acc-hero-name">' + escapeHtml(displayName) + '</strong>' +
         '      <span class="acc-member-pill">Verified Account</span>' +
         '    </div>' +
         '    <p class="acc-hero-email" id="accountEmail">' + escapeHtml(userEmail) + '</p>' +
@@ -13800,13 +13804,6 @@
             if (errEl) {
               errEl.textContent =
                 (body && (body.error || body.message)) ||
-                'Not enough credits for this watch. Top up credits to continue.';
-            }
-            updateCtQuote();
-            return null;
-          }
-          if (!response.ok) {
-            throw new Error(
               (body && (body.error || body.message)) || 'HTTP ' + response.status
             );
           }
@@ -14391,11 +14388,11 @@
     const summary = $('#wdgJobSummary');
     if (summary) {
       summary.innerHTML =
-        '<div><dt>Reference</dt><dd><code>' + escapeHtml(ref) + '</code></dd></div>' +
-        '<div><dt>Sites Monitored</dt><dd>' + totalSites + ' site' + (totalSites === 1 ? '' : 's') + '</dd></div>' +
-        '<div><dt>Credits Spent</dt><dd>' + creditsSpent + ' credits</dd></div>' +
-        '<div><dt>Schedule</dt><dd>Daily 06:00 MYT · ' + WDG_DAYS + ' Days</dd></div>' +
-        '<div><dt>Overall Status</dt><dd><span class="hist-badge ' + overallMeta.tone + '">' +
+        '<div class="summary-row"><dt>Reference</dt><dd><code>' + escapeHtml(ref) + '</code></dd></div>' +
+        '<div class="summary-row"><dt>Sites Monitored</dt><dd><strong>' + totalSites + ' site' + (totalSites === 1 ? '' : 's') + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Credits Spent</dt><dd><strong>' + creditsSpent + ' credits</strong></dd></div>' +
+        '<div class="summary-row"><dt>Schedule</dt><dd>Daily 06:00 MYT · ' + WDG_DAYS + ' Days</dd></div>' +
+        '<div class="summary-row"><dt>Overall Status</dt><dd><span class="hist-badge ' + overallMeta.tone + '">' +
         escapeHtml(overallMeta.label) + '</span></dd></div>';
     }
 

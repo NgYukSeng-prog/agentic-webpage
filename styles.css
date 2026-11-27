@@ -10337,6 +10337,19 @@ body.is-authed #homeTemplate3 .t3-btn-guest {
   margin-top: 8px;
 }
 
+#view-watchdog-results .job-card .btn-ghost {
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  font-weight: 650;
+}
+
+#view-watchdog-results .job-card .btn-ghost:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
 .wdg-preview-table th,
 .wdg-preview-table td {
   vertical-align: top;
@@ -10373,7 +10386,21 @@ body.is-authed #homeTemplate3 .t3-btn-guest {
 /* --- Redesigned Account Settings Modal -------------------------------- */
 .acc-modal {
   display: grid;
-  gap: 18px;
+  gap: 16px;
+}
+
+.acc-header {
+  padding-right: 36px;
+}
+
+.acc-header .modal-title {
+  margin: 0 0 4px;
+}
+
+.acc-header-sub {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--slate-500);
 }
 
 .acc-hero {
