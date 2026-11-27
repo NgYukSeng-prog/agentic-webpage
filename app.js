@@ -293,11 +293,14 @@
   const CT_START_URL = CFG.COMPETITOR_TRACKER_START_URL || '';
 
   /* --- Website Watchdog (8th live worker) --------------------------------
-     5 credits / 30 days · daily uptime, SSL, speed & broken links (1–3 sites). */
+     5 credits per site / 30 days · daily 06:00 MYT uptime, SSL, speed & broken links (1–3 sites). */
   const WDG_AGENT_ID = CFG.SITE_WATCHDOG_AGENT_ID || 'website-watchdog';
   const WDG_AGENT_NAME =
     CFG.SITE_WATCHDOG_AGENT_NAME || 'Website Uptime, SSL & Broken-Link Watchdog';
-  const WDG_CREDITS = toPositiveInt(CFG.SITE_WATCHDOG_CREDITS, 5);
+  const WDG_CREDITS_PER_SITE = toPositiveInt(
+    CFG.SITE_WATCHDOG_CREDITS_PER_SITE || CFG.SITE_WATCHDOG_CREDITS,
+    5
+  );
   const WDG_DAYS = toPositiveInt(CFG.SITE_WATCHDOG_DAYS, 30);
   const WDG_MAX_URLS = toPositiveInt(CFG.SITE_WATCHDOG_MAX_URLS, 3);
   const WDG_START_URL =
@@ -691,7 +694,7 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — 7 Live Workers, One Credit Wallet',
+    agents: 'AI Agents — 8 Live Workers, One Credit Wallet',
     plans: 'Manage My Plan — Subscriptions & History',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
@@ -3830,17 +3833,60 @@
             : 'healthy';
         const sslRaw = firstValue(site, ['ssl_days_left', 'ssl_days', 'ssl_expiry_days'], null);
         const msRaw = firstValue(site, ['response_ms', 'latency_ms', 'load_ms'], null);
+        const httpRaw = firstValue(site, ['http_status', 'status_code', 'code'], null);
+        const httpStatus = httpRaw == null || httpRaw === '' ? null : Math.round(Number(httpRaw) || 0);
         const brokenRaw = firstValue(site, ['broken_links', 'broken_count', 'broken'], 0);
+        const brokenList = Array.isArray(brokenRaw)
+          ? brokenRaw
+              .map(function (entry) {
+                if (typeof entry === 'string') return { url: entry, status: null, reason: '' };
+                if (entry && typeof entry === 'object') {
+                  const code = firstValue(entry, ['http_status', 'status_code', 'status', 'code'], null);
+                  return {
+                    url: String(firstValue(entry, ['url', 'href', 'link', 'target'], '')),
+                    status: code == null || code === '' ? null : String(code),
+                    reason: String(firstValue(entry, ['reason', 'error', 'message'], ''))
+                  };
+                }
+                return null;
+              })
+              .filter(function (entry) { return entry && (entry.url || entry.reason); })
+          : [];
         const brokenCount = Array.isArray(brokenRaw)
           ? brokenRaw.length
           : Number(brokenRaw) || 0;
+
+        const warningsRaw = firstValue(site, ['warnings', 'issues', 'reasons'], null);
+        const warnings = [];
+        if (Array.isArray(warningsRaw)) {
+          warningsRaw.forEach(function (w) {
+            if (typeof w === 'string' && w.trim()) warnings.push(w.trim());
+            else if (w && typeof w === 'object') {
+              const msg = firstValue(w, ['message', 'reason', 'detail', 'label'], '');
+              if (msg) warnings.push(String(msg));
+            }
+          });
+        } else if (typeof warningsRaw === 'string' && warningsRaw.trim()) {
+          warnings.push(warningsRaw.trim());
+        }
+        const singleReason = firstValue(site, ['warning', 'error', 'reason', 'message'], '');
+        if (singleReason && warnings.indexOf(String(singleReason)) === -1) {
+          warnings.push(String(singleReason));
+        }
+
+        const responseMs = msRaw == null || msRaw === '' ? null : Math.round(Number(msRaw) || 0);
+        const sslDaysLeft = sslRaw == null || sslRaw === '' ? null : Math.round(Number(sslRaw) || 0);
+
         return {
           url: String(firstValue(site, ['url', 'site', 'target'], '')),
           label: String(firstValue(site, ['label', 'name'], '')),
           status: status,
-          responseMs: msRaw == null || msRaw === '' ? null : Math.round(Number(msRaw) || 0),
-          sslDaysLeft: sslRaw == null || sslRaw === '' ? null : Math.round(Number(sslRaw) || 0),
-          brokenLinks: brokenCount
+          httpStatus: httpStatus,
+          responseMs: responseMs,
+          sslDaysLeft: sslDaysLeft,
+          brokenLinks: brokenCount,
+          brokenList: brokenList,
+          warnings: warnings
         };
       });
   }
@@ -3917,7 +3963,7 @@
       sslDaysLeft: sslDaysLeft === null || sslDaysLeft === '' ? null : Math.round(Number(sslDaysLeft) || 0),
       alertsSent: Number(firstValue(job, ['alerts_sent', 'alerts', 'alert_count'], 0)) || 0,
       lastChecked: firstValue(job, ['last_checked_at', 'checked_at', 'updated_at'], startedAt),
-      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], WDG_CREDITS)) || WDG_CREDITS,
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], WDG_CREDITS_PER_SITE)) || WDG_CREDITS_PER_SITE,
       created: startedAt,
       expiresAt: expiresAt,
       percent: clamp(Number(percent) || 0, 0, 100),
@@ -4322,6 +4368,74 @@
     return { tone: 'ok', label: 'Healthy' };
   }
 
+  function watchdogSiteReasons(site) {
+    const reasons = [];
+    if (site.httpStatus !== null && (site.httpStatus >= 400 || site.httpStatus === 0)) {
+      reasons.push(site.httpStatus === 0 ? 'Site unreachable (no HTTP response)' : 'HTTP ' + site.httpStatus + ' error');
+    }
+    if (Array.isArray(site.brokenList) && site.brokenList.length) {
+      site.brokenList.forEach(function (item) {
+        const codePart = item.status ? ' (HTTP ' + item.status + ')' : '';
+        const reasonPart = !item.status && item.reason ? ' (' + item.reason + ')' : '';
+        reasons.push('Broken link' + codePart + reasonPart + ': ' + (item.url || 'unknown URL'));
+      });
+    } else if (site.brokenLinks > 0) {
+      reasons.push(site.brokenLinks + ' broken link' + (site.brokenLinks === 1 ? '' : 's') + ' detected');
+    }
+    if (Array.isArray(site.warnings) && site.warnings.length) {
+      site.warnings.forEach(function (w) {
+        if (reasons.indexOf(w) === -1) reasons.push(w);
+      });
+    }
+    if (site.sslDaysLeft !== null && site.sslDaysLeft <= 14) {
+      const sslMsg = site.sslDaysLeft <= 0
+        ? 'SSL certificate expired'
+        : 'SSL expires in ' + site.sslDaysLeft + ' day' + (site.sslDaysLeft === 1 ? '' : 's');
+      if (!reasons.some(function (r) { return r.toLowerCase().indexOf('ssl') !== -1; })) {
+        reasons.push(sslMsg);
+      }
+    }
+    if (site.responseMs !== null && site.responseMs >= 3500) {
+      const slowMsg = 'Slow response: ' + site.responseMs.toLocaleString() + ' ms';
+      if (!reasons.some(function (r) { return r.toLowerCase().indexOf('slow') !== -1 || r.indexOf('ms') !== -1; })) {
+        reasons.push(slowMsg);
+      }
+    }
+    return reasons;
+  }
+
+  function renderWatchdogIssuesHtml(sites, fallbackStatus) {
+    const issueBlocks = [];
+    (sites || []).forEach(function (site) {
+      const reasons = watchdogSiteReasons(site);
+      if (!reasons.length && site.status === 'healthy') return;
+      if (!reasons.length) {
+        reasons.push(site.status === 'down' ? 'Site failed health check' : 'Health warning reported');
+      }
+      const toneClass = site.status === 'down' ? 'is-down' : 'is-warning';
+      const siteLabel = site.label || site.url;
+      issueBlocks.push(
+        '<div class="wdg-issues ' + toneClass + '">' +
+        (siteLabel ? '<strong class="wdg-issues-site">' + escapeHtml(siteLabel) + '</strong>' : '') +
+        '<ul>' +
+        reasons.map(function (r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') +
+        '</ul>' +
+        '</div>'
+      );
+    });
+    if (!issueBlocks.length && (fallbackStatus === 'warning' || fallbackStatus === 'down')) {
+      const toneClass = fallbackStatus === 'down' ? 'is-down' : 'is-warning';
+      issueBlocks.push(
+        '<div class="wdg-issues ' + toneClass + '"><ul><li>' +
+        (fallbackStatus === 'down'
+          ? 'Site downtime detected — check email alert for details.'
+          : 'Performance, SSL, or broken-link warning detected.') +
+        '</li></ul></div>'
+      );
+    }
+    return issueBlocks.join('');
+  }
+
   function renderWatchdogHistoryCard(job) {
     const statusMeta = watchdogStatusMeta(job.lastStatus);
     const sitesText = job.urls && job.urls.length
@@ -4332,6 +4446,7 @@
     const percent = clamp(Number(job.percent) || 0, 2, 100);
     const sslText = job.sslDaysLeft !== null ? job.sslDaysLeft + ' days left' : '—';
     const alerts = Number(job.alertsSent) || 0;
+    const issuesHtml = renderWatchdogIssuesHtml(job.reportSites, job.lastStatus);
 
     return (
       '<article class="hist-card">' +
@@ -4349,6 +4464,7 @@
       '</span>' +
       '</div>' +
       '<div class="watch-progress"><span style="width:' + percent + '%"></span></div>' +
+      issuesHtml +
       '<dl class="hist-meta">' +
       '<div><dt>SSL expiry</dt><dd>' + escapeHtml(sslText) + '</dd></div>' +
       '<div><dt>Alerts sent</dt><dd>' + alerts + '</dd></div>' +
@@ -13713,10 +13829,15 @@
     return rows;
   }
 
+  function wdgTotalCredits(validCount) {
+    return Math.max(1, Number(validCount) || 0) * WDG_CREDITS_PER_SITE;
+  }
+
   function updateWdgQuote() {
     const rows = wdgRows();
     const valid = rows.filter(function (row) { return isHttpUrl(row.url); }).length;
     const rowCount = $$('#wdgRows [data-wdg-row]').length;
+    const totalCredits = wdgTotalCredits(valid);
 
     const availableEl = $('#wdgAvailable');
     if (availableEl) availableEl.textContent = state.credits + ' Credits';
@@ -13728,7 +13849,7 @@
     }
 
     const totalEl = $('#wdgCost');
-    if (totalEl) totalEl.textContent = WDG_CREDITS + ' Credits';
+    if (totalEl) totalEl.textContent = totalCredits + ' Credits';
 
     const addBtn = $('#wdgAddBtn');
     if (addBtn) {
@@ -13740,7 +13861,7 @@
     const hint = $('#wdgCountHint');
     if (hint) hint.textContent = rowCount + ' of ' + WDG_MAX_URLS;
 
-    const shortfall = WDG_CREDITS - state.credits;
+    const shortfall = totalCredits - state.credits;
     const shortEl = $('#wdgShortfall');
     if (shortEl) {
       if (valid > 0 && shortfall > 0) {
@@ -13759,7 +13880,7 @@
       btn.disabled = wdgStarting || valid === 0;
       btn.textContent = wdgStarting
         ? 'Running Day-0 Health Check…'
-        : 'Confirm & Spend ' + WDG_CREDITS + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog';
+        : 'Confirm & Spend ' + totalCredits + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog';
     }
   }
 
@@ -13813,7 +13934,7 @@
     openModal(
       '<h2 class="modal-title" id="modalTitle">Website Uptime, SSL &amp; Broken-Link Watchdog</h2>' +
       '<p class="modal-sub">Daily monitoring for up to ' + WDG_MAX_URLS +
-      ' live websites · ' + WDG_CREDITS + ' credits / ' + WDG_DAYS + ' days</p>' +
+      ' live websites · ' + WDG_CREDITS_PER_SITE + ' credits per site / ' + WDG_DAYS + ' days</p>' +
       '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
       '<div class="calc-cell"><span class="calc-label">Available</span>' +
       '<span class="calc-value" id="wdgAvailable">' + state.credits + ' Credits</span></div>' +
@@ -13822,11 +13943,11 @@
       '<div class="calc-cell"><span class="calc-label">Duration</span>' +
       '<span class="calc-value">' + WDG_DAYS + ' Days</span></div>' +
       '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
-      '<span class="calc-value" id="wdgCost">' + WDG_CREDITS + ' Credits</span></div>' +
+      '<span class="calc-value" id="wdgCost">' + WDG_CREDITS_PER_SITE + ' Credits</span></div>' +
       '</div></div>' +
       '<form class="invoice-form" id="watchdogForm" novalidate>' +
       '<div class="modal-section"><h3>Websites to monitor</h3>' +
-      '<span class="fine">1–' + WDG_MAX_URLS + ' live URLs</span></div>' +
+      '<span class="fine">1–' + WDG_MAX_URLS + ' live URLs · ' + WDG_CREDITS_PER_SITE + ' credits / site</span></div>' +
       '<div class="ct-rows" id="wdgRows"></div>' +
       '<div class="rw-add-row">' +
       '<button type="button" class="btn btn-ghost btn-sm" id="wdgAddBtn">+ Add Website</button>' +
@@ -13844,17 +13965,18 @@
       '<button type="button" class="wdg-pill" data-wdg-threshold="5000" role="radio" aria-checked="false">5s</button>' +
       '</div>' +
       '</div>' +
+      '<p class="wdg-ssl-help">Monitors uptime, page speed, broken links, and SSL (your site\'s HTTPS security certificate that keeps your site trusted &amp; padlock-safe).</p>' +
       '</div>' +
       '<div class="field"><label for="wdgEmail">Delivery email</label>' +
       '<input type="email" id="wdgEmail" class="is-locked" value="' +
       escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
-      '<p class="ct-note">Runs an instant Day-0 health check now, then monitors every day at 10:00 MYT for ' +
+      '<p class="ct-note">Runs an instant Day-0 health check now, then monitors every day at 06:00 MYT for ' +
       WDG_DAYS + ' days. Alerts are emailed only when downtime, expiring SSL, slow loads, or broken links are found.</p>' +
       '<div class="modal-actions">' +
       '<div class="scraper-modal-error" id="watchdogFormError" role="alert"></div>' +
       '<p class="scraper-shortfall" id="wdgShortfall" hidden></p>' +
       '<button type="submit" class="btn btn-activate" id="wdgStartBtn" disabled>' +
-      'Confirm &amp; Spend ' + WDG_CREDITS + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog</button>' +
+      'Confirm &amp; Spend ' + WDG_CREDITS_PER_SITE + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog</button>' +
       '<p class="fine">Credits are deducted immediately. Daily watchdog checks run automatically.</p>' +
       '</div>' +
       '</form>',
@@ -13915,6 +14037,7 @@
           const sslText =
             site.sslDaysLeft !== null ? 'SSL: ' + site.sslDaysLeft + ' days left' : 'SSL: Checked';
           const brokenText = 'Broken links: ' + (Number(site.brokenLinks) || 0);
+          const issuesHtml = renderWatchdogIssuesHtml([site], site.status);
           return (
             '<div class="wdg-report-site">' +
             '<div class="wdg-report-top">' +
@@ -13927,6 +14050,7 @@
             '<span>' + escapeHtml(sslText) + '</span>' +
             '<span>' + escapeHtml(brokenText) + '</span>' +
             '</div>' +
+            issuesHtml +
             '</div>'
           );
         })
@@ -13959,8 +14083,9 @@
       if (errEl) errEl.textContent = 'Maximum ' + WDG_MAX_URLS + ' websites per watchdog.';
       return;
     }
-    if (state.credits < WDG_CREDITS) {
-      const shortfall = WDG_CREDITS - state.credits;
+    const totalCredits = wdgTotalCredits(validRows.length);
+    if (state.credits < totalCredits) {
+      const shortfall = totalCredits - state.credits;
       if (errEl) {
         errEl.textContent =
           'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
@@ -13992,8 +14117,8 @@
           duration_days: WDG_DAYS,
           days: WDG_DAYS,
           max_urls: WDG_MAX_URLS,
-          credits: WDG_CREDITS,
-          credits_spent: WDG_CREDITS
+          credits: totalCredits,
+          credits_spent: totalCredits
         })
       },
       60000

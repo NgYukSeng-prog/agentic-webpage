@@ -10251,3 +10251,44 @@ body.is-authed #homeTemplate3 .t3-btn-guest {
   background: #fee2e2;
   color: #991b1b;
 }
+
+.wdg-ssl-help {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  line-height: 1.48;
+  color: var(--slate-500);
+}
+
+.wdg-issues {
+  margin-top: 8px;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border-left: 3px solid #f59e0b;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 0.77rem;
+  line-height: 1.48;
+}
+
+.wdg-issues.is-down {
+  border-left-color: #dc2626;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.wdg-issues-site {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.wdg-issues ul {
+  margin: 0;
+  padding-left: 16px;
+  list-style: disc;
+}
+
+.wdg-issues li {
+  overflow-wrap: anywhere;
+}
