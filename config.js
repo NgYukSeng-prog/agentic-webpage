@@ -42,11 +42,9 @@ window.CONFIG = {
   FREE_SIGNUP_CREDITS: 5,
 
   /* --- Home page layout --------------------------------------------------
-     Home is rendered from index.html with BOTH templates in the DOM.
-     'template2' = calm editorial layout (default)
-     'template1' = original hero + stats + steps layout
-     Change this one string to restore the original Home page instantly. */
-  HOME_TEMPLATE: 'template2',
+     Home is rendered from index.html with all three templates in the DOM.
+     'template1' | 'template2' | 'template3' — change this single value to switch Home layout instantly */
+  HOME_TEMPLATE: 'template3',
 
   /* --- Billing / credit checkout ---------------------------------------- */
   BILLING_CHECKOUT_URL: 'https://n8n.20.205.96.122.sslip.io/webhook/billing/create-checkout',

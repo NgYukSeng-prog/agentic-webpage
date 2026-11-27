@@ -98,11 +98,11 @@
       'Delivered every market morning at 07:00 MYT (skips Saturday & Sunday when US markets are closed — you always receive 5 full market-day briefs).'
   );
   const FREE_SIGNUP_CREDITS = toPositiveInt(CFG.FREE_SIGNUP_CREDITS, 5);
-  /* Home layout: 'template2' = editorial layout, 'template1' = original. */
-  const HOME_TEMPLATE =
-    String(CFG.HOME_TEMPLATE || 'template1').toLowerCase() === 'template2'
-      ? 'template2'
-      : 'template1';
+  /* Home layout: 'template1' | 'template2' | 'template3'. */
+  const HOME_TEMPLATE = (function () {
+    const t = String(CFG.HOME_TEMPLATE || 'template3').toLowerCase().trim();
+    return t === 'template1' || t === 'template2' || t === 'template3' ? t : 'template3';
+  })();
   const GOOGLE_CLIENT_ID = String(CFG.GOOGLE_CLIENT_ID || '').trim();
   const GOOGLE_GSI_SRC = 'https://accounts.google.com/gsi/client';
 
@@ -5961,36 +5961,46 @@
     });
 
     /* Subscribe → auth gate → configuration modal */
-    const subscribeBtn = $('#subscribeBtn');
-    if (subscribeBtn) {
-      subscribeBtn.addEventListener('click', function () {
-        if (!isLoggedIn()) {
-          requireAuth({ action: 'stock' });
-          return;
-        }
-        if (state.credits < CREDITS_PER_STOCK) {
-          toast('You need at least ' + CREDITS_PER_STOCK + ' credits to subscribe.', 'warn');
-          return;
-        }
-        openStockModal();
-      });
+    function launchStockAgent() {
+      if (!isLoggedIn()) {
+        requireAuth({ action: 'stock' });
+        return;
+      }
+      if (state.credits < CREDITS_PER_STOCK) {
+        toast('You need at least ' + CREDITS_PER_STOCK + ' credits to subscribe.', 'warn');
+        return;
+      }
+      openStockModal();
     }
 
+    const subscribeBtn = $('#subscribeBtn');
+    if (subscribeBtn) {
+      subscribeBtn.addEventListener('click', launchStockAgent);
+    }
+    $$('[data-open-stock]').forEach(function (btn) {
+      btn.addEventListener('click', launchStockAgent);
+    });
+
     /* Lead Scraper: auth gate → configuration modal */
+    function launchScraperAgent() {
+      if (!isLoggedIn()) {
+        requireAuth({ action: 'scraper' });
+        return;
+      }
+      if (state.credits < LEAD_MIN_CREDITS) {
+        toast('Needs at least ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM + ' leads).', 'warn');
+        return;
+      }
+      openScraperModal();
+    }
+
     const scraperBtn = $('#scraperSubscribeBtn');
     if (scraperBtn) {
-      scraperBtn.addEventListener('click', function () {
-        if (!isLoggedIn()) {
-          requireAuth({ action: 'scraper' });
-          return;
-        }
-        if (state.credits < LEAD_MIN_CREDITS) {
-          toast('Needs at least ' + LEAD_MIN_CREDITS + ' credits (1 term · ' + LEAD_LEADS_PER_TERM + ' leads).', 'warn');
-          return;
-        }
-        openScraperModal();
-      });
+      scraperBtn.addEventListener('click', launchScraperAgent);
     }
+    $$('[data-open-scraper]').forEach(function (btn) {
+      btn.addEventListener('click', launchScraperAgent);
+    });
 
     /* Lead Scraper: column reference */
     $$('[data-open-columns]').forEach(function (btn) {
@@ -13446,17 +13456,27 @@
   }
 
   /* ============================== INIT =================================== */
-  /* Both Home templates live in the DOM; only one is shown. The live output
+  /* All Home templates live in the DOM; only one is shown. The live output
      preview is a single node moved into the active template's mount point so
      every existing tab/render handler keeps working with zero duplication. */
   function applyHomeTemplate() {
-    const t1 = $('#homeTemplate1');
-    const t2 = $('#homeTemplate2');
-    if (!t1 || !t2) return;
+    const templates = {
+      template1: $('#homeTemplate1'),
+      template2: $('#homeTemplate2'),
+      template3: $('#homeTemplate3')
+    };
+    const active =
+      templates[HOME_TEMPLATE] ||
+      templates.template3 ||
+      templates.template2 ||
+      templates.template1;
+    if (!active) return;
 
-    const active = HOME_TEMPLATE === 'template2' ? t2 : t1;
-    t1.hidden = active !== t1;
-    t2.hidden = active !== t2;
+    Object.keys(templates).forEach(function (key) {
+      if (templates[key]) {
+        templates[key].hidden = templates[key] !== active;
+      }
+    });
 
     const host = $('#homePreviewHost');
     if (!host) return;
