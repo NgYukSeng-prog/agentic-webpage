@@ -10095,3 +10095,159 @@ body.is-authed #homeTemplate3 .t3-btn-guest {
     width: 100%;
   }
 }
+
+/* ======================================================================
+   36. WEBSITE WATCHDOG (WORKER #8)
+   ====================================================================== */
+.agent-card-watchdog .agent-visual,
+.agent-visual-watchdog {
+  background:
+    radial-gradient(circle at 72% 20%, rgba(16, 185, 129, 0.2), transparent 55%),
+    linear-gradient(150deg, #0b1220 0%, #0b241d 55%, #091713 100%);
+}
+
+.agent-visual-glow-watchdog {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.36), transparent 68%);
+}
+
+.price-tag-watchdog {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.wdg-options {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--slate-200);
+}
+
+.wdg-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--slate-800);
+  cursor: pointer;
+}
+
+.wdg-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #10b981;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.wdg-threshold-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wdg-threshold-label {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--slate-600);
+}
+
+.wdg-threshold-pills {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.wdg-pill {
+  appearance: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--slate-200);
+  background: #ffffff;
+  color: var(--slate-700);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.wdg-pill.is-active {
+  border-color: #10b981;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+.wdg-report {
+  display: grid;
+  gap: 8px;
+}
+
+.wdg-report-site {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--slate-200);
+}
+
+.wdg-report-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.wdg-report-url {
+  font-size: 0.86rem;
+  color: var(--slate-900);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wdg-report-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.74rem;
+  color: var(--slate-500);
+  overflow-wrap: anywhere;
+}
+
+.wdg-report-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--slate-600);
+}
+
+.wdg-status-pill {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.wdg-status-pill.is-healthy {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.wdg-status-pill.is-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.wdg-status-pill.is-down {
+  background: #fee2e2;
+  color: #991b1b;
+}

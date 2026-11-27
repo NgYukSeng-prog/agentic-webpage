@@ -292,6 +292,17 @@
   const CT_MAX_URLS = toPositiveInt(CFG.COMPETITOR_TRACKER_MAX_URLS, 3);
   const CT_START_URL = CFG.COMPETITOR_TRACKER_START_URL || '';
 
+  /* --- Website Watchdog (8th live worker) --------------------------------
+     5 credits / 30 days · daily uptime, SSL, speed & broken links (1–3 sites). */
+  const WDG_AGENT_ID = CFG.SITE_WATCHDOG_AGENT_ID || 'website-watchdog';
+  const WDG_AGENT_NAME =
+    CFG.SITE_WATCHDOG_AGENT_NAME || 'Website Uptime, SSL & Broken-Link Watchdog';
+  const WDG_CREDITS = toPositiveInt(CFG.SITE_WATCHDOG_CREDITS, 5);
+  const WDG_DAYS = toPositiveInt(CFG.SITE_WATCHDOG_DAYS, 30);
+  const WDG_MAX_URLS = toPositiveInt(CFG.SITE_WATCHDOG_MAX_URLS, 3);
+  const WDG_START_URL =
+    CFG.SITE_WATCHDOG_START_URL || API_BASE + '/site-watchdog-start';
+
   const INV_EXPORT_FORMATS =
     Array.isArray(CFG.INVOICE_OCR_EXPORT_FORMATS) && CFG.INVOICE_OCR_EXPORT_FORMATS.length
       ? CFG.INVOICE_OCR_EXPORT_FORMATS
@@ -1100,9 +1111,21 @@
       b2b: [],
       invoice: [],
       enricher: [],
-      review: []
+      review: [],
+      property: [],
+      tracker: [],
+      watchdog: []
     };
-    historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
+    historyPages = {
+      stock: 1,
+      b2b: 1,
+      invoice: 1,
+      enricher: 1,
+      review: 1,
+      property: 1,
+      tracker: 1,
+      watchdog: 1
+    };
     stopScraperTimers();
     stopLeTimer();
     stopRwTimer();
@@ -1133,6 +1156,7 @@
       else if (gate.action === 'invoice') openInvoiceModal();
       else if (gate.action === 'enricher') openLeadEnricherModal();
       else if (gate.action === 'review') openReviewMinerModal();
+      else if (gate.action === 'watchdog') openWatchdogModal();
       else if (gate.action === 'checkout') openCheckout(gate.packId);
       else if (gate.action === 'account') openAccountModal();
     }, 180);
@@ -3246,7 +3270,8 @@
     enricher: [],
     review: [],
     property: [],
-    tracker: []
+    tracker: [],
+    watchdog: []
   };
   let historyPages = {
     stock: 1,
@@ -3255,7 +3280,8 @@
     enricher: 1,
     review: 1,
     property: 1,
-    tracker: 1
+    tracker: 1,
+    watchdog: 1
   };
 
   function historySource(body) {
@@ -3773,6 +3799,132 @@
     };
   }
 
+  function normalizeWatchdogReport(rawReport) {
+    if (!rawReport) return [];
+    let list = [];
+    if (Array.isArray(rawReport)) {
+      list = rawReport;
+    } else if (typeof rawReport === 'object') {
+      if (Array.isArray(rawReport.sites)) list = rawReport.sites;
+      else if (Array.isArray(rawReport.results)) list = rawReport.results;
+      else if (Array.isArray(rawReport.checks)) list = rawReport.checks;
+      else if (rawReport.url || rawReport.status) list = [rawReport];
+    }
+    return list
+      .filter(function (item) { return item && typeof item === 'object'; })
+      .map(function (site) {
+        const rawStatus = String(
+          firstValue(site, ['status', 'health', 'state'], 'healthy')
+        ).toLowerCase();
+        const status =
+          rawStatus.indexOf('down') !== -1 ||
+          rawStatus.indexOf('fail') !== -1 ||
+          rawStatus.indexOf('error') !== -1 ||
+          rawStatus === 'red'
+            ? 'down'
+            : rawStatus.indexOf('warn') !== -1 ||
+              rawStatus.indexOf('slow') !== -1 ||
+              rawStatus.indexOf('degrad') !== -1 ||
+              rawStatus === 'amber'
+            ? 'warning'
+            : 'healthy';
+        const sslRaw = firstValue(site, ['ssl_days_left', 'ssl_days', 'ssl_expiry_days'], null);
+        const msRaw = firstValue(site, ['response_ms', 'latency_ms', 'load_ms'], null);
+        const brokenRaw = firstValue(site, ['broken_links', 'broken_count', 'broken'], 0);
+        const brokenCount = Array.isArray(brokenRaw)
+          ? brokenRaw.length
+          : Number(brokenRaw) || 0;
+        return {
+          url: String(firstValue(site, ['url', 'site', 'target'], '')),
+          label: String(firstValue(site, ['label', 'name'], '')),
+          status: status,
+          responseMs: msRaw == null || msRaw === '' ? null : Math.round(Number(msRaw) || 0),
+          sslDaysLeft: sslRaw == null || sslRaw === '' ? null : Math.round(Number(sslRaw) || 0),
+          brokenLinks: brokenCount
+        };
+      });
+  }
+
+  function normalizeWatchdogJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const urlsRaw = firstValue(
+      job,
+      ['urls', 'sites', 'websites', 'targets', 'tracked_urls'],
+      []
+    );
+    const urlsList = Array.isArray(urlsRaw)
+      ? urlsRaw
+          .map(function (u) {
+            return typeof u === 'string'
+              ? u
+              : u && typeof u === 'object'
+              ? String(u.url || u.site || '')
+              : '';
+          })
+          .filter(Boolean)
+      : [];
+    const urlsCount = Array.isArray(urlsRaw)
+      ? urlsList.length
+      : Number(firstValue(job, ['urls_count', 'url_count'], urlsRaw)) || 0;
+    const daysRaw = firstValue(
+      job,
+      ['days_remaining', 'days_left', 'watch_days_left'],
+      null
+    );
+    const daysLeft =
+      daysRaw === null || daysRaw === ''
+        ? WDG_DAYS
+        : clamp(Number(daysRaw) || 0, 0, WDG_DAYS);
+    const expiresAt = firstValue(
+      job,
+      ['expires_at', 'expiresAt', 'end_date'],
+      ''
+    );
+    const startedAt = firstValue(
+      job,
+      ['started_at', 'created_at', 'createdAt', 'date'],
+      ''
+    );
+    const reportSites = normalizeWatchdogReport(job.last_report || job.report);
+    const rawStatus = String(
+      firstValue(job, ['last_status', 'health_status', 'status'], 'healthy')
+    ).toLowerCase();
+    const lastStatus =
+      rawStatus.indexOf('down') !== -1 || rawStatus.indexOf('error') !== -1 || rawStatus === 'red'
+        ? 'down'
+        : rawStatus.indexOf('warn') !== -1 || rawStatus.indexOf('slow') !== -1 || rawStatus === 'amber'
+        ? 'warning'
+        : 'healthy';
+    let sslDaysLeft = firstValue(job, ['ssl_days_left', 'min_ssl_days'], null);
+    if ((sslDaysLeft === null || sslDaysLeft === '') && reportSites.length) {
+      const sslVals = reportSites
+        .map(function (s) { return s.sslDaysLeft; })
+        .filter(function (v) { return v !== null; });
+      if (sslVals.length) sslDaysLeft = Math.min.apply(null, sslVals);
+    }
+    const percent = expiresAt
+      ? subscriptionValidity(expiresAt, startedAt).percent
+      : (daysLeft / WDG_DAYS) * 100;
+
+    return {
+      job_id: String(firstValue(job, ['watch_id', 'job_id', 'id'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
+      urls: urlsList,
+      urlsCount: urlsCount || urlsList.length || 1,
+      daysLeft: daysLeft,
+      lastStatus: lastStatus,
+      reportSites: reportSites,
+      sslDaysLeft: sslDaysLeft === null || sslDaysLeft === '' ? null : Math.round(Number(sslDaysLeft) || 0),
+      alertsSent: Number(firstValue(job, ['alerts_sent', 'alerts', 'alert_count'], 0)) || 0,
+      lastChecked: firstValue(job, ['last_checked_at', 'checked_at', 'updated_at'], startedAt),
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], WDG_CREDITS)) || WDG_CREDITS,
+      created: startedAt,
+      expiresAt: expiresAt,
+      percent: clamp(Number(percent) || 0, 0, 100),
+      downloadReady: false
+    };
+  }
+
   function renderStockHistoryCard(sub) {
     const validity = subscriptionValidity(sub.expiresAt, sub.startedAt);
     const remaining = validity.expired
@@ -4164,6 +4316,51 @@
     );
   }
 
+  function watchdogStatusMeta(status) {
+    if (status === 'down') return { tone: 'bad', label: 'Down' };
+    if (status === 'warning') return { tone: 'warn', label: 'Warning' };
+    return { tone: 'ok', label: 'Healthy' };
+  }
+
+  function renderWatchdogHistoryCard(job) {
+    const statusMeta = watchdogStatusMeta(job.lastStatus);
+    const sitesText = job.urls && job.urls.length
+      ? job.urls.join(' · ')
+      : job.urlsCount + ' site' + (job.urlsCount === 1 ? '' : 's');
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    const daysLeft = Number(job.daysLeft) || 0;
+    const percent = clamp(Number(job.percent) || 0, 2, 100);
+    const sslText = job.sslDaysLeft !== null ? job.sslDaysLeft + ' days left' : '—';
+    const alerts = Number(job.alertsSent) || 0;
+
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Website Watchdog</strong>' +
+      histIdBadge(job) +
+      '<span class="hist-badge ' + statusMeta.tone + '">' + escapeHtml(statusMeta.label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(sitesText) + ' · ' + escapeHtml(creditText) + '</p>' +
+      '<div class="hist-trading">' +
+      '<span class="hist-trading-label"><strong>' + daysLeft + ' / ' + WDG_DAYS +
+      '</strong> days left</span>' +
+      '<span class="hist-badge ' + (alerts > 0 ? 'warn' : 'ok') + '">' +
+      alerts + ' alert' + (alerts === 1 ? '' : 's') + ' sent' +
+      '</span>' +
+      '</div>' +
+      '<div class="watch-progress"><span style="width:' + percent + '%"></span></div>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>SSL expiry</dt><dd>' + escapeHtml(sslText) + '</dd></div>' +
+      '<div><dt>Alerts sent</dt><dd>' + alerts + '</dd></div>' +
+      '<div><dt>Last checked</dt><dd>' +
+      escapeHtml(job.lastChecked ? fmtMYT(job.lastChecked) : '—') + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
+      '<div><dt>Watch ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
+      '</dl>' +
+      '</article>'
+    );
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
@@ -4172,6 +4369,7 @@
     const reviewPane = $('#historyReview');
     const propertyPane = $('#historyProperty');
     const trackerPane = $('#historyTracker');
+    const watchdogPane = $('#historyWatchdog');
     const stockCount = historyState.stock.length;
     const b2bCount = historyState.b2b.length;
     const invoiceCount = historyState.invoice.length;
@@ -4179,6 +4377,7 @@
     const reviewCount = historyState.review.length;
     const propertyCount = historyState.property.length;
     const trackerCount = historyState.tracker.length;
+    const watchdogCount = historyState.watchdog.length;
     const stockPage = historyPageSlice('stock', historyState.stock);
     const b2bPage = historyPageSlice('b2b', historyState.b2b);
     const invoicePage = historyPageSlice('invoice', historyState.invoice);
@@ -4186,6 +4385,7 @@
     const reviewPage = historyPageSlice('review', historyState.review);
     const propertyPage = historyPageSlice('property', historyState.property);
     const trackerPage = historyPageSlice('tracker', historyState.tracker);
+    const watchdogPage = historyPageSlice('watchdog', historyState.watchdog);
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
@@ -4271,6 +4471,18 @@
           '</div>';
     }
 
+    if (watchdogPane) {
+      watchdogPane.innerHTML = watchdogCount
+        ? renderHistoryPager('watchdog', 'Website Watchdogs', watchdogPage.page, watchdogPage.pages, watchdogCount) +
+          '<div class="hist-list">' +
+          watchdogPage.items.map(renderWatchdogHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No website watchdogs yet. Start a 30-day watchdog to monitor uptime, SSL expiry and broken links.</p>' +
+          '<a class="btn btn-primary btn-sm" href="#agents">Start 30-Day Watchdog</a>' +
+          '</div>';
+    }
+
     /* Keep tab + section counters in sync. */
     const counts = {
       stock: stockCount,
@@ -4279,7 +4491,8 @@
       enricher: enricherCount,
       review: reviewCount,
       property: propertyCount,
-      tracker: trackerCount
+      tracker: trackerCount,
+      watchdog: watchdogCount
     };
     $$('[data-hist-count]').forEach(function (el) {
       const key = el.getAttribute('data-hist-count');
@@ -4288,19 +4501,19 @@
     $$('[data-hist-count-label="stock"]').forEach(function (el) {
       el.textContent = stockCount + ' subscription' + (stockCount === 1 ? '' : 's');
     });
-    ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker'].forEach(function (key) {
+    ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog'].forEach(function (key) {
       $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
-        el.textContent = counts[key] + ' job' + (counts[key] === 1 ? '' : 's');
+        el.textContent = counts[key] + ' ' + (key === 'watchdog' ? 'watch' + (counts[key] === 1 ? '' : 'es') : 'job' + (counts[key] === 1 ? '' : 's'));
       });
     });
   }
 
-  /* All / stock / b2b / invoice / enricher / review filter for the panel. */
+  /* All / stock / b2b / invoice / enricher / review / property / tracker / watchdog filter for the panel. */
   function applyHistoryFilter(name) {
     const filter =
       name === 'stock' || name === 'b2b' || name === 'invoice' ||
       name === 'enricher' || name === 'review' ||
-      name === 'property' || name === 'tracker'
+      name === 'property' || name === 'tracker' || name === 'watchdog'
         ? name
         : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
@@ -4320,7 +4533,8 @@
       enricher: 1,
       review: 1,
       property: 1,
-      tracker: 1
+      tracker: 1,
+      watchdog: 1
     };
     if (isLoggedIn() && !historyState.loading) paintHistory();
   }
@@ -4333,9 +4547,10 @@
     const reviewPane = $('#historyReview');
     const propertyPane = $('#historyProperty');
     const trackerPane = $('#historyTracker');
+    const watchdogPane = $('#historyWatchdog');
     if (
       !stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane &&
-      !propertyPane && !trackerPane
+      !propertyPane && !trackerPane && !watchdogPane
     ) {
       return;
     }
@@ -4349,7 +4564,8 @@
         enricher: 1,
         review: 1,
         property: 1,
-        tracker: 1
+        tracker: 1,
+        watchdog: 1
       };
     }
 
@@ -4363,11 +4579,12 @@
         enricher: [],
         review: [],
         property: [],
-        tracker: []
+        tracker: [],
+        watchdog: []
       };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property sniper watches and competitor watches are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property sniper watches, competitor watches and website watchdogs are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
@@ -4377,11 +4594,12 @@
       if (reviewPane) reviewPane.innerHTML = loginCard;
       if (propertyPane) propertyPane.innerHTML = loginCard;
       if (trackerPane) trackerPane.innerHTML = loginCard;
+      if (watchdogPane) watchdogPane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
-      ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker'].forEach(function (key) {
+      ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog'].forEach(function (key) {
         $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
-          el.textContent = '0 jobs';
+          el.textContent = key === 'watchdog' ? '0 watches' : '0 jobs';
         });
       });
       return;
@@ -4401,6 +4619,7 @@
     if (reviewPane) reviewPane.innerHTML = '<p class="empty-note">Loading your review mining jobs…</p>';
     if (propertyPane) propertyPane.innerHTML = '<p class="empty-note">Loading your sniper watches…</p>';
     if (trackerPane) trackerPane.innerHTML = '<p class="empty-note">Loading your competitor watches…</p>';
+    if (watchdogPane) watchdogPane.innerHTML = '<p class="empty-note">Loading your website watchdogs…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -4475,6 +4694,13 @@
           'tracker',
           'watches'
         ]);
+        const watchdogRaw = pickArray(source, [
+          'site_watchdog',
+          'site_watchdogs',
+          'website_watchdog',
+          'watchdog_jobs',
+          'watchdog'
+        ]);
         const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
         const stockExtra = [];
         const b2bExtra = [];
@@ -4483,12 +4709,15 @@
         const reviewExtra = [];
         const propertyExtra = [];
         const trackerExtra = [];
+        const watchdogExtra = [];
 
         combined.forEach(function (item) {
           const kind = String(
             (item && (item.agent || item.agent_id || item.type || item.kind)) || ''
           ).toLowerCase();
-          if (kind.indexOf('track') !== -1 || kind.indexOf('monitor') !== -1) {
+          if (kind.indexOf('watchdog') !== -1 || kind.indexOf('uptime') !== -1) {
+            watchdogExtra.push(item);
+          } else if (kind.indexOf('track') !== -1 || kind.indexOf('monitor') !== -1) {
             trackerExtra.push(item);
           } else if (kind.indexOf('property') !== -1 || kind.indexOf('scout') !== -1) {
             propertyExtra.push(item);
@@ -4516,6 +4745,7 @@
         historyState.review = reviewRaw.concat(reviewExtra).map(normalizeReviewJob);
         historyState.property = propertyRaw.concat(propertyExtra).map(normalizePropertyJob);
         historyState.tracker = trackerRaw.concat(trackerExtra).map(normalizeTrackerJob);
+        historyState.watchdog = watchdogRaw.concat(watchdogExtra).map(normalizeWatchdogJob);
 
         /* Fall back to the locally cached activations when the server has
            nothing recorded yet for this browser. */
@@ -4539,6 +4769,7 @@
         historyState.review = sortNewestFirst(historyState.review, 'created');
         historyState.property = sortNewestFirst(historyState.property, 'created');
         historyState.tracker = sortNewestFirst(historyState.tracker, 'created');
+        historyState.watchdog = sortNewestFirst(historyState.watchdog, 'created');
 
         historyState.loaded = true;
         paintHistory();
@@ -5568,9 +5799,21 @@
       b2b: [],
       invoice: [],
       enricher: [],
-      review: []
+      review: [],
+      property: [],
+      tracker: [],
+      watchdog: []
     };
-    historyPages = { stock: 1, b2b: 1, invoice: 1, enricher: 1, review: 1 };
+    historyPages = {
+      stock: 1,
+      b2b: 1,
+      invoice: 1,
+      enricher: 1,
+      review: 1,
+      property: 1,
+      tracker: 1,
+      watchdog: 1
+    };
     saveState();
 
     clearAuthSession();
@@ -6162,6 +6405,13 @@
     $$('[data-open-competitor]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         openCompetitorTrackerModal();
+      });
+    });
+
+    /* Website Watchdog (Worker #8): launch */
+    $$('[data-open-watchdog]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openWatchdogModal();
       });
     });
 
@@ -13441,6 +13691,400 @@
         }
         updateCtQuote();
         console.warn('[LiteWork] Competitor Tracker start failed.', err);
+      });
+  }
+
+  /* ========================================================================
+     WORKER #8 · WEBSITE UPTIME, SSL & BROKEN-LINK WATCHDOG
+     ======================================================================== */
+  let wdgStarting = false;
+  let wdgThresholdMs = 3500;
+
+  function wdgRows() {
+    const rows = [];
+    $$('#wdgRows [data-wdg-row]').forEach(function (row) {
+      const urlEl = row.querySelector('[data-wdg-url]');
+      const labelEl = row.querySelector('[data-wdg-label]');
+      rows.push({
+        url: urlEl ? String(urlEl.value || '').trim() : '',
+        label: labelEl ? String(labelEl.value || '').trim() : ''
+      });
+    });
+    return rows;
+  }
+
+  function updateWdgQuote() {
+    const rows = wdgRows();
+    const valid = rows.filter(function (row) { return isHttpUrl(row.url); }).length;
+    const rowCount = $$('#wdgRows [data-wdg-row]').length;
+
+    const availableEl = $('#wdgAvailable');
+    if (availableEl) availableEl.textContent = state.credits + ' Credits';
+
+    const countEl = $('#wdgSiteCount');
+    if (countEl) {
+      countEl.textContent = valid + ' / ' + WDG_MAX_URLS;
+      countEl.classList.toggle('is-zero', valid === 0);
+    }
+
+    const totalEl = $('#wdgCost');
+    if (totalEl) totalEl.textContent = WDG_CREDITS + ' Credits';
+
+    const addBtn = $('#wdgAddBtn');
+    if (addBtn) {
+      const full = rowCount >= WDG_MAX_URLS;
+      addBtn.disabled = full;
+      addBtn.textContent = full ? 'Maximum ' + WDG_MAX_URLS + ' Sites' : '+ Add Website';
+    }
+
+    const hint = $('#wdgCountHint');
+    if (hint) hint.textContent = rowCount + ' of ' + WDG_MAX_URLS;
+
+    const shortfall = WDG_CREDITS - state.credits;
+    const shortEl = $('#wdgShortfall');
+    if (shortEl) {
+      if (valid > 0 && shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this watchdog. Top up credits to continue.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+
+    const btn = $('#wdgStartBtn');
+    if (btn) {
+      btn.disabled = wdgStarting || valid === 0;
+      btn.textContent = wdgStarting
+        ? 'Running Day-0 Health Check…'
+        : 'Confirm & Spend ' + WDG_CREDITS + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog';
+    }
+  }
+
+  function addWdgRow(url, label) {
+    const rowsWrap = $('#wdgRows');
+    if (!rowsWrap) return;
+    if ($$('#wdgRows [data-wdg-row]').length >= WDG_MAX_URLS) {
+      toast('Up to ' + WDG_MAX_URLS + ' websites per watchdog.', 'warn');
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'ct-row';
+    row.setAttribute('data-wdg-row', '');
+    row.innerHTML =
+      '<input type="url" data-wdg-url autocomplete="off" spellcheck="false" ' +
+      'placeholder="https://yourcompany.com" />' +
+      '<input type="text" data-wdg-label autocomplete="off" placeholder="Label (e.g. Main Site, Shop)" />' +
+      '<button type="button" class="rw-remove" data-wdg-remove aria-label="Remove website">×</button>';
+    rowsWrap.appendChild(row);
+
+    const urlInput = row.querySelector('[data-wdg-url]');
+    const labelInput = row.querySelector('[data-wdg-label]');
+    if (urlInput) {
+      urlInput.value = url || '';
+      urlInput.addEventListener('input', updateWdgQuote);
+    }
+    if (labelInput) {
+      labelInput.value = label || '';
+      labelInput.addEventListener('input', updateWdgQuote);
+    }
+    const removeBtn = row.querySelector('[data-wdg-remove]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        if ($$('#wdgRows [data-wdg-row]').length <= 1) return;
+        row.parentNode.removeChild(row);
+        updateWdgQuote();
+      });
+    }
+
+    updateWdgQuote();
+    if (urlInput && !url) urlInput.focus();
+  }
+
+  function openWatchdogModal() {
+    if (!requireAuth({ action: 'watchdog' })) return;
+
+    wdgStarting = false;
+    wdgThresholdMs = 3500;
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Website Uptime, SSL &amp; Broken-Link Watchdog</h2>' +
+      '<p class="modal-sub">Daily monitoring for up to ' + WDG_MAX_URLS +
+      ' live websites · ' + WDG_CREDITS + ' credits / ' + WDG_DAYS + ' days</p>' +
+      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="wdgAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Sites</span>' +
+      '<span class="calc-value is-zero" id="wdgSiteCount">0 / ' + WDG_MAX_URLS + '</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Duration</span>' +
+      '<span class="calc-value">' + WDG_DAYS + ' Days</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="wdgCost">' + WDG_CREDITS + ' Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="watchdogForm" novalidate>' +
+      '<div class="modal-section"><h3>Websites to monitor</h3>' +
+      '<span class="fine">1–' + WDG_MAX_URLS + ' live URLs</span></div>' +
+      '<div class="ct-rows" id="wdgRows"></div>' +
+      '<div class="rw-add-row">' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="wdgAddBtn">+ Add Website</button>' +
+      '<span class="fine" id="wdgCountHint">1 of ' + WDG_MAX_URLS + '</span>' +
+      '</div>' +
+      '<div class="wdg-options">' +
+      '<label class="wdg-check">' +
+      '<input type="checkbox" id="wdgBrokenLinks" checked />' +
+      '<span>Scan for broken checkout, contact &amp; WhatsApp links</span>' +
+      '</label>' +
+      '<div class="wdg-threshold-row">' +
+      '<span class="wdg-threshold-label">Slow-load alert threshold</span>' +
+      '<div class="wdg-threshold-pills" role="radiogroup" aria-label="Slow-load alert threshold">' +
+      '<button type="button" class="wdg-pill is-active" data-wdg-threshold="3500" role="radio" aria-checked="true">3.5s</button>' +
+      '<button type="button" class="wdg-pill" data-wdg-threshold="5000" role="radio" aria-checked="false">5s</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="field"><label for="wdgEmail">Delivery email</label>' +
+      '<input type="email" id="wdgEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
+      '<p class="ct-note">Runs an instant Day-0 health check now, then monitors every day at 10:00 MYT for ' +
+      WDG_DAYS + ' days. Alerts are emailed only when downtime, expiring SSL, slow loads, or broken links are found.</p>' +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="watchdogFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="wdgShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="wdgStartBtn" disabled>' +
+      'Confirm &amp; Spend ' + WDG_CREDITS + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog</button>' +
+      '<p class="fine">Credits are deducted immediately. Daily watchdog checks run automatically.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    const addBtn = $('#wdgAddBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        addWdgRow('');
+      });
+    }
+
+    $$('[data-wdg-threshold]').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        wdgThresholdMs = Number(pill.getAttribute('data-wdg-threshold')) || 3500;
+        $$('[data-wdg-threshold]').forEach(function (other) {
+          const on = other === pill;
+          other.classList.toggle('is-active', on);
+          other.setAttribute('aria-checked', String(on));
+        });
+      });
+    });
+
+    const form = $('#watchdogForm');
+    if (form) form.addEventListener('submit', handleWatchdogStart);
+
+    addWdgRow('');
+  }
+
+  function renderWatchdogDay0Html(sites, fallbackUrls, lastStatus) {
+    const list =
+      sites && sites.length
+        ? sites
+        : fallbackUrls.map(function (row) {
+            return {
+              url: row.url,
+              label: row.label,
+              status: lastStatus || 'healthy',
+              responseMs: null,
+              sslDaysLeft: null,
+              brokenLinks: 0
+            };
+          });
+
+    return (
+      '<div class="wdg-report">' +
+      list
+        .map(function (site) {
+          const meta = watchdogStatusMeta(site.status);
+          const statusClass =
+            site.status === 'down'
+              ? 'is-down'
+              : site.status === 'warning'
+              ? 'is-warning'
+              : 'is-healthy';
+          const msText = site.responseMs !== null ? site.responseMs + ' ms' : 'OK';
+          const sslText =
+            site.sslDaysLeft !== null ? 'SSL: ' + site.sslDaysLeft + ' days left' : 'SSL: Checked';
+          const brokenText = 'Broken links: ' + (Number(site.brokenLinks) || 0);
+          return (
+            '<div class="wdg-report-site">' +
+            '<div class="wdg-report-top">' +
+            '<strong class="wdg-report-url">' + escapeHtml(site.label || site.url) + '</strong>' +
+            '<span class="wdg-status-pill ' + statusClass + '">' + escapeHtml(meta.label) + '</span>' +
+            '</div>' +
+            (site.label ? '<span class="wdg-report-sub">' + escapeHtml(site.url) + '</span>' : '') +
+            '<div class="wdg-report-metrics">' +
+            '<span>' + escapeHtml(msText) + '</span>' +
+            '<span>' + escapeHtml(sslText) + '</span>' +
+            '<span>' + escapeHtml(brokenText) + '</span>' +
+            '</div>' +
+            '</div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function handleWatchdogStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'watchdog' });
+      return;
+    }
+
+    const errEl = $('#watchdogFormError');
+    const rows = wdgRows();
+    const validRows = rows.filter(function (row) { return isHttpUrl(row.url); });
+
+    if (!rows.length) {
+      if (errEl) errEl.textContent = 'Add at least one website URL to continue.';
+      return;
+    }
+    if (validRows.length !== rows.length) {
+      if (errEl) errEl.textContent = 'Every website URL must start with http:// or https://.';
+      return;
+    }
+    if (rows.length > WDG_MAX_URLS) {
+      if (errEl) errEl.textContent = 'Maximum ' + WDG_MAX_URLS + ' websites per watchdog.';
+      return;
+    }
+    if (state.credits < WDG_CREDITS) {
+      const shortfall = WDG_CREDITS - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this watchdog. Top up credits to continue.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    wdgStarting = true;
+    updateWdgQuote();
+
+    const email = accountEmail();
+    const brokenEl = $('#wdgBrokenLinks');
+    const scanBrokenLinks = brokenEl ? !!brokenEl.checked : true;
+
+    apiFetch(
+      WDG_START_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          agent_id: WDG_AGENT_ID,
+          email: email,
+          urls: rows.map(function (row) { return row.url; }),
+          targets: rows,
+          url_labels: rows.map(function (row) { return row.label; }),
+          scan_broken_links: scanBrokenLinks,
+          slow_threshold_ms: wdgThresholdMs,
+          duration_days: WDG_DAYS,
+          days: WDG_DAYS,
+          max_urls: WDG_MAX_URLS,
+          credits: WDG_CREDITS,
+          credits_spent: WDG_CREDITS
+        })
+      },
+      60000
+    )
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          wdgStarting = false;
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to start a website watchdog.',
+            { action: 'watchdog' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            wdgStarting = false;
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this watchdog. Top up credits to continue.';
+            }
+            updateWdgQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const watchId = String(
+          outer.watch_id ||
+          outer.id ||
+          outer.job_id ||
+          inner.watch_id ||
+          inner.id ||
+          inner.job_id ||
+          'wdg_' + Date.now()
+        );
+        const displayId = String(outer.display_id || inner.display_id || watchId);
+        const lastStatus = String(
+          outer.last_status || inner.last_status || 'healthy'
+        ).toLowerCase();
+        const reportSites = normalizeWatchdogReport(
+          outer.last_report || inner.last_report
+        );
+
+        historyState.loaded = false;
+        wdgStarting = false;
+
+        const modalBody = $('#modalBody');
+        if (modalBody) {
+          modalBody.innerHTML =
+            '<h2 class="modal-title" id="modalTitle">Day-0 Health Summary</h2>' +
+            '<div class="watch-confirm">' +
+            '<h3>✓ 30-Day Watchdog active for ' + rows.length + ' site' +
+            (rows.length === 1 ? '' : 's') + '</h3>' +
+            '<div class="watch-confirm-id">Reference: <code>' +
+            escapeHtml(displayId) + '</code></div>' +
+            renderWatchdogDay0Html(reportSites, rows, lastStatus) +
+            '<p>Daily checks run automatically for ' + WDG_DAYS +
+            ' days. Alerts will be emailed to ' + escapeHtml(email) + ' if issues appear.</p>' +
+            '<div class="modal-actions">' +
+            '<a class="btn btn-primary" href="#plans" data-modal-close>Manage My Plan (#plans)</a>' +
+            '</div>' +
+            '</div>';
+        }
+
+        toast('Website Watchdog started — Day-0 health report ready.', 'success');
+      })
+      .catch(function (err) {
+        wdgStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the website watchdog. Please try again.';
+        }
+        updateWdgQuote();
+        console.warn('[LiteWork] Website Watchdog start failed.', err);
       });
   }
 

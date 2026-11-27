@@ -558,6 +558,17 @@ window.CONFIG = {
   COMPETITOR_TRACKER_START_URL:
     'https://n8n.20.205.96.122.sslip.io/webhook/competitor-tracker-start',
 
+  /* --- Website Watchdog (8th live worker) ---------------------------------
+     5 credits / 30 days · daily uptime, SSL expiry, slow-load & broken-link
+     checks for up to 3 URLs. */
+  SITE_WATCHDOG_AGENT_ID: 'website-watchdog',
+  SITE_WATCHDOG_AGENT_NAME: 'Website Uptime, SSL & Broken-Link Watchdog',
+  SITE_WATCHDOG_CREDITS: 5,
+  SITE_WATCHDOG_DAYS: 30,
+  SITE_WATCHDOG_MAX_URLS: 3,
+  SITE_WATCHDOG_START_URL:
+    'https://n8n.20.205.96.122.sslip.io/webhook/site-watchdog-start',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
