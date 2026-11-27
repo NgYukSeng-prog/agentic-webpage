@@ -704,6 +704,7 @@
     'enricher-results': 'Lead Enricher Results — LiteWork',
     'review-results': 'Review Miner Results — LiteWork',
     'property-results': 'Property Sniper Results — LiteWork',
+    'watchdog-results': 'Website Watchdog Report — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -721,7 +722,8 @@
       enricherJob: null,
       reviewJob: null,
       propertyJob: null,
-      trackerJob: null
+      trackerJob: null,
+      watchdogJob: null
     };
   }
 
@@ -769,6 +771,10 @@
         trackerJob:
           parsed.trackerJob && typeof parsed.trackerJob === 'object'
             ? parsed.trackerJob
+            : null,
+        watchdogJob:
+          parsed.watchdogJob && typeof parsed.watchdogJob === 'object'
+            ? parsed.watchdogJob
             : null
       };
     } catch (err) {
@@ -788,7 +794,8 @@
           enricherJob: state.enricherJob || null,
           reviewJob: state.reviewJob || null,
           propertyJob: state.propertyJob || null,
-          trackerJob: state.trackerJob || null
+          trackerJob: state.trackerJob || null,
+          watchdogJob: state.watchdogJob || null
         })
       );
     } catch (err) {
@@ -1921,67 +1928,77 @@
 
     const choices = AVATARS.map(function (avatar) {
       return (
-        '<button type="button" class="avatar-choice' +
+        '<button type="button" class="acc-avatar-tile' +
         (avatar.id === currentId ? ' is-selected' : '') +
         '" data-avatar-choice="' + avatar.id + '" aria-pressed="' +
         (avatar.id === currentId ? 'true' : 'false') + '">' +
         avatarMarkup(avatar.id, 'avatar--picker') +
-        '<span class="avatar-choice-label">' + escapeHtml(avatar.label) + '</span>' +
-        '<span class="avatar-choice-id">' + escapeHtml(avatar.id) + '</span>' +
+        '<span class="acc-avatar-name">' + escapeHtml(avatar.label) + '</span>' +
         '</button>'
       );
     }).join('');
 
+    const currentAvatar = AVATARS.filter(function (a) { return a.id === currentId; })[0] || AVATARS[0];
+    const displayName = displayUserName(auth.user);
+    const userEmail = auth.user.email || '—';
+
     openModal(
-      '<div class="account-modal">' +
-        '<h2 class="modal-title" id="modalTitle">Account Settings</h2>' +
-        '<p class="modal-sub">Your identity, live credit balance and animated profile picture.</p>' +
-        '<div class="account-card">' +
-        '  <div class="account-card-main">' +
-        '    <span class="account-card-label">Signed in as</span>' +
-        '    <strong id="accountEmail">' + escapeHtml(auth.user.email || '—') + '</strong>' +
-        '    <span class="account-card-name">' + escapeHtml(displayUserName(auth.user)) + '</span>' +
-        '  </div>' +
-        '  <div class="account-card-credits">' +
-        '    <span class="account-card-label">Credits</span>' +
-        '    <strong><span data-credit-count>' + state.credits + '</span></strong>' +
-        '  </div>' +
-        '</div>' +
-        '<button type="button" class="btn btn-ghost btn-block account-history-btn" id="accountHistoryBtn">' +
-        'View Subscriptions & History</button>' +
-        '<div class="avatar-section-head">' +
-        '  <h3>Choose your avatar</h3>' +
-        '  <span>5 shapes · subtle looping animation</span>' +
-        '</div>' +
-        '<div class="avatar-picker" id="avatarPicker" role="group" aria-label="Profile avatar">' +
-        choices +
-        '</div>' +
-        '<div class="avatar-preview" id="avatarPreviewRow">' +
-        '  <span class="avatar-preview-art" id="avatarPreview">' +
+      '<div class="acc-modal">' +
+        '<div class="acc-hero">' +
+        '  <div class="acc-hero-avatar" id="avatarPreview">' +
         avatarMarkup(currentId, 'avatar--preview') +
-        '  </span>' +
-        '  <span class="avatar-preview-copy">' +
-        '    <strong id="avatarPreviewName">' +
-        escapeHtml(
-          (AVATARS.filter(function (a) { return a.id === currentId; })[0] || {}).label || 'Mochi'
-        ) +
-        '</strong>' +
-        '    <span>Preview updates instantly. Save to sync with Neon.</span>' +
-        '  </span>' +
-        '</div>' +
-        '<p class="avatar-error" id="avatarError" role="alert"></p>' +
-        '<div class="account-session">' +
-        '  <div class="account-session-copy">' +
-        '    <strong>Session</strong>' +
-        '    <span>Signed in on this device. Logging out clears your token and local job history.</span>' +
         '  </div>' +
-        '  <button type="button" class="btn btn-danger-ghost" id="accountLogoutBtn">Log Out</button>' +
+        '  <div class="acc-hero-info">' +
+        '    <div class="acc-hero-top">' +
+        '      <h2 class="acc-hero-name" id="modalTitle">' + escapeHtml(displayName) + '</h2>' +
+        '      <span class="acc-member-pill">Verified Account</span>' +
+        '    </div>' +
+        '    <p class="acc-hero-email" id="accountEmail">' + escapeHtml(userEmail) + '</p>' +
+        '  </div>' +
         '</div>' +
-        '<div class="modal-actions account-actions">' +
-        '  <button type="button" class="btn btn-ghost" data-modal-close>Cancel</button>' +
-        '  <button type="button" class="btn btn-primary" id="avatarSaveBtn">Save avatar</button>' +
+
+        '<div class="acc-stats">' +
+        '  <div class="acc-stat-card">' +
+        '    <div class="acc-stat-copy">' +
+        '      <span class="acc-stat-label">Available Credits</span>' +
+        '      <strong class="acc-stat-value"><span data-credit-count>' + state.credits + '</span> <small>cr</small></strong>' +
+        '    </div>' +
+        '    <a class="btn btn-primary btn-sm acc-stat-btn" href="#topup" data-modal-close>Top Up Credits</a>' +
+        '  </div>' +
+        '  <div class="acc-stat-card">' +
+        '    <div class="acc-stat-copy">' +
+        '      <span class="acc-stat-label">Live Activity</span>' +
+        '      <strong class="acc-stat-sub">Runs, watches &amp; history</strong>' +
+        '    </div>' +
+        '    <button type="button" class="btn btn-ghost btn-sm acc-stat-btn" id="accountHistoryBtn">Subscriptions &amp; History →</button>' +
+        '  </div>' +
         '</div>' +
-        '</div>',
+
+        '<div class="acc-section">' +
+        '  <div class="acc-section-head">' +
+        '    <div>' +
+        '      <h3>Avatar</h3>' +
+        '      <p>Animated SVG profile badge synced across devices</p>' +
+        '    </div>' +
+        '    <span class="acc-avatar-active" id="avatarPreviewName">' + escapeHtml(currentAvatar.label) + '</span>' +
+        '  </div>' +
+        '  <div class="acc-avatar-grid" id="avatarPicker" role="group" aria-label="Profile avatar">' +
+        choices +
+        '  </div>' +
+        '  <p class="avatar-error" id="avatarError" role="alert"></p>' +
+        '  <div class="acc-save-row">' +
+        '    <button type="button" class="btn btn-primary" id="avatarSaveBtn">Save Avatar</button>' +
+        '  </div>' +
+        '</div>' +
+
+        '<div class="acc-footer">' +
+        '  <div class="acc-footer-meta">' +
+        '    <button type="button" class="acc-reset-link" id="accountResetBtn">Reset Password</button>' +
+        '    <span class="acc-footer-note">Email-verified accounts can request a 6-digit reset code.</span>' +
+        '  </div>' +
+        '  <button type="button" class="btn btn-danger-outline btn-sm" id="accountLogoutBtn">Log Out</button>' +
+        '</div>' +
+      '</div>',
       true
     );
 
@@ -1999,6 +2016,11 @@
       if (name) name.textContent = avatar.label;
       const err = $('#avatarError');
       if (err) err.textContent = '';
+      const saveBtn = $('#avatarSaveBtn');
+      if (saveBtn) {
+        saveBtn.classList.remove('is-saved');
+        saveBtn.textContent = 'Save Avatar';
+      }
     };
 
     $$('#avatarPicker [data-avatar-choice]').forEach(function (btn) {
@@ -2006,6 +2028,17 @@
         applyChoice(btn.getAttribute('data-avatar-choice'));
       });
     });
+
+    const resetBtn = $('#accountResetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        const email = auth.user && auth.user.email ? String(auth.user.email) : '';
+        closeModal(false);
+        openAuthModal('login', 'Request a 6-digit verification code to reset your password.');
+        authResetEmail = email;
+        openForgotStep('request');
+      });
+    }
 
     const logoutBtn = $('#accountLogoutBtn');
     if (logoutBtn) {
@@ -2064,13 +2097,16 @@
             auth.user.avatar_id =
               (body && (body.avatar_id || (body.user && body.user.avatar_id))) || selectedId;
             renderAuthUI();
-            closeModal();
+            saveBtn.disabled = false;
+            saveBtn.classList.add('is-saved');
+            saveBtn.textContent = '✓ Avatar Saved';
             toast('Avatar updated — it will follow you across devices.', 'success');
           });
         })
         .catch(function (error) {
           saveBtn.disabled = false;
-          saveBtn.textContent = 'Save avatar';
+          saveBtn.classList.remove('is-saved');
+          saveBtn.textContent = 'Save Avatar';
           if (errEl) {
             errEl.textContent =
               error && error.name === 'AbortError'
@@ -2210,6 +2246,7 @@
     'enricher-results',
     'review-results',
     'property-results',
+    'watchdog-results',
     'success'
   ];
 
@@ -2235,7 +2272,8 @@
         route === 'invoice-results' ||
         route === 'enricher-results' ||
         route === 'review-results' ||
-        route === 'property-results';
+        route === 'property-results' ||
+        route === 'watchdog-results';
       const active = r === route || (agentRoutes && r === 'agents');
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
@@ -2274,6 +2312,7 @@
     if (route === 'enricher-results') renderLeResults();
     if (route === 'review-results') renderRwResults();
     if (route === 'property-results') renderPropertyResults();
+    if (route === 'watchdog-results') renderWatchdogResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -3811,26 +3850,14 @@
       if (Array.isArray(rawReport.sites)) list = rawReport.sites;
       else if (Array.isArray(rawReport.results)) list = rawReport.results;
       else if (Array.isArray(rawReport.checks)) list = rawReport.checks;
-      else if (rawReport.url || rawReport.status) list = [rawReport];
+      else if (rawReport.url || rawReport.status || rawReport.site_status) list = [rawReport];
     }
     return list
       .filter(function (item) { return item && typeof item === 'object'; })
       .map(function (site) {
         const rawStatus = String(
-          firstValue(site, ['status', 'health', 'state'], 'healthy')
+          firstValue(site, ['status', 'site_status', 'health', 'state'], 'healthy')
         ).toLowerCase();
-        const status =
-          rawStatus.indexOf('down') !== -1 ||
-          rawStatus.indexOf('fail') !== -1 ||
-          rawStatus.indexOf('error') !== -1 ||
-          rawStatus === 'red'
-            ? 'down'
-            : rawStatus.indexOf('warn') !== -1 ||
-              rawStatus.indexOf('slow') !== -1 ||
-              rawStatus.indexOf('degrad') !== -1 ||
-              rawStatus === 'amber'
-            ? 'warning'
-            : 'healthy';
         const sslRaw = firstValue(site, ['ssl_days_left', 'ssl_days', 'ssl_expiry_days'], null);
         const msRaw = firstValue(site, ['response_ms', 'latency_ms', 'load_ms'], null);
         const httpRaw = firstValue(site, ['http_status', 'status_code', 'code'], null);
@@ -3839,11 +3866,12 @@
         const brokenList = Array.isArray(brokenRaw)
           ? brokenRaw
               .map(function (entry) {
-                if (typeof entry === 'string') return { url: entry, status: null, reason: '' };
+                if (typeof entry === 'string') return { url: entry, anchor: '', status: null, reason: '' };
                 if (entry && typeof entry === 'object') {
                   const code = firstValue(entry, ['http_status', 'status_code', 'status', 'code'], null);
                   return {
                     url: String(firstValue(entry, ['url', 'href', 'link', 'target'], '')),
+                    anchor: String(firstValue(entry, ['anchor', 'anchor_text', 'text', 'label'], '')),
                     status: code == null || code === '' ? null : String(code),
                     reason: String(firstValue(entry, ['reason', 'error', 'message'], ''))
                   };
@@ -3876,6 +3904,34 @@
 
         const responseMs = msRaw == null || msRaw === '' ? null : Math.round(Number(msRaw) || 0);
         const sslDaysLeft = sslRaw == null || sslRaw === '' ? null : Math.round(Number(sslRaw) || 0);
+        const hasBroken = brokenList.length > 0 || brokenCount > 0;
+        const hasWarnFlags =
+          warnings.length > 0 ||
+          site.is_slow === true ||
+          site.ssl_warning === true ||
+          (sslDaysLeft !== null && sslDaysLeft <= 14) ||
+          (httpStatus !== null && httpStatus >= 400 && httpStatus < 500);
+
+        let status = 'healthy';
+        if (
+          rawStatus.indexOf('down') !== -1 ||
+          rawStatus.indexOf('fail') !== -1 ||
+          rawStatus.indexOf('error') !== -1 ||
+          rawStatus === 'red' ||
+          httpStatus === 0 ||
+          (httpStatus !== null && httpStatus >= 500)
+        ) {
+          status = 'down';
+        } else if (
+          rawStatus.indexOf('warn') !== -1 ||
+          rawStatus.indexOf('slow') !== -1 ||
+          rawStatus.indexOf('degrad') !== -1 ||
+          rawStatus === 'amber' ||
+          hasBroken ||
+          hasWarnFlags
+        ) {
+          status = 'warning';
+        }
 
         return {
           url: String(firstValue(site, ['url', 'site', 'target'], '')),
@@ -3889,6 +3945,16 @@
           warnings: warnings
         };
       });
+  }
+
+  function deriveWatchdogOverallStatus(reportSites, rawStatus) {
+    const sites = Array.isArray(reportSites) ? reportSites : [];
+    if (sites.some(function (s) { return s.status === 'down'; })) return 'down';
+    if (sites.some(function (s) { return s.status === 'warning'; })) return 'warning';
+    const raw = String(rawStatus || 'healthy').toLowerCase();
+    if (raw.indexOf('down') !== -1 || raw.indexOf('error') !== -1 || raw === 'red') return 'down';
+    if (raw.indexOf('warn') !== -1 || raw.indexOf('slow') !== -1 || raw === 'amber') return 'warning';
+    return 'healthy';
   }
 
   function normalizeWatchdogJob(raw) {
@@ -3932,15 +3998,10 @@
       ''
     );
     const reportSites = normalizeWatchdogReport(job.last_report || job.report);
-    const rawStatus = String(
+    const lastStatus = deriveWatchdogOverallStatus(
+      reportSites,
       firstValue(job, ['last_status', 'health_status', 'status'], 'healthy')
-    ).toLowerCase();
-    const lastStatus =
-      rawStatus.indexOf('down') !== -1 || rawStatus.indexOf('error') !== -1 || rawStatus === 'red'
-        ? 'down'
-        : rawStatus.indexOf('warn') !== -1 || rawStatus.indexOf('slow') !== -1 || rawStatus === 'amber'
-        ? 'warning'
-        : 'healthy';
+    );
     let sslDaysLeft = firstValue(job, ['ssl_days_left', 'min_ssl_days'], null);
     if ((sslDaysLeft === null || sslDaysLeft === '') && reportSites.length) {
       const sslVals = reportSites
@@ -4376,8 +4437,9 @@
     if (Array.isArray(site.brokenList) && site.brokenList.length) {
       site.brokenList.forEach(function (item) {
         const codePart = item.status ? ' (HTTP ' + item.status + ')' : '';
+        const anchorPart = item.anchor ? ' ["' + item.anchor + '"]' : '';
         const reasonPart = !item.status && item.reason ? ' (' + item.reason + ')' : '';
-        reasons.push('Broken link' + codePart + reasonPart + ': ' + (item.url || 'unknown URL'));
+        reasons.push('Broken link' + codePart + reasonPart + anchorPart + ': ' + (item.url || 'unknown URL'));
       });
     } else if (site.brokenLinks > 0) {
       reasons.push(site.brokenLinks + ' broken link' + (site.brokenLinks === 1 ? '' : 's') + ' detected');
@@ -4473,6 +4535,10 @@
       '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
       '<div><dt>Watch ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
       '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-watchdog-view="' +
+      escapeHtml(job.job_id || job.display_id) + '">View Report</button>' +
+      '</div>' +
       '</article>'
     );
   }
@@ -5908,6 +5974,9 @@
     state.invoiceJob = null;
     state.enricherJob = null;
     state.reviewJob = null;
+    state.propertyJob = null;
+    state.trackerJob = null;
+    state.watchdogJob = null;
     historyState = {
       loaded: false,
       loading: false,
@@ -6128,7 +6197,10 @@
             kind === 'b2b' ||
             kind === 'invoice' ||
             kind === 'enricher' ||
-            kind === 'review'
+            kind === 'review' ||
+            kind === 'property' ||
+            kind === 'tracker' ||
+            kind === 'watchdog'
           ) {
             const list = historyState[kind] || [];
             const total = list.length;
@@ -6206,6 +6278,12 @@
         const propDownload = event.target.closest('[data-property-download]');
         if (propDownload) {
           downloadPropExcel(propDownload.getAttribute('data-property-download'));
+          return;
+        }
+
+        const wdgView = event.target.closest('[data-watchdog-view]');
+        if (wdgView) {
+          openWatchdogHistoryJob(wdgView.getAttribute('data-watchdog-view'));
         }
       });
     }
@@ -13791,7 +13869,7 @@
             '<div class="watch-confirm-id">Watch ID <code>' +
             escapeHtml(displayId || watchId) + '</code></div>' +
             '<div class="modal-actions">' +
-            '<a class="btn btn-primary" href="#plans" data-modal-close>Manage My Plan (#plans)</a>' +
+            '<a class="btn btn-primary" href="#plans" data-modal-close>View in Manage My Plan →</a>' +
             '</div>' +
             '</div>';
         }
@@ -14177,29 +14255,55 @@
         const reportSites = normalizeWatchdogReport(
           outer.last_report || inner.last_report
         );
+        const overallStatus = deriveWatchdogOverallStatus(
+          reportSites,
+          outer.last_status || inner.last_status || 'healthy'
+        );
+        const expiresAt = String(
+          outer.expires_at ||
+          inner.expires_at ||
+          new Date(Date.now() + WDG_DAYS * 86400000).toISOString()
+        );
 
+        state.watchdogJob = {
+          job_id: watchId,
+          display_id: displayId,
+          urls: rows.map(function (r) { return r.url; }),
+          urls_count: Number(outer.urls_count || inner.urls_count || rows.length) || rows.length,
+          credits_spent: Number(outer.credits_spent || inner.credits_spent || totalCredits) || totalCredits,
+          last_status: overallStatus,
+          last_report: reportSites.length
+            ? reportSites
+            : rows.map(function (r) {
+                return {
+                  url: r.url,
+                  label: r.label,
+                  status: overallStatus,
+                  httpStatus: null,
+                  responseMs: null,
+                  sslDaysLeft: null,
+                  brokenLinks: 0,
+                  brokenList: [],
+                  warnings: []
+                };
+              }),
+          email: email,
+          started_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          days_remaining: WDG_DAYS
+        };
+        saveState();
         historyState.loaded = false;
         wdgStarting = false;
 
-        const modalBody = $('#modalBody');
-        if (modalBody) {
-          modalBody.innerHTML =
-            '<h2 class="modal-title" id="modalTitle">Day-0 Health Summary</h2>' +
-            '<div class="watch-confirm">' +
-            '<h3>✓ 30-Day Watchdog active for ' + rows.length + ' site' +
-            (rows.length === 1 ? '' : 's') + '</h3>' +
-            '<div class="watch-confirm-id">Reference: <code>' +
-            escapeHtml(displayId) + '</code></div>' +
-            renderWatchdogDay0Html(reportSites, rows, lastStatus) +
-            '<p>Daily checks run automatically for ' + WDG_DAYS +
-            ' days. Alerts will be emailed to ' + escapeHtml(email) + ' if issues appear.</p>' +
-            '<div class="modal-actions">' +
-            '<a class="btn btn-primary" href="#plans" data-modal-close>Manage My Plan (#plans)</a>' +
-            '</div>' +
-            '</div>';
-        }
+        closeModal(false);
+        toast('Website Watchdog active — Day-0 health report ready.', 'success');
 
-        toast('Website Watchdog started — Day-0 health report ready.', 'success');
+        if (currentRoute() === 'watchdog-results') {
+          renderWatchdogResults();
+        } else {
+          window.location.hash = '#watchdog-results';
+        }
       })
       .catch(function (err) {
         wdgStarting = false;
@@ -14211,6 +14315,153 @@
         updateWdgQuote();
         console.warn('[LiteWork] Website Watchdog start failed.', err);
       });
+  }
+
+  function renderWatchdogResults() {
+    const empty = $('#watchdogEmpty');
+    const main = $('#watchdogMain');
+    if (!empty || !main) return;
+
+    const job = state.watchdogJob;
+    if (!job) {
+      empty.hidden = false;
+      main.hidden = true;
+      return;
+    }
+
+    empty.hidden = true;
+    main.hidden = false;
+
+    const sites = Array.isArray(job.last_report) && job.last_report.length
+      ? (typeof job.last_report[0].httpStatus !== 'undefined'
+          ? job.last_report
+          : normalizeWatchdogReport(job.last_report))
+      : (Array.isArray(job.urls) ? job.urls : []).map(function (u) {
+          return {
+            url: typeof u === 'string' ? u : String((u && u.url) || ''),
+            label: '',
+            status: job.last_status || 'healthy',
+            httpStatus: null,
+            responseMs: null,
+            sslDaysLeft: null,
+            brokenLinks: 0,
+            brokenList: [],
+            warnings: []
+          };
+        });
+
+    const overallStatus = deriveWatchdogOverallStatus(sites, job.last_status);
+    const overallMeta = watchdogStatusMeta(overallStatus);
+    const totalSites = Number(job.urls_count) || sites.length || 1;
+    const creditsSpent = Number(job.credits_spent) || wdgTotalCredits(totalSites);
+    const ref = job.display_id || job.job_id || '—';
+
+    const ringCard = $('#wdgRingCard');
+    if (ringCard) {
+      ringCard.classList.toggle('is-complete', overallStatus === 'healthy');
+      ringCard.classList.toggle('is-warning', overallStatus === 'warning');
+      ringCard.classList.toggle('is-down', overallStatus === 'down');
+    }
+
+    const ringFill = $('#wdgRingFill');
+    if (ringFill) ringFill.style.strokeDashoffset = '0';
+    const ringPct = $('#wdgRingPercent');
+    if (ringPct) ringPct.textContent = '100%';
+    const ringCount = $('#wdgRingCount');
+    if (ringCount) ringCount.textContent = totalSites + ' / ' + totalSites + ' sites checked · Day 0 active';
+
+    const statusBadge = $('#wdgStatusBadge');
+    if (statusBadge) {
+      statusBadge.classList.remove('is-ok', 'is-fail', 'is-pending', 'is-down');
+      statusBadge.classList.add(overallStatus === 'down' ? 'is-down' : overallStatus === 'warning' ? 'is-fail' : 'is-ok');
+      const txt = statusBadge.querySelector('.webhook-text');
+      if (txt) txt.textContent = WDG_DAYS + '-Day Watchdog Active · Daily 06:00 MYT';
+    }
+
+    const emailNote = $('#wdgEmailNote');
+    if (emailNote) {
+      const em = job.email || accountEmail() || 'your account email';
+      emailNote.textContent =
+        'Daily checks run at 06:00 MYT for ' + WDG_DAYS + ' days. Alerts are emailed to ' + em + ' only when issues appear.';
+    }
+
+    const metaEl = $('#wdgJobMeta');
+    if (metaEl) metaEl.textContent = 'Reference ' + ref + ' · Checked ' + fmtMYT(job.started_at || new Date().toISOString());
+
+    const summary = $('#wdgJobSummary');
+    if (summary) {
+      summary.innerHTML =
+        '<div><dt>Reference</dt><dd><code>' + escapeHtml(ref) + '</code></dd></div>' +
+        '<div><dt>Sites Monitored</dt><dd>' + totalSites + ' site' + (totalSites === 1 ? '' : 's') + '</dd></div>' +
+        '<div><dt>Credits Spent</dt><dd>' + creditsSpent + ' credits</dd></div>' +
+        '<div><dt>Schedule</dt><dd>Daily 06:00 MYT · ' + WDG_DAYS + ' Days</dd></div>' +
+        '<div><dt>Overall Status</dt><dd><span class="hist-badge ' + overallMeta.tone + '">' +
+        escapeHtml(overallMeta.label) + '</span></dd></div>';
+    }
+
+    const pill = $('#wdgPreviewPill');
+    if (pill) pill.textContent = totalSites + ' site' + (totalSites === 1 ? '' : 's');
+
+    const tbody = $('#wdgTable tbody');
+    if (tbody) {
+      tbody.innerHTML = sites.length
+        ? sites
+            .map(function (site) {
+              const meta = watchdogStatusMeta(site.status);
+              const httpText = site.httpStatus !== null ? String(site.httpStatus) : '—';
+              const msText = site.responseMs !== null ? site.responseMs.toLocaleString() + ' ms' : '—';
+              const sslText = site.sslDaysLeft !== null ? site.sslDaysLeft + ' days' : '—';
+              const reasons = watchdogSiteReasons(site);
+              const issuesHtml = reasons.length
+                ? '<ul class="wdg-table-issues">' +
+                  reasons.map(function (r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') +
+                  '</ul>'
+                : '<span class="wdg-no-issues">No issues found</span>';
+              return (
+                '<tr>' +
+                '<td class="cell-strong">' +
+                escapeHtml(site.label || site.url) +
+                (site.label ? '<span class="wdg-table-url">' + escapeHtml(site.url) + '</span>' : '') +
+                '</td>' +
+                '<td><span class="hist-badge ' + meta.tone + '">' + escapeHtml(meta.label) + '</span></td>' +
+                '<td>' + escapeHtml(httpText) + '</td>' +
+                '<td>' + escapeHtml(msText) + '</td>' +
+                '<td>' + escapeHtml(sslText) + '</td>' +
+                '<td>' + issuesHtml + '</td>' +
+                '</tr>'
+              );
+            })
+            .join('')
+        : '<tr><td colspan="6">No site check details returned.</td></tr>';
+    }
+  }
+
+  function openWatchdogHistoryJob(watchId) {
+    const ref = String(watchId || '').trim();
+    if (!ref) return;
+    const known = findHistoryJob(historyState.watchdog, ref);
+    if (!known) return;
+
+    state.watchdogJob = {
+      job_id: known.job_id,
+      display_id: known.display_id || known.job_id,
+      urls: known.urls || [],
+      urls_count: known.urlsCount || (known.urls ? known.urls.length : 1),
+      credits_spent: known.credits || WDG_CREDITS_PER_SITE,
+      last_status: known.lastStatus,
+      last_report: known.reportSites || [],
+      email: accountEmail(),
+      started_at: known.lastChecked || known.created || new Date().toISOString(),
+      expires_at: known.expiresAt || '',
+      days_remaining: known.daysLeft
+    };
+    saveState();
+
+    if (currentRoute() === 'watchdog-results') {
+      renderWatchdogResults();
+    } else {
+      window.location.hash = '#watchdog-results';
+    }
   }
 
   /* Returning to the tab should never wait for the next 2.5s tick. */

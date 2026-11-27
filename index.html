@@ -9,7 +9,7 @@
   <meta property="og:title" content="LiteWork — Your Low-Cost AI Workforce" />
   <meta property="og:description" content="Five live AI workers: a 07:00 MYT stock brief, a B2B Excel lead scraper, an Invoice OCR agent, a Website & Email Lead Enricher and a Competitor Review Miner. Pay as you go with credits." />
   <meta property="og:type" content="website" />
-  <link rel="stylesheet" href="styles.css?v=48" />
+  <link rel="stylesheet" href="styles.css?v=49" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322D3EE'/%3E%3Cstop offset='0.52' stop-color='%236366F1'/%3E%3Cstop offset='1' stop-color='%23A855F7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='1' y='1' width='30' height='30' rx='9' fill='url(%23g)'/%3E%3Cpath d='M19.4 4.6 9.2 17.4h4.55L12 26.9 23 14.2h-4.7z' fill='%2307131F'/%3E%3Ccircle cx='24.9' cy='7.4' r='1.05' fill='%23E0F2FE'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -2305,6 +2305,94 @@
     </section>
 
     <!-- ====================================================================
+         VIEW · WEBSITE WATCHDOG RESULTS
+         ==================================================================== -->
+    <section class="view" data-view="watchdog-results" id="view-watchdog-results">
+      <div class="container">
+        <a class="back-link" href="#agents">
+          <span aria-hidden="true">←</span> Back to AI Agents
+        </a>
+
+        <div class="page-head configure-head">
+          <span class="eyebrow">Website Watchdog · Worker #8</span>
+          <h1>Your Day-0 health report is ready.</h1>
+          <p>Daily 06:00 MYT uptime, SSL expiry, load speed &amp; broken-link checks for 30 days.</p>
+        </div>
+
+        <div class="panel" id="watchdogEmpty" hidden>
+          <div class="panel-head">
+            <h2>No website watchdog selected</h2>
+            <p>Start a 30-day Website Watchdog or open one from Manage My Plan to inspect its health report.</p>
+          </div>
+          <a class="btn btn-primary" href="#agents">Start 30-Day Watchdog</a>
+        </div>
+
+        <div id="watchdogMain" hidden>
+          <div class="scraper-grid">
+            <div class="ring-card" id="wdgRingCard">
+              <div class="ring-wrap">
+                <svg class="ring" viewBox="0 0 140 140" role="img" aria-label="Website Watchdog Day-0 health check status">
+                  <circle class="ring-track" cx="70" cy="70" r="58" />
+                  <circle class="ring-fill" id="wdgRingFill" cx="70" cy="70" r="58" transform="rotate(-90 70 70)" />
+                </svg>
+                <div class="ring-center">
+                  <strong id="wdgRingPercent">100%</strong>
+                  <span id="wdgRingCount">0 / 0 sites checked · Day 0 active</span>
+                </div>
+              </div>
+              <span class="webhook-badge is-ok" id="wdgStatusBadge">
+                <span class="webhook-dot" aria-hidden="true"></span>
+                <span class="webhook-text">30-Day Watchdog Active · Daily 06:00 MYT</span>
+              </span>
+              <p class="ring-hint" id="wdgRingRule">Daily 06:00 MYT · 30 Days · 5 credits / site</p>
+              <p class="ring-email" id="wdgEmailNote">Daily checks run at 06:00 MYT for 30 days. Alerts are emailed only when issues appear.</p>
+            </div>
+
+            <div class="panel job-card">
+              <div class="panel-head">
+                <h2>Watch details</h2>
+                <p id="wdgJobMeta">—</p>
+              </div>
+
+              <dl class="summary-grid compact" id="wdgJobSummary"></dl>
+
+              <div class="wdg-results-actions">
+                <a class="btn btn-primary" href="#plans">View in Manage My Plan →</a>
+                <button type="button" class="btn btn-ghost" data-open-watchdog>Start Another Watchdog</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel result-panel">
+            <div class="panel-head row-head">
+              <div>
+                <h2>Day-0 Health Report</h2>
+                <p id="wdgTableMeta">Uptime, HTTP code, load speed, SSL expiry &amp; broken-link check</p>
+              </div>
+              <span class="mini-pill" id="wdgPreviewPill">0 sites</span>
+            </div>
+
+            <div class="table-scroll">
+              <table class="leads-table wdg-preview-table" id="wdgTable">
+                <thead>
+                  <tr>
+                    <th>Website URL</th>
+                    <th>Status</th>
+                    <th>HTTP Code</th>
+                    <th>Load Speed (ms)</th>
+                    <th>SSL Expiry (days left)</th>
+                    <th>Issues / Broken Links</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================
          VIEW · SUCCESS (stock subscription)
          ==================================================================== -->
     <section class="view" data-view="success" id="view-success">
@@ -2377,8 +2465,7 @@
 
       <div class="footer-col">
         <h3>Resources</h3>
-        <!-- TODO: replace with your own repository URL -->
-        <a id="ghLink" href="https://github.com/your-username/agentic-webpage" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+        <a id="ghLink" href="https://github.com/NgYukSeng-prog/agentic-webpage" target="_blank" rel="noopener noreferrer">GitHub repository</a>
         <a href="#configure">Configure an agent</a>
         <a href="#scraper-results">Scraper results</a>
         <a href="terms.html">Terms & Conditions</a>
@@ -2447,7 +2534,7 @@
 
   <div class="toast-root" id="toastRoot" role="status" aria-live="polite"></div>
 
-  <script src="config.js?v=48"></script>
-  <script src="app.js?v=48"></script>
+  <script src="config.js?v=49"></script>
+  <script src="app.js?v=49"></script>
 </body>
 </html>
