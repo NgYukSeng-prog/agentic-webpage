@@ -306,6 +306,18 @@
   const WDG_START_URL =
     CFG.SITE_WATCHDOG_START_URL || API_BASE + '/site-watchdog-start';
 
+  /* --- Dividend & Ex-Date Radar (9th live worker) ------------------------
+     5 credits (1–5 stocks) / 10 credits (6–15 stocks) · 30-day radar. */
+  const DIV_AGENT_ID = CFG.DIVIDEND_RADAR_AGENT_ID || 'dividend-radar';
+  const DIV_AGENT_NAME =
+    CFG.DIVIDEND_RADAR_AGENT_NAME || 'Dividend & Ex-Date Radar (MY / SG / US)';
+  const DIV_DAYS = toPositiveInt(CFG.DIVIDEND_RADAR_DAYS, 30);
+  const DIV_MAX_STOCKS = toPositiveInt(CFG.DIVIDEND_RADAR_MAX_STOCKS, 15);
+  const DIV_START_URL =
+    CFG.dividendRadarStartUrl || API_BASE + '/dividend-radar-start';
+  const DIV_DOWNLOAD_URL =
+    CFG.dividendCalendarDownloadUrl || API_BASE + '/download-dividend-calendar';
+
   const INV_EXPORT_FORMATS =
     Array.isArray(CFG.INVOICE_OCR_EXPORT_FORMATS) && CFG.INVOICE_OCR_EXPORT_FORMATS.length
       ? CFG.INVOICE_OCR_EXPORT_FORMATS
@@ -694,7 +706,7 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — 8 Live Workers, One Credit Wallet',
+    agents: 'AI Agents — 9 Live Workers, One Credit Wallet',
     plans: 'Manage My Plan — Subscriptions & History',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
@@ -705,6 +717,7 @@
     'review-results': 'Review Miner Results — LiteWork',
     'property-results': 'Property Sniper Results — LiteWork',
     'watchdog-results': 'Website Watchdog Report — LiteWork',
+    'dividend-results': 'Dividend & Ex-Date Radar — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -723,7 +736,8 @@
       reviewJob: null,
       propertyJob: null,
       trackerJob: null,
-      watchdogJob: null
+      watchdogJob: null,
+      dividendJob: null
     };
   }
 
@@ -775,6 +789,10 @@
         watchdogJob:
           parsed.watchdogJob && typeof parsed.watchdogJob === 'object'
             ? parsed.watchdogJob
+            : null,
+        dividendJob:
+          parsed.dividendJob && typeof parsed.dividendJob === 'object'
+            ? parsed.dividendJob
             : null
       };
     } catch (err) {
@@ -795,7 +813,8 @@
           reviewJob: state.reviewJob || null,
           propertyJob: state.propertyJob || null,
           trackerJob: state.trackerJob || null,
-          watchdogJob: state.watchdogJob || null
+          watchdogJob: state.watchdogJob || null,
+          dividendJob: state.dividendJob || null
         })
       );
     } catch (err) {
@@ -1124,7 +1143,8 @@
       review: [],
       property: [],
       tracker: [],
-      watchdog: []
+      watchdog: [],
+      dividend: []
     };
     historyPages = {
       stock: 1,
@@ -1134,7 +1154,8 @@
       review: 1,
       property: 1,
       tracker: 1,
-      watchdog: 1
+      watchdog: 1,
+      dividend: 1
     };
     stopScraperTimers();
     stopLeTimer();
@@ -1167,6 +1188,7 @@
       else if (gate.action === 'enricher') openLeadEnricherModal();
       else if (gate.action === 'review') openReviewMinerModal();
       else if (gate.action === 'watchdog') openWatchdogModal();
+      else if (gate.action === 'dividend') openDividendModal();
       else if (gate.action === 'checkout') openCheckout(gate.packId);
       else if (gate.action === 'account') openAccountModal();
     }, 180);
@@ -2251,6 +2273,7 @@
     'review-results',
     'property-results',
     'watchdog-results',
+    'dividend-results',
     'success'
   ];
 
@@ -2277,7 +2300,8 @@
         route === 'enricher-results' ||
         route === 'review-results' ||
         route === 'property-results' ||
-        route === 'watchdog-results';
+        route === 'watchdog-results' ||
+        route === 'dividend-results';
       const active = r === route || (agentRoutes && r === 'agents');
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
@@ -2317,6 +2341,7 @@
     if (route === 'review-results') renderRwResults();
     if (route === 'property-results') renderPropertyResults();
     if (route === 'watchdog-results') renderWatchdogResults();
+    if (route === 'dividend-results') renderDividendResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -3317,7 +3342,8 @@
     review: [],
     property: [],
     tracker: [],
-    watchdog: []
+    watchdog: [],
+    dividend: []
   };
   let historyPages = {
     stock: 1,
@@ -3327,7 +3353,8 @@
     review: 1,
     property: 1,
     tracker: 1,
-    watchdog: 1
+    watchdog: 1,
+    dividend: 1
   };
 
   function historySource(body) {
@@ -4547,6 +4574,130 @@
     );
   }
 
+  function normalizeDividendRows(rawRows) {
+    const list = Array.isArray(rawRows) ? rawRows : [];
+    return list
+      .filter(function (item) { return item && typeof item === 'object'; })
+      .map(function (row) {
+        const ticker = String(firstValue(row, ['ticker', 'symbol'], '')).toUpperCase();
+        const regionRaw = String(firstValue(row, ['region', 'market'], '')).toLowerCase();
+        const region =
+          regionRaw === 'my' || ticker.endsWith('.KL')
+            ? 'MY'
+            : regionRaw === 'sg' || ticker.endsWith('.SI')
+            ? 'SG'
+            : 'US';
+        const exStatusRaw = String(
+          firstValue(row, ['ex_date_status', 'status', 'confidence'], 'estimated')
+        ).toLowerCase();
+        const exConfirmed =
+          exStatusRaw.indexOf('confirm') !== -1 || row.confirmed === true;
+        return {
+          ticker: ticker,
+          name: String(firstValue(row, ['name', 'company', 'company_name'], '')),
+          region: region,
+          shares: Number(firstValue(row, ['shares', 'qty'], 0)) || 0,
+          price: firstValue(row, ['price', 'last_price', 'close'], null),
+          ttmYield: firstValue(row, ['ttm_yield', 'yield', 'dividend_yield'], null),
+          nextExDate: String(firstValue(row, ['next_ex_date', 'ex_date', 'ex_dividend_date'], '')),
+          exConfirmed: exConfirmed,
+          paymentDate: String(firstValue(row, ['payment_date', 'pay_date'], '')),
+          divPerShare: firstValue(row, ['div_per_share', 'dividend_per_share', 'dps'], null),
+          estPayout: firstValue(row, ['est_payout', 'estimated_payout', 'payout'], null),
+          source: String(firstValue(row, ['source', 'data_source'], 'Yahoo Finance'))
+        };
+      });
+  }
+
+  function normalizeDividendJob(raw) {
+    const job = raw && typeof raw === 'object' ? raw : {};
+    const rows = normalizeDividendRows(
+      firstValue(job, ['calendar', 'rows', 'holdings', 'stocks', 'results'], [])
+    );
+    const daysRaw = firstValue(job, ['days_remaining', 'days_left'], null);
+    const daysLeft =
+      daysRaw === null || daysRaw === ''
+        ? DIV_DAYS
+        : clamp(Number(daysRaw) || 0, 0, DIV_DAYS);
+    const expiresAt = String(firstValue(job, ['expires_at', 'expiresAt', 'end_date'], ''));
+    const startedAt = String(firstValue(job, ['started_at', 'created_at', 'createdAt', 'date'], ''));
+    const percent = expiresAt
+      ? subscriptionValidity(expiresAt, startedAt).percent
+      : (daysLeft / DIV_DAYS) * 100;
+    const statusRaw = String(firstValue(job, ['status', 'job_status'], 'active')).toLowerCase();
+    const status =
+      statusRaw === 'completed' || statusRaw === 'expired' || daysLeft === 0
+        ? 'completed'
+        : 'active';
+    const upcomingCount = Number(
+      firstValue(job, ['confirmed_upcoming_count', 'upcoming_count'], null)
+    );
+    const computedUpcoming = rows.filter(function (r) { return !!r.nextExDate; }).length;
+    const nextRow = rows.find(function (r) { return !!r.nextExDate; }) || null;
+    const nextExCallout =
+      firstValue(job, ['next_ex_date_summary', 'next_ex_callout'], '') ||
+      (nextRow ? nextRow.ticker + ' · ' + nextRow.nextExDate : '');
+
+    return {
+      job_id: String(firstValue(job, ['radar_id', 'job_id', 'id'], '')),
+      display_id: String(firstValue(job, ['display_id', 'displayId', 'public_id'], '') || ''),
+      rows: rows,
+      stocksCount: Number(firstValue(job, ['stocks_count', 'holdings_count'], rows.length)) || rows.length || 1,
+      confirmedUpcoming: Number.isFinite(upcomingCount) ? upcomingCount : computedUpcoming,
+      nextExCallout: String(nextExCallout || ''),
+      alertDaysBefore: toPositiveInt(firstValue(job, ['alert_days_before', 'lead_days'], 3), 3),
+      dataSources: String(firstValue(job, ['data_sources', 'sources'], 'Yahoo Finance · Bursa · SGX')),
+      downloadUrl: String(firstValue(job, ['download_url', 'xlsx_url'], '')),
+      credits: Number(firstValue(job, ['credits_spent', 'creditsSpent', 'credits'], 5)) || 5,
+      status: status,
+      created: startedAt,
+      expiresAt: expiresAt,
+      daysLeft: daysLeft,
+      percent: clamp(Number(percent) || 0, 0, 100),
+      downloadReady: true
+    };
+  }
+
+  function renderDividendHistoryCard(job) {
+    const active = job.status === 'active';
+    const badge = active ? { tone: 'ok', label: 'Active' } : { tone: 'muted', label: 'Completed' };
+    const stocksText = job.stocksCount + ' stock' + (job.stocksCount === 1 ? '' : 's');
+    const creditText = job.credits + ' credit' + (job.credits === 1 ? '' : 's');
+    const daysLeft = Number(job.daysLeft) || 0;
+    const percent = clamp(Number(job.percent) || 0, 2, 100);
+    const refId = job.job_id || job.display_id;
+
+    return (
+      '<article class="hist-card">' +
+      '<div class="hist-card-top">' +
+      '<strong>Dividend &amp; Ex-Date Radar</strong>' +
+      histIdBadge(job) +
+      '<span class="hist-badge ' + badge.tone + '">' + escapeHtml(badge.label) + '</span>' +
+      '</div>' +
+      '<p class="hist-sub">' + escapeHtml(stocksText) + ' · ' + escapeHtml(creditText) + ' · ' + job.alertDaysBefore + 'd Ex-Date alert</p>' +
+      '<div class="hist-trading">' +
+      '<span class="hist-trading-label"><strong>' + daysLeft + ' / ' + DIV_DAYS + '</strong> days left</span>' +
+      (job.nextExCallout
+        ? '<span class="hist-badge ok">Next Ex-Date: ' + escapeHtml(job.nextExCallout) + '</span>'
+        : '<span class="hist-badge muted">' + job.confirmedUpcoming + ' upcoming</span>') +
+      '</div>' +
+      '<div class="watch-progress"><span style="width:' + percent + '%"></span></div>' +
+      '<dl class="hist-meta">' +
+      '<div><dt>Stocks</dt><dd>' + escapeHtml(stocksText) + '</dd></div>' +
+      '<div><dt>Upcoming Ex-Dates</dt><dd>' + job.confirmedUpcoming + '</dd></div>' +
+      '<div><dt>Credits spent</dt><dd>' + escapeHtml(creditText) + '</dd></div>' +
+      '<div><dt>Radar ID</dt><dd><code>' + escapeHtml(formatJobRef(job) || '—') + '</code></dd></div>' +
+      '</dl>' +
+      '<div class="hist-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-dividend-view="' +
+      escapeHtml(refId) + '">View Calendar</button>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-dividend-download="' +
+      escapeHtml(refId) + '">Download .xlsx</button>' +
+      '</div>' +
+      '</article>'
+    );
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
@@ -4556,6 +4707,7 @@
     const propertyPane = $('#historyProperty');
     const trackerPane = $('#historyTracker');
     const watchdogPane = $('#historyWatchdog');
+    const dividendPane = $('#historyDividend');
     const stockCount = historyState.stock.length;
     const b2bCount = historyState.b2b.length;
     const invoiceCount = historyState.invoice.length;
@@ -4564,6 +4716,7 @@
     const propertyCount = historyState.property.length;
     const trackerCount = historyState.tracker.length;
     const watchdogCount = historyState.watchdog.length;
+    const dividendCount = historyState.dividend.length;
     const stockPage = historyPageSlice('stock', historyState.stock);
     const b2bPage = historyPageSlice('b2b', historyState.b2b);
     const invoicePage = historyPageSlice('invoice', historyState.invoice);
@@ -4572,6 +4725,7 @@
     const propertyPage = historyPageSlice('property', historyState.property);
     const trackerPage = historyPageSlice('tracker', historyState.tracker);
     const watchdogPage = historyPageSlice('watchdog', historyState.watchdog);
+    const dividendPage = historyPageSlice('dividend', historyState.dividend);
 
     if (stockPane) {
       stockPane.innerHTML = stockCount
@@ -4669,6 +4823,21 @@
           '</div>';
     }
 
+    if (dividendPane) {
+      dividendPane.innerHTML = dividendCount
+        ? renderHistoryPager('dividend', 'Dividend Radars', dividendPage.page, dividendPage.pages, dividendCount) +
+          '<div class="hist-list">' +
+          dividendPage.items.map(renderDividendHistoryCard).join('') +
+          '</div>'
+        : '<div class="hist-empty">' +
+          '<p class="empty-note">No dividend radars yet. Configure a 30-day radar to generate your 12-month .xlsx calendar and Ex-Date alerts.</p>' +
+          '<button type="button" class="btn btn-primary btn-sm" data-open-dividend>Configure Radar →</button>' +
+          '</div>';
+      $$('[data-open-dividend]', dividendPane).forEach(function (btn) {
+        btn.addEventListener('click', openDividendModal);
+      });
+    }
+
     /* Keep tab + section counters in sync. */
     const counts = {
       stock: stockCount,
@@ -4678,7 +4847,8 @@
       review: reviewCount,
       property: propertyCount,
       tracker: trackerCount,
-      watchdog: watchdogCount
+      watchdog: watchdogCount,
+      dividend: dividendCount
     };
     $$('[data-hist-count]').forEach(function (el) {
       const key = el.getAttribute('data-hist-count');
@@ -4687,19 +4857,25 @@
     $$('[data-hist-count-label="stock"]').forEach(function (el) {
       el.textContent = stockCount + ' subscription' + (stockCount === 1 ? '' : 's');
     });
-    ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog'].forEach(function (key) {
+    ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog', 'dividend'].forEach(function (key) {
       $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
-        el.textContent = counts[key] + ' ' + (key === 'watchdog' ? 'watch' + (counts[key] === 1 ? '' : 'es') : 'job' + (counts[key] === 1 ? '' : 's'));
+        el.textContent =
+          counts[key] + ' ' +
+          (key === 'watchdog'
+            ? 'watch' + (counts[key] === 1 ? '' : 'es')
+            : key === 'dividend'
+            ? 'radar' + (counts[key] === 1 ? '' : 's')
+            : 'job' + (counts[key] === 1 ? '' : 's'));
       });
     });
   }
 
-  /* All / stock / b2b / invoice / enricher / review / property / tracker / watchdog filter for the panel. */
+  /* All / stock / b2b / invoice / enricher / review / property / tracker / watchdog / dividend filter for the panel. */
   function applyHistoryFilter(name) {
     const filter =
       name === 'stock' || name === 'b2b' || name === 'invoice' ||
       name === 'enricher' || name === 'review' ||
-      name === 'property' || name === 'tracker' || name === 'watchdog'
+      name === 'property' || name === 'tracker' || name === 'watchdog' || name === 'dividend'
         ? name
         : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
@@ -4720,7 +4896,8 @@
       review: 1,
       property: 1,
       tracker: 1,
-      watchdog: 1
+      watchdog: 1,
+      dividend: 1
     };
     if (isLoggedIn() && !historyState.loading) paintHistory();
   }
@@ -4734,9 +4911,10 @@
     const propertyPane = $('#historyProperty');
     const trackerPane = $('#historyTracker');
     const watchdogPane = $('#historyWatchdog');
+    const dividendPane = $('#historyDividend');
     if (
       !stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane &&
-      !propertyPane && !trackerPane && !watchdogPane
+      !propertyPane && !trackerPane && !watchdogPane && !dividendPane
     ) {
       return;
     }
@@ -4751,7 +4929,8 @@
         review: 1,
         property: 1,
         tracker: 1,
-        watchdog: 1
+        watchdog: 1,
+        dividend: 1
       };
     }
 
@@ -4766,11 +4945,12 @@
         review: [],
         property: [],
         tracker: [],
-        watchdog: []
+        watchdog: [],
+        dividend: []
       };
       const loginCard =
         '<div class="hist-empty">' +
-        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property sniper watches, competitor watches and website watchdogs are tied to your LiteWork account.</p>' +
+        '<p class="empty-note">Log in to view your subscriptions and purchase history. Your stock briefs, scraping runs, invoice batches, enrichment runs, review battlecards, property sniper watches, competitor watches, website watchdogs and dividend radars are tied to your LiteWork account.</p>' +
         '<button type="button" class="btn btn-primary btn-sm" data-history-login>Log in</button>' +
         '</div>';
       if (stockPane) stockPane.innerHTML = loginCard;
@@ -4781,11 +4961,12 @@
       if (propertyPane) propertyPane.innerHTML = loginCard;
       if (trackerPane) trackerPane.innerHTML = loginCard;
       if (watchdogPane) watchdogPane.innerHTML = loginCard;
+      if (dividendPane) dividendPane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
-      ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog'].forEach(function (key) {
+      ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog', 'dividend'].forEach(function (key) {
         $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
-          el.textContent = key === 'watchdog' ? '0 watches' : '0 jobs';
+          el.textContent = key === 'watchdog' ? '0 watches' : key === 'dividend' ? '0 radars' : '0 jobs';
         });
       });
       return;
@@ -4806,6 +4987,7 @@
     if (propertyPane) propertyPane.innerHTML = '<p class="empty-note">Loading your sniper watches…</p>';
     if (trackerPane) trackerPane.innerHTML = '<p class="empty-note">Loading your competitor watches…</p>';
     if (watchdogPane) watchdogPane.innerHTML = '<p class="empty-note">Loading your website watchdogs…</p>';
+    if (dividendPane) dividendPane.innerHTML = '<p class="empty-note">Loading your dividend radars…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -4887,6 +5069,12 @@
           'watchdog_jobs',
           'watchdog'
         ]);
+        const dividendRaw = pickArray(source, [
+          'dividend_radar',
+          'dividend_radars',
+          'dividend_jobs',
+          'dividends'
+        ]);
         const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
         const stockExtra = [];
         const b2bExtra = [];
@@ -4896,12 +5084,15 @@
         const propertyExtra = [];
         const trackerExtra = [];
         const watchdogExtra = [];
+        const dividendExtra = [];
 
         combined.forEach(function (item) {
           const kind = String(
             (item && (item.agent || item.agent_id || item.type || item.kind)) || ''
           ).toLowerCase();
-          if (kind.indexOf('watchdog') !== -1 || kind.indexOf('uptime') !== -1) {
+          if (kind.indexOf('dividend') !== -1 || kind.indexOf('ex-date') !== -1) {
+            dividendExtra.push(item);
+          } else if (kind.indexOf('watchdog') !== -1 || kind.indexOf('uptime') !== -1) {
             watchdogExtra.push(item);
           } else if (kind.indexOf('track') !== -1 || kind.indexOf('monitor') !== -1) {
             trackerExtra.push(item);
@@ -4932,6 +5123,7 @@
         historyState.property = propertyRaw.concat(propertyExtra).map(normalizePropertyJob);
         historyState.tracker = trackerRaw.concat(trackerExtra).map(normalizeTrackerJob);
         historyState.watchdog = watchdogRaw.concat(watchdogExtra).map(normalizeWatchdogJob);
+        historyState.dividend = dividendRaw.concat(dividendExtra).map(normalizeDividendJob);
 
         /* Fall back to the locally cached activations when the server has
            nothing recorded yet for this browser. */
@@ -4956,6 +5148,7 @@
         historyState.property = sortNewestFirst(historyState.property, 'created');
         historyState.tracker = sortNewestFirst(historyState.tracker, 'created');
         historyState.watchdog = sortNewestFirst(historyState.watchdog, 'created');
+        historyState.dividend = sortNewestFirst(historyState.dividend, 'created');
 
         historyState.loaded = true;
         paintHistory();
@@ -5981,6 +6174,7 @@
     state.propertyJob = null;
     state.trackerJob = null;
     state.watchdogJob = null;
+    state.dividendJob = null;
     historyState = {
       loaded: false,
       loading: false,
@@ -5991,7 +6185,8 @@
       review: [],
       property: [],
       tracker: [],
-      watchdog: []
+      watchdog: [],
+      dividend: []
     };
     historyPages = {
       stock: 1,
@@ -6001,7 +6196,8 @@
       review: 1,
       property: 1,
       tracker: 1,
-      watchdog: 1
+      watchdog: 1,
+      dividend: 1
     };
     saveState();
 
@@ -6204,7 +6400,8 @@
             kind === 'review' ||
             kind === 'property' ||
             kind === 'tracker' ||
-            kind === 'watchdog'
+            kind === 'watchdog' ||
+            kind === 'dividend'
           ) {
             const list = historyState[kind] || [];
             const total = list.length;
@@ -6288,6 +6485,18 @@
         const wdgView = event.target.closest('[data-watchdog-view]');
         if (wdgView) {
           openWatchdogHistoryJob(wdgView.getAttribute('data-watchdog-view'));
+          return;
+        }
+
+        const divView = event.target.closest('[data-dividend-view]');
+        if (divView) {
+          openDividendHistoryJob(divView.getAttribute('data-dividend-view'));
+          return;
+        }
+
+        const divDownload = event.target.closest('[data-dividend-download]');
+        if (divDownload) {
+          downloadDividendCalendar(divDownload.getAttribute('data-dividend-download'));
         }
       });
     }
@@ -6612,6 +6821,20 @@
         openWatchdogModal();
       });
     });
+
+    /* Dividend & Ex-Date Radar (Worker #9): launch & download */
+    $$('[data-open-dividend]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        openDividendModal();
+      });
+    });
+
+    const divDownloadBtn = $('#divDownloadBtn');
+    if (divDownloadBtn) {
+      divDownloadBtn.addEventListener('click', function () {
+        downloadDividendCalendar();
+      });
+    }
 
     /* Scraper results: resume + download */
     const resumeBtn = $('#resumeBtn');

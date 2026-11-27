@@ -570,6 +570,17 @@ window.CONFIG = {
   SITE_WATCHDOG_START_URL:
     'https://n8n.20.205.96.122.sslip.io/webhook/site-watchdog-start',
 
+  /* --- Dividend & Ex-Date Radar (9th live worker) -------------------------
+     5 credits (1–5 stocks) / 10 credits (6–15 stocks) · 30-day radar. */
+  DIVIDEND_RADAR_AGENT_ID: 'dividend-radar',
+  DIVIDEND_RADAR_AGENT_NAME: 'Dividend & Ex-Date Radar (MY / SG / US)',
+  DIVIDEND_RADAR_DAYS: 30,
+  DIVIDEND_RADAR_MAX_STOCKS: 15,
+  dividendRadarStartUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/dividend-radar-start',
+  dividendCalendarDownloadUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-dividend-calendar',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
