@@ -13804,4 +13804,697 @@
             if (errEl) {
               errEl.textContent =
                 (body && (body.error || body.message)) ||
-... [truncated for diff preview]
+                'Not enough credits for this watch. Top up credits to continue.';
+            }
+            updateCtQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const watchId = String(
+          outer.watch_id ||
+          outer.id ||
+          outer.job_id ||
+          inner.watch_id ||
+          inner.id ||
+          inner.job_id ||
+          'watch_' + Date.now()
+        );
+        const displayId = String(outer.display_id || inner.display_id || '');
+        const expiresAt = String(
+          outer.expires_at ||
+          inner.expires_at ||
+          new Date(Date.now() + CT_DAYS * 86400000).toISOString()
+        );
+
+        state.trackerJob = {
+          job_id: watchId,
+          display_id: displayId,
+          agent_id: CT_AGENT_ID,
+          status: 'completed',
+          urls: rows.length,
+          changes_detected: 0,
+          credits_spent: CT_CREDITS,
+          email: email,
+          started_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          days_left: CT_DAYS,
+          percent: 100
+        };
+        activeJobIds.add(watchId);
+        saveState();
+        updateJobDock();
+        historyState.loaded = false;
+
+        ctStarting = false;
+
+        const modalBody = $('#modalBody');
+        if (modalBody) {
+          modalBody.innerHTML =
+            '<h2 class="modal-title" id="modalTitle">Your 7-day watch is live</h2>' +
+            '<div class="watch-confirm">' +
+            '<h3>✓ Baseline captured for ' + rows.length + ' competitor URL' +
+            (rows.length === 1 ? '' : 's') + '</h3>' +
+            '<p>Daily automated checks run for ' + CT_DAYS +
+            ' days. A confirmation email is on its way, and you will only be alerted when real text or price changes are detected.</p>' +
+            '<div class="watch-confirm-id">Watch ID <code>' +
+            escapeHtml(displayId || watchId) + '</code></div>' +
+            '<div class="modal-actions">' +
+            '<a class="btn btn-primary" href="#plans" data-modal-close>View in Manage My Plan →</a>' +
+            '</div>' +
+            '</div>';
+        }
+
+        toast('Competitor watch started — baseline captured.', 'success');
+      })
+      .catch(function (err) {
+        ctStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the competitor watch. Please try again.';
+        }
+        updateCtQuote();
+        console.warn('[LiteWork] Competitor Tracker start failed.', err);
+      });
+  }
+
+  /* ========================================================================
+     WORKER #8 · WEBSITE UPTIME, SSL & BROKEN-LINK WATCHDOG
+     ======================================================================== */
+  let wdgStarting = false;
+  let wdgThresholdMs = 3500;
+
+  function wdgRows() {
+    const rows = [];
+    $$('#wdgRows [data-wdg-row]').forEach(function (row) {
+      const urlEl = row.querySelector('[data-wdg-url]');
+      const labelEl = row.querySelector('[data-wdg-label]');
+      rows.push({
+        url: urlEl ? String(urlEl.value || '').trim() : '',
+        label: labelEl ? String(labelEl.value || '').trim() : ''
+      });
+    });
+    return rows;
+  }
+
+  function wdgTotalCredits(validCount) {
+    return Math.max(1, Number(validCount) || 0) * WDG_CREDITS_PER_SITE;
+  }
+
+  function updateWdgQuote() {
+    const rows = wdgRows();
+    const valid = rows.filter(function (row) { return isHttpUrl(row.url); }).length;
+    const rowCount = $$('#wdgRows [data-wdg-row]').length;
+    const totalCredits = wdgTotalCredits(valid);
+
+    const availableEl = $('#wdgAvailable');
+    if (availableEl) availableEl.textContent = state.credits + ' Credits';
+
+    const countEl = $('#wdgSiteCount');
+    if (countEl) {
+      countEl.textContent = valid + ' / ' + WDG_MAX_URLS;
+      countEl.classList.toggle('is-zero', valid === 0);
+    }
+
+    const totalEl = $('#wdgCost');
+    if (totalEl) totalEl.textContent = totalCredits + ' Credits';
+
+    const addBtn = $('#wdgAddBtn');
+    if (addBtn) {
+      const full = rowCount >= WDG_MAX_URLS;
+      addBtn.disabled = full;
+      addBtn.textContent = full ? 'Maximum ' + WDG_MAX_URLS + ' Sites' : '+ Add Website';
+    }
+
+    const hint = $('#wdgCountHint');
+    if (hint) hint.textContent = rowCount + ' of ' + WDG_MAX_URLS;
+
+    const shortfall = totalCredits - state.credits;
+    const shortEl = $('#wdgShortfall');
+    if (shortEl) {
+      if (valid > 0 && shortfall > 0) {
+        shortEl.hidden = false;
+        shortEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this watchdog. Top up credits to continue.';
+      } else {
+        shortEl.hidden = true;
+        shortEl.textContent = '';
+      }
+    }
+
+    const btn = $('#wdgStartBtn');
+    if (btn) {
+      btn.disabled = wdgStarting || valid === 0;
+      btn.textContent = wdgStarting
+        ? 'Running Day-0 Health Check…'
+        : 'Confirm & Spend ' + totalCredits + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog';
+    }
+  }
+
+  function addWdgRow(url, label) {
+    const rowsWrap = $('#wdgRows');
+    if (!rowsWrap) return;
+    if ($$('#wdgRows [data-wdg-row]').length >= WDG_MAX_URLS) {
+      toast('Up to ' + WDG_MAX_URLS + ' websites per watchdog.', 'warn');
+      return;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'ct-row';
+    row.setAttribute('data-wdg-row', '');
+    row.innerHTML =
+      '<input type="url" data-wdg-url autocomplete="off" spellcheck="false" ' +
+      'placeholder="https://yourcompany.com" />' +
+      '<input type="text" data-wdg-label autocomplete="off" placeholder="Label (e.g. Main Site, Shop)" />' +
+      '<button type="button" class="rw-remove" data-wdg-remove aria-label="Remove website">×</button>';
+    rowsWrap.appendChild(row);
+
+    const urlInput = row.querySelector('[data-wdg-url]');
+    const labelInput = row.querySelector('[data-wdg-label]');
+    if (urlInput) {
+      urlInput.value = url || '';
+      urlInput.addEventListener('input', updateWdgQuote);
+    }
+    if (labelInput) {
+      labelInput.value = label || '';
+      labelInput.addEventListener('input', updateWdgQuote);
+    }
+    const removeBtn = row.querySelector('[data-wdg-remove]');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        if ($$('#wdgRows [data-wdg-row]').length <= 1) return;
+        row.parentNode.removeChild(row);
+        updateWdgQuote();
+      });
+    }
+
+    updateWdgQuote();
+    if (urlInput && !url) urlInput.focus();
+  }
+
+  function openWatchdogModal() {
+    if (!requireAuth({ action: 'watchdog' })) return;
+
+    wdgStarting = false;
+    wdgThresholdMs = 3500;
+
+    openModal(
+      '<h2 class="modal-title" id="modalTitle">Website Uptime, SSL &amp; Broken-Link Watchdog</h2>' +
+      '<p class="modal-sub">Daily monitoring for up to ' + WDG_MAX_URLS +
+      ' live websites · ' + WDG_CREDITS_PER_SITE + ' credits per site / ' + WDG_DAYS + ' days</p>' +
+      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="wdgAvailable">' + state.credits + ' Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Sites</span>' +
+      '<span class="calc-value is-zero" id="wdgSiteCount">0 / ' + WDG_MAX_URLS + '</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Duration</span>' +
+      '<span class="calc-value">' + WDG_DAYS + ' Days</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="wdgCost">' + WDG_CREDITS_PER_SITE + ' Credits</span></div>' +
+      '</div></div>' +
+      '<form class="invoice-form" id="watchdogForm" novalidate>' +
+      '<div class="modal-section"><h3>Websites to monitor</h3>' +
+      '<span class="fine">1–' + WDG_MAX_URLS + ' live URLs · ' + WDG_CREDITS_PER_SITE + ' credits / site</span></div>' +
+      '<div class="ct-rows" id="wdgRows"></div>' +
+      '<div class="rw-add-row">' +
+      '<button type="button" class="btn btn-ghost btn-sm" id="wdgAddBtn">+ Add Website</button>' +
+      '<span class="fine" id="wdgCountHint">1 of ' + WDG_MAX_URLS + '</span>' +
+      '</div>' +
+      '<div class="wdg-options">' +
+      '<label class="wdg-check">' +
+      '<input type="checkbox" id="wdgBrokenLinks" checked />' +
+      '<span>Scan for broken checkout, contact &amp; WhatsApp links</span>' +
+      '</label>' +
+      '<div class="wdg-threshold-row">' +
+      '<span class="wdg-threshold-label">Slow-load alert threshold</span>' +
+      '<div class="wdg-threshold-pills" role="radiogroup" aria-label="Slow-load alert threshold">' +
+      '<button type="button" class="wdg-pill is-active" data-wdg-threshold="3500" role="radio" aria-checked="true">3.5s</button>' +
+      '<button type="button" class="wdg-pill" data-wdg-threshold="5000" role="radio" aria-checked="false">5s</button>' +
+      '</div>' +
+      '</div>' +
+      '<p class="wdg-ssl-help">Monitors uptime, page speed, broken links, and SSL (your site\'s HTTPS security certificate that keeps your site trusted &amp; padlock-safe).</p>' +
+      '</div>' +
+      '<div class="field"><label for="wdgEmail">Delivery email</label>' +
+      '<input type="email" id="wdgEmail" class="is-locked" value="' +
+      escapeHtml(accountEmail()) + '" disabled tabindex="-1" /></div>' +
+      '<p class="ct-note">Runs an instant Day-0 health check now, then monitors every day at 06:00 MYT for ' +
+      WDG_DAYS + ' days. Alerts are emailed only when downtime, expiring SSL, slow loads, or broken links are found.</p>' +
+      '<div class="modal-actions">' +
+      '<div class="scraper-modal-error" id="watchdogFormError" role="alert"></div>' +
+      '<p class="scraper-shortfall" id="wdgShortfall" hidden></p>' +
+      '<button type="submit" class="btn btn-activate" id="wdgStartBtn" disabled>' +
+      'Confirm &amp; Spend ' + WDG_CREDITS_PER_SITE + ' Credits · Start ' + WDG_DAYS + '-Day Watchdog</button>' +
+      '<p class="fine">Credits are deducted immediately. Daily watchdog checks run automatically.</p>' +
+      '</div>' +
+      '</form>',
+      true
+    );
+
+    const addBtn = $('#wdgAddBtn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function () {
+        addWdgRow('');
+      });
+    }
+
+    $$('[data-wdg-threshold]').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        wdgThresholdMs = Number(pill.getAttribute('data-wdg-threshold')) || 3500;
+        $$('[data-wdg-threshold]').forEach(function (other) {
+          const on = other === pill;
+          other.classList.toggle('is-active', on);
+          other.setAttribute('aria-checked', String(on));
+        });
+      });
+    });
+
+    const form = $('#watchdogForm');
+    if (form) form.addEventListener('submit', handleWatchdogStart);
+
+    addWdgRow('');
+  }
+
+  function handleWatchdogStart(event) {
+    event.preventDefault();
+
+    if (!isLoggedIn()) {
+      requireAuth({ action: 'watchdog' });
+      return;
+    }
+
+    const errEl = $('#watchdogFormError');
+    const rows = wdgRows();
+    const validRows = rows.filter(function (row) { return isHttpUrl(row.url); });
+
+    if (!rows.length) {
+      if (errEl) errEl.textContent = 'Add at least one website URL to continue.';
+      return;
+    }
+    if (validRows.length !== rows.length) {
+      if (errEl) errEl.textContent = 'Every website URL must start with http:// or https://.';
+      return;
+    }
+    if (rows.length > WDG_MAX_URLS) {
+      if (errEl) errEl.textContent = 'Maximum ' + WDG_MAX_URLS + ' websites per watchdog.';
+      return;
+    }
+
+    const totalCredits = wdgTotalCredits(validRows.length);
+    if (state.credits < totalCredits) {
+      const shortfall = totalCredits - state.credits;
+      if (errEl) {
+        errEl.textContent =
+          'You need ' + shortfall + ' more credit' + (shortfall === 1 ? '' : 's') +
+          ' for this watchdog. Top up credits to continue.';
+      }
+      return;
+    }
+
+    if (errEl) errEl.textContent = '';
+    wdgStarting = true;
+    updateWdgQuote();
+
+    const email = accountEmail();
+    const brokenEl = $('#wdgBrokenLinks');
+    const scanBrokenLinks = brokenEl ? !!brokenEl.checked : true;
+
+    apiFetch(
+      WDG_START_URL,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          agent_id: WDG_AGENT_ID,
+          email: email,
+          urls: rows.map(function (row) { return row.url; }),
+          targets: rows,
+          url_labels: rows.map(function (row) { return row.label; }),
+          scan_broken_links: scanBrokenLinks,
+          slow_threshold_ms: wdgThresholdMs,
+          duration_days: WDG_DAYS,
+          days: WDG_DAYS,
+          max_urls: WDG_MAX_URLS,
+          credits: totalCredits,
+          credits_spent: totalCredits
+        })
+      },
+      60000
+    )
+      .then(function (response) {
+        if (!response) return null;
+        if (response.status === 401) {
+          wdgStarting = false;
+          closeModal(false);
+          handleAuthExpired(
+            'Your session expired. Log in again to start a website watchdog.',
+            { action: 'watchdog' }
+          );
+          return null;
+        }
+        return readJson(response).then(function (body) {
+          if (response.status === 402) {
+            if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+            wdgStarting = false;
+            if (errEl) {
+              errEl.textContent =
+                (body && (body.error || body.message)) ||
+                'Not enough credits for this watchdog. Top up credits to continue.';
+            }
+            updateWdgQuote();
+            return null;
+          }
+          if (!response.ok) {
+            throw new Error(
+              (body && (body.error || body.message)) || 'HTTP ' + response.status
+            );
+          }
+          return body || {};
+        });
+      })
+      .then(function (body) {
+        if (!body) return;
+
+        if (setLiveCredits(extractRemaining(body))) syncCreditUI();
+
+        const outer = body.data && typeof body.data === 'object' ? body.data : body;
+        const inner = outer.data && typeof outer.data === 'object' ? outer.data : {};
+        const watchId = String(
+          outer.watch_id ||
+          outer.id ||
+          outer.job_id ||
+          inner.watch_id ||
+          inner.id ||
+          inner.job_id ||
+          'wdg_' + Date.now()
+        );
+        const displayId = String(outer.display_id || inner.display_id || watchId);
+        const reportSites = normalizeWatchdogReport(
+          outer.last_report || inner.last_report
+        );
+        const overallStatus = deriveWatchdogOverallStatus(
+          reportSites,
+          outer.last_status || inner.last_status || 'healthy'
+        );
+        const expiresAt = String(
+          outer.expires_at ||
+          inner.expires_at ||
+          new Date(Date.now() + WDG_DAYS * 86400000).toISOString()
+        );
+
+        state.watchdogJob = {
+          job_id: watchId,
+          display_id: displayId,
+          urls: rows.map(function (r) { return r.url; }),
+          urls_count: Number(outer.urls_count || inner.urls_count || rows.length) || rows.length,
+          credits_spent: Number(outer.credits_spent || inner.credits_spent || totalCredits) || totalCredits,
+          last_status: overallStatus,
+          last_report: reportSites.length
+            ? reportSites
+            : rows.map(function (r) {
+                return {
+                  url: r.url,
+                  label: r.label,
+                  status: overallStatus,
+                  httpStatus: null,
+                  responseMs: null,
+                  sslDaysLeft: null,
+                  brokenLinks: 0,
+                  brokenList: [],
+                  warnings: []
+                };
+              }),
+          email: email,
+          started_at: new Date().toISOString(),
+          expires_at: expiresAt,
+          days_remaining: WDG_DAYS
+        };
+        saveState();
+        historyState.loaded = false;
+        wdgStarting = false;
+
+        closeModal(false);
+        toast('Website Watchdog active — Day-0 health report ready.', 'success');
+
+        if (currentRoute() === 'watchdog-results') {
+          renderWatchdogResults();
+        } else {
+          window.location.hash = '#watchdog-results';
+        }
+      })
+      .catch(function (err) {
+        wdgStarting = false;
+        if (errEl) {
+          errEl.textContent =
+            (err && err.message ? err.message : '') ||
+            'Could not start the website watchdog. Please try again.';
+        }
+        updateWdgQuote();
+        console.warn('[LiteWork] Website Watchdog start failed.', err);
+      });
+  }
+
+  function renderWatchdogResults() {
+    const empty = $('#watchdogEmpty');
+    const main = $('#watchdogMain');
+    if (!empty || !main) return;
+
+    const job = state.watchdogJob;
+    if (!job) {
+      empty.hidden = false;
+      main.hidden = true;
+      return;
+    }
+
+    empty.hidden = true;
+    main.hidden = false;
+
+    const sites = Array.isArray(job.last_report) && job.last_report.length
+      ? (typeof job.last_report[0].httpStatus !== 'undefined'
+          ? job.last_report
+          : normalizeWatchdogReport(job.last_report))
+      : (Array.isArray(job.urls) ? job.urls : []).map(function (u) {
+          return {
+            url: typeof u === 'string' ? u : String((u && u.url) || ''),
+            label: '',
+            status: job.last_status || 'healthy',
+            httpStatus: null,
+            responseMs: null,
+            sslDaysLeft: null,
+            brokenLinks: 0,
+            brokenList: [],
+            warnings: []
+          };
+        });
+
+    const overallStatus = deriveWatchdogOverallStatus(sites, job.last_status);
+    const overallMeta = watchdogStatusMeta(overallStatus);
+    const totalSites = Number(job.urls_count) || sites.length || 1;
+    const creditsSpent = Number(job.credits_spent) || wdgTotalCredits(totalSites);
+    const ref = job.display_id || job.job_id || '—';
+
+    const ringCard = $('#wdgRingCard');
+    if (ringCard) {
+      ringCard.classList.toggle('is-complete', overallStatus === 'healthy');
+      ringCard.classList.toggle('is-warning', overallStatus === 'warning');
+      ringCard.classList.toggle('is-down', overallStatus === 'down');
+    }
+
+    const ringFill = $('#wdgRingFill');
+    if (ringFill) ringFill.style.strokeDashoffset = '0';
+    const ringPct = $('#wdgRingPercent');
+    if (ringPct) ringPct.textContent = '100%';
+    const ringCount = $('#wdgRingCount');
+    if (ringCount) ringCount.textContent = totalSites + ' / ' + totalSites + ' sites checked · Day 0 active';
+
+    const statusBadge = $('#wdgStatusBadge');
+    if (statusBadge) {
+      statusBadge.classList.remove('is-ok', 'is-fail', 'is-pending', 'is-down');
+      statusBadge.classList.add(overallStatus === 'down' ? 'is-down' : overallStatus === 'warning' ? 'is-fail' : 'is-ok');
+      const txt = statusBadge.querySelector('.webhook-text');
+      if (txt) txt.textContent = WDG_DAYS + '-Day Watchdog Active · Daily 06:00 MYT';
+    }
+
+    const emailNote = $('#wdgEmailNote');
+    if (emailNote) {
+      const em = job.email || accountEmail() || 'your account email';
+      emailNote.textContent =
+        'Daily checks run at 06:00 MYT for ' + WDG_DAYS + ' days. Alerts are emailed to ' + em + ' only when issues appear.';
+    }
+
+    const metaEl = $('#wdgJobMeta');
+    if (metaEl) metaEl.textContent = 'Reference ' + ref + ' · Checked ' + fmtMYT(job.started_at || new Date().toISOString());
+
+    const summary = $('#wdgJobSummary');
+    if (summary) {
+      summary.innerHTML =
+        '<div class="summary-row"><dt>Reference</dt><dd><code>' + escapeHtml(ref) + '</code></dd></div>' +
+        '<div class="summary-row"><dt>Sites Monitored</dt><dd><strong>' + totalSites + ' site' + (totalSites === 1 ? '' : 's') + '</strong></dd></div>' +
+        '<div class="summary-row"><dt>Credits Spent</dt><dd><strong>' + creditsSpent + ' credits</strong></dd></div>' +
+        '<div class="summary-row"><dt>Schedule</dt><dd>Daily 06:00 MYT · ' + WDG_DAYS + ' Days</dd></div>' +
+        '<div class="summary-row"><dt>Overall Status</dt><dd><span class="hist-badge ' + overallMeta.tone + '">' +
+        escapeHtml(overallMeta.label) + '</span></dd></div>';
+    }
+
+    const pill = $('#wdgPreviewPill');
+    if (pill) pill.textContent = totalSites + ' site' + (totalSites === 1 ? '' : 's');
+
+    const tbody = $('#wdgTable tbody');
+    if (tbody) {
+      tbody.innerHTML = sites.length
+        ? sites
+            .map(function (site) {
+              const meta = watchdogStatusMeta(site.status);
+              const httpText = site.httpStatus !== null ? String(site.httpStatus) : '—';
+              const msText = site.responseMs !== null ? site.responseMs.toLocaleString() + ' ms' : '—';
+              const sslText = site.sslDaysLeft !== null ? site.sslDaysLeft + ' days' : '—';
+              const reasons = watchdogSiteReasons(site);
+              const issuesHtml = reasons.length
+                ? '<ul class="wdg-table-issues">' +
+                  reasons.map(function (r) { return '<li>' + escapeHtml(r) + '</li>'; }).join('') +
+                  '</ul>'
+                : '<span class="wdg-no-issues">No issues found</span>';
+              return (
+                '<tr>' +
+                '<td class="cell-strong">' +
+                escapeHtml(site.label || site.url) +
+                (site.label ? '<span class="wdg-table-url">' + escapeHtml(site.url) + '</span>' : '') +
+                '</td>' +
+                '<td><span class="hist-badge ' + meta.tone + '">' + escapeHtml(meta.label) + '</span></td>' +
+                '<td>' + escapeHtml(httpText) + '</td>' +
+                '<td>' + escapeHtml(msText) + '</td>' +
+                '<td>' + escapeHtml(sslText) + '</td>' +
+                '<td>' + issuesHtml + '</td>' +
+                '</tr>'
+              );
+            })
+            .join('')
+        : '<tr><td colspan="6">No site check details returned.</td></tr>';
+    }
+  }
+
+  function openWatchdogHistoryJob(watchId) {
+    const ref = String(watchId || '').trim();
+    if (!ref) return;
+    const known = findHistoryJob(historyState.watchdog, ref);
+    if (!known) return;
+
+    state.watchdogJob = {
+      job_id: known.job_id,
+      display_id: known.display_id || known.job_id,
+      urls: known.urls || [],
+      urls_count: known.urlsCount || (known.urls ? known.urls.length : 1),
+      credits_spent: known.credits || WDG_CREDITS_PER_SITE,
+      last_status: known.lastStatus,
+      last_report: known.reportSites || [],
+      email: accountEmail(),
+      started_at: known.lastChecked || known.created || new Date().toISOString(),
+      expires_at: known.expiresAt || '',
+      days_remaining: known.daysLeft
+    };
+    saveState();
+
+    if (currentRoute() === 'watchdog-results') {
+      renderWatchdogResults();
+    } else {
+      window.location.hash = '#watchdog-results';
+    }
+  }
+
+  /* Returning to the tab should never wait for the next 2.5s tick. */
+  function resumePollingOnFocus() {
+    if (document.visibilityState === 'hidden') return;
+    if (scraperPollActive(state.scraperJob)) forceScraperPollNow();
+    if (invoicePollActive(state.invoiceJob)) forceInvoicePollNow();
+    if (lePollActive(state.enricherJob)) forceLePollNow();
+    if (rwPollActive(state.reviewJob)) forceRwPollNow();
+    if (propPollActive(state.propertyJob)) forcePropPollNow();
+    updateJobDock();
+  }
+
+  /* ============================== INIT =================================== */
+  /* All Home templates live in the DOM; only one is shown. The live output
+     preview is a single node moved into the active template's mount point so
+     every existing tab/render handler keeps working with zero duplication. */
+  function applyHomeTemplate() {
+    const templates = {
+      template1: $('#homeTemplate1'),
+      template2: $('#homeTemplate2'),
+      template3: $('#homeTemplate3')
+    };
+    const active =
+      templates[HOME_TEMPLATE] ||
+      templates.template3 ||
+      templates.template2 ||
+      templates.template1;
+    if (!active) return;
+
+    Object.keys(templates).forEach(function (key) {
+      if (templates[key]) {
+        templates[key].hidden = templates[key] !== active;
+      }
+    });
+
+    const host = $('#homePreviewHost');
+    if (!host) return;
+
+    const mount = active.querySelector('[data-home-preview-mount]');
+    if (!mount || host.parentNode === mount) return;
+
+    const first = mount.firstElementChild;
+    if (first && first.classList && first.classList.contains('preview-note')) {
+      mount.insertBefore(host, first);
+    } else {
+      mount.appendChild(host);
+    }
+  }
+
+  function init() {
+    const year = $('#year');
+    if (year) year.textContent = String(new Date().getFullYear());
+
+    if (!window.location.hash) {
+      window.history.replaceState(null, '', '#home');
+    }
+
+    applyHomeTemplate();
+    buildStockGrid();
+    renderTopup();
+    renderHomeBrief('NVDA');
+    renderWalletSubs();
+    syncCreditUI();
+    updateNextBrief();
+    bindEvents();
+    renderAuthUI();
+    bindJobDock();
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) resumePollingOnFocus();
+    });
+
+    /* Live profile + credits from GET /auth/me when a token exists. */
+    refreshSession();
+
+    window.addEventListener('hashchange', onRouteChange);
+    onRouteChange();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
