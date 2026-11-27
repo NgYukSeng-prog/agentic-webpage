@@ -1965,7 +1965,7 @@
         '  <div class="acc-stat-card">' +
         '    <div class="acc-stat-copy">' +
         '      <span class="acc-stat-label">Available Credits</span>' +
-        '      <strong class="acc-stat-value"><span data-credit-count>' + state.credits + '</span> <small>cr</small></strong>' +
+        '      <strong class="acc-stat-value"><span data-credit-count>' + state.credits + '</span> <small>Credit</small></strong>' +
         '    </div>' +
         '    <a class="btn btn-primary btn-sm acc-stat-btn" href="#topup" data-modal-close>Top Up Credits</a>' +
         '  </div>' +
