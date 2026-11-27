@@ -44,7 +44,7 @@ window.CONFIG = {
   /* --- Home page layout --------------------------------------------------
      Home is rendered from index.html with all three templates in the DOM.
      'template1' | 'template2' | 'template3' — change this single value to switch Home layout instantly */
-  HOME_TEMPLATE: 'template3',
+  HOME_TEMPLATE: 'template2',
 
   /* --- Billing / credit checkout ---------------------------------------- */
   BILLING_CHECKOUT_URL: 'https://n8n.20.205.96.122.sslip.io/webhook/billing/create-checkout',
