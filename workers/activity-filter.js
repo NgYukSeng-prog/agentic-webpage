@@ -18,7 +18,7 @@
 
   var CFG = window.CONFIG || {};
   var TOKEN_KEY = CFG.AUTH_TOKEN_KEY || 'aaas_token';
-  var COLLAPSE_AT = 3;
+  var ITEMS_PER_PAGE = 5;
 
   var panes = null;
   var searchInput = null;
@@ -30,7 +30,7 @@
     worker: 'all',
     status: 'all',
     query: '',
-    expanded: {}
+    pages: {}
   };
 
   var lastSignature = '';
@@ -193,9 +193,62 @@
   /* ------------------------------ apply view ----------------------------- */
 
   function removeInjected() {
-    $$('.af-toggle, .af-group-empty, [data-af-empty]', panes).forEach(function (el) {
+    $$('.af-toggle, .af-pager, .af-group-empty, [data-af-empty]', panes).forEach(function (el) {
       if (el.parentNode) el.parentNode.removeChild(el);
     });
+  }
+
+  function pageNumbers(current, pages) {
+    var out = [];
+    if (pages <= 7) {
+      for (var i = 1; i <= pages; i += 1) out.push(i);
+      return out;
+    }
+    var wanted = [1, current - 1, current, current + 1, pages]
+      .filter(function (n) {
+        return n >= 1 && n <= pages;
+      })
+      .sort(function (a, b) { return a - b; });
+    var unique = [];
+    wanted.forEach(function (n) {
+      if (unique.indexOf(n) === -1) unique.push(n);
+    });
+    var rendered = [];
+    unique.forEach(function (n) {
+      if (rendered.length && n - rendered[rendered.length - 1] > 1) rendered.push('…');
+      rendered.push(n);
+    });
+    return rendered;
+  }
+
+  function pagerHtml(key, page, pages, total) {
+    var start = (page - 1) * ITEMS_PER_PAGE + 1;
+    var end = Math.min(page * ITEMS_PER_PAGE, total);
+    var nums = pageNumbers(page, pages)
+      .map(function (item) {
+        if (item === '…') return '<span class="af-pager-gap" aria-hidden="true">…</span>';
+        var active = item === page;
+        return (
+          '<button type="button" class="af-page-num' + (active ? ' is-active' : '') + '"' +
+          ' data-af-page="' + item + '" data-af-group="' + key + '"' +
+          ' aria-label="Page ' + item + '"' +
+          (active ? ' aria-current="page"' : '') + '>' + item + '</button>'
+        );
+      })
+      .join('');
+
+    return (
+      '<div class="af-pager" data-af-pager="' + key + '">' +
+      '<span class="af-pager-info">Showing ' + start + '–' + end + ' of ' + total + '</span>' +
+      '<div class="af-pager-controls">' +
+      '<button type="button" class="af-page-btn" data-af-page="prev" data-af-group="' + key + '"' +
+      (page <= 1 ? ' disabled' : '') + '>← Prev</button>' +
+      '<div class="af-pager-nums">' + nums + '</div>' +
+      '<button type="button" class="af-page-btn" data-af-page="next" data-af-group="' + key + '"' +
+      (page >= pages ? ' disabled' : '') + '>Next →</button>' +
+      '</div>' +
+      '</div>'
+    );
   }
 
   function showEmptyCard() {
@@ -250,7 +303,7 @@
       worker: state.worker,
       status: state.status,
       query: query,
-      expanded: state.expanded,
+      pages: state.pages,
       plan: plan.map(function (entry) {
         return [entry.key, entry.cards.length, entry.matched.length];
       })
@@ -295,41 +348,33 @@
       return;
     }
 
-    var collapseEnabled = state.worker === 'all' && !query;
-
+    /* Paginate each visible section at ITEMS_PER_PAGE matching cards. */
     plan.forEach(function (entry) {
       if (entry.group.hidden) return;
-      entry.matched.forEach(function (card) {
-        card.style.display = '';
-      });
-
-      if (totalMatched === 0) return;
-
-      var unmatched = entry.cards.filter(function (card) {
-        return entry.matched.indexOf(card) === -1;
-      });
-      unmatched.forEach(function (card) {
+      entry.cards.forEach(function (card) {
         card.style.display = 'none';
       });
+      if (totalMatched === 0 || !entry.matched.length) return;
 
-      if (collapseEnabled && entry.matched.length > COLLAPSE_AT) {
-        var expanded = !!state.expanded[entry.key];
-        if (!expanded) {
-          entry.matched.slice(COLLAPSE_AT).forEach(function (card) {
-            card.style.display = 'none';
-          });
-        }
+      var pages = Math.max(1, Math.ceil(entry.matched.length / ITEMS_PER_PAGE));
+      var current = Number(state.pages[entry.key]) || 1;
+      current = Math.max(1, Math.min(pages, current));
+      state.pages[entry.key] = current;
+
+      var start = (current - 1) * ITEMS_PER_PAGE;
+      entry.matched
+        .slice(start, start + ITEMS_PER_PAGE)
+        .forEach(function (card) {
+          card.style.display = '';
+        });
+
+      if (entry.matched.length > ITEMS_PER_PAGE) {
         var pane = paneOf(entry.group);
         if (pane) {
-          var toggle = document.createElement('button');
-          toggle.type = 'button';
-          toggle.className = 'btn btn-ghost btn-sm af-toggle';
-          toggle.setAttribute('data-af-toggle', entry.key);
-          toggle.setAttribute('aria-expanded', String(expanded));
-          toggle.textContent = expanded
-            ? 'Show less ▴'
-            : 'Show all ' + entry.matched.length + ' runs ▾';
-          pane.appendChild(toggle);
+          pane.insertAdjacentHTML(
+            'beforeend',
+            pagerHtml(entry.key, current, pages, entry.matched.length)
+          );
         }
       }
     });
@@ -349,7 +394,7 @@
     state.worker = 'all';
     state.status = 'all';
     state.query = '';
-    state.expanded = {};
+    state.pages = {};
     lastSignature = '';
     if (searchInput) searchInput.value = '';
     if (workerSelect) workerSelect.value = 'all';
@@ -369,14 +414,37 @@
     var target = event.target;
     if (!target || typeof target.closest !== 'function') return;
 
-    var toggle = target.closest('[data-af-toggle]');
-    if (toggle) {
+    var pageBtn = target.closest('[data-af-page]');
+    if (pageBtn) {
       event.preventDefault();
-      var key = toggle.getAttribute('data-af-toggle');
-      if (state.expanded[key]) delete state.expanded[key];
-      else state.expanded[key] = true;
+      var key = pageBtn.getAttribute('data-af-group');
+      var action = pageBtn.getAttribute('data-af-page');
+      var group = key
+        ? panes.querySelector('[data-hist-group="' + key + '"]')
+        : null;
+      if (!group) return;
+
+      var query = String(state.query || '').trim().toLowerCase();
+      var matched = cardsOf(group).filter(function (card) {
+        return cardMatches(card, query, state.status);
+      });
+      var pages = Math.max(1, Math.ceil(matched.length / ITEMS_PER_PAGE));
+      var current = Number(state.pages[key]) || 1;
+      if (action === 'prev') current -= 1;
+      else if (action === 'next') current += 1;
+      else current = Number(action) || 1;
+      state.pages[key] = Math.max(1, Math.min(pages, current));
       lastSignature = '';
       apply();
+
+      var head = group.querySelector('.hist-group-head') || group;
+      if (head.scrollIntoView) {
+        try {
+          head.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (err) {
+          head.scrollIntoView();
+        }
+      }
       return;
     }
 
@@ -391,7 +459,7 @@
     if (searchInput) {
       searchInput.addEventListener('input', function () {
         state.query = searchInput.value || '';
-        state.expanded = {};
+        state.pages = {};
         lastSignature = '';
         scheduleApply(120);
       });
@@ -400,7 +468,7 @@
     if (workerSelect) {
       workerSelect.addEventListener('change', function () {
         state.worker = workerSelect.value || 'all';
-        state.expanded = {};
+        state.pages = {};
         lastSignature = '';
         apply();
       });
@@ -411,7 +479,7 @@
         var btn = event.target.closest ? event.target.closest('[data-af-status]') : null;
         if (!btn) return;
         state.status = btn.getAttribute('data-af-status') || 'all';
-        state.expanded = {};
+        state.pages = {};
         lastSignature = '';
         $$('[data-af-status]', statusWrap).forEach(function (other) {
           var on = other === btn;

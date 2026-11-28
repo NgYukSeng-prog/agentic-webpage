@@ -6193,6 +6193,100 @@ table.leads-table {
   font-size: 0.86rem;
 }
 
+/* Light-theme 5-per-page pager inside each history section. */
+.af-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.af-pager-info {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #475569;
+}
+
+.af-pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.af-pager-nums {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.af-page-btn,
+.af-page-num {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 650;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.af-page-btn {
+  padding: 7px 12px;
+  min-height: 34px;
+}
+
+.af-page-num {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+}
+
+.af-page-btn:hover:not(:disabled),
+.af-page-num:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.af-page-num.is-active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+}
+
+.af-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #fff;
+  color: #94a3b8;
+}
+
+.af-pager-gap {
+  padding: 0 2px;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .af-pager {
+    padding: 9px 10px;
+  }
+
+  .af-pager-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 @media (max-width: 600px) {
   .history-toolbar {
     display: grid;
@@ -9164,6 +9258,114 @@ table.leads-table {
   background: linear-gradient(135deg, #22d3ee, #6366f1);
   border-color: transparent;
   color: #06121f;
+}
+
+/* Mobile stays exactly as before (≤767px). */
+.agent-pager-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 767px) {
+  .agent-pager-actions {
+    display: contents;
+  }
+
+  #agentPrev {
+    order: 1;
+  }
+
+  .agent-pager-info {
+    order: 2;
+  }
+
+  .agent-pager-nums {
+    order: 3;
+  }
+
+  #agentNext {
+    order: 4;
+  }
+}
+
+/* Laptop / desktop: balanced 3-zone light pagination bar. */
+@media (min-width: 768px) {
+  .agent-pager {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-radius: 14px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+  }
+
+  .agent-pager-info {
+    flex: 0 0 auto;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: #cbd5e1;
+  }
+
+  .agent-pager-nums {
+    margin: 0 auto;
+    gap: 8px;
+  }
+
+  .agent-pager-num {
+    min-width: 38px;
+    width: auto;
+    height: 38px;
+    padding: 0 10px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .agent-pager-num:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+  }
+
+  .agent-pager-num.is-active {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #fff;
+  }
+
+  .agent-pager-actions {
+    flex: 0 0 auto;
+    gap: 10px;
+  }
+
+  .agent-pager-btn {
+    min-height: 0;
+    padding: 9px 18px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .agent-pager-btn:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    transform: none;
+  }
+
+  .agent-pager-btn:disabled {
+    opacity: 0.45;
+    background: #fff;
+    color: #94a3b8;
+  }
 }
 
 /* ======================================================================

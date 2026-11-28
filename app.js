@@ -6703,7 +6703,13 @@
 
         /* Filtered categories with <= 3 agents need no pagination. */
         if (pager) pager.hidden = list.length <= PAGE_SIZE;
-        if (info) info.textContent = 'Page ' + page + ' of ' + pages;
+        if (info) {
+          const start = list.length ? (page - 1) * PAGE_SIZE + 1 : 0;
+          const end = Math.min(page * PAGE_SIZE, list.length);
+          info.textContent =
+            'Showing ' + start + '–' + end + ' of ' + list.length + ' workers · Page ' +
+            page + ' of ' + pages;
+        }
 
         if (nums) {
           let html = '';
