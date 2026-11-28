@@ -1189,7 +1189,9 @@
       else if (gate.action === 'enricher') openLeadEnricherModal();
       else if (gate.action === 'review') openReviewMinerModal();
       else if (gate.action === 'watchdog') openWatchdogModal();
-      else if (gate.action === 'dividend') openDividendModal();
+      else if (gate.action === 'dividend') {
+        if (window.openDividendModal) window.openDividendModal();
+      }
       else if (gate.action === 'checkout') openCheckout(gate.packId);
       else if (gate.action === 'account') openAccountModal();
     }, 180);
@@ -2344,7 +2346,7 @@
     if (route === 'review-results') renderRwResults();
     if (route === 'property-results') renderPropertyResults();
     if (route === 'watchdog-results') renderWatchdogResults();
-    if (route === 'dividend-results') renderDividendResults();
+    if (route === 'dividend-results' && window.renderDividendResults) window.renderDividendResults();
     if (route === 'gold-results' && window.renderGoldResults) window.renderGoldResults();
 
     renderScraperCardStatus();
@@ -4702,6 +4704,43 @@
     );
   }
 
+  /* Keep every tab badge and section counter pill truthful. Called BEFORE
+     any section renderer runs so a single failing worker can never leave the
+     other workers' counts stuck at 0. */
+  function syncHistoryCounts(counts) {
+    const safe = counts || {};
+    $$('[data-hist-count]').forEach(function (el) {
+      const key = el.getAttribute('data-hist-count');
+      el.textContent = String(safe[key] == null ? 0 : safe[key]);
+    });
+    $$('[data-hist-count-label="stock"]').forEach(function (el) {
+      const stock = Number(safe.stock) || 0;
+      el.textContent = stock + ' subscription' + (stock === 1 ? '' : 's');
+    });
+    ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog', 'dividend'].forEach(function (key) {
+      const count = Number(safe[key]) || 0;
+      $$('[data-hist-count-label="' + key + '"]').forEach(function (el) {
+        el.textContent =
+          count + ' ' +
+          (key === 'watchdog'
+            ? 'watch' + (count === 1 ? '' : 'es')
+            : key === 'dividend'
+            ? 'radar' + (count === 1 ? '' : 's')
+            : 'job' + (count === 1 ? '' : 's'));
+      });
+    });
+  }
+
+  /* Isolate one worker's history renderer. A throw here is logged and never
+     blanks the counts or the cards of the other nine workers. */
+  function safeHistorySection(label, render) {
+    try {
+      render();
+    } catch (err) {
+      console.warn('[LiteWork] ' + label + ' history render failed:', err);
+    }
+  }
+
   function paintHistory() {
     const stockPane = $('#historyStock');
     const b2bPane = $('#historyB2B');
@@ -4731,6 +4770,21 @@
     const watchdogPage = historyPageSlice('watchdog', historyState.watchdog);
     const dividendPage = historyPageSlice('dividend', historyState.dividend);
 
+    /* Counts are painted BEFORE any section renderer runs, so one failing
+       worker can never leave every tab badge stuck at 0. */
+    syncHistoryCounts({
+      stock: stockCount,
+      b2b: b2bCount,
+      invoice: invoiceCount,
+      enricher: enricherCount,
+      review: reviewCount,
+      property: propertyCount,
+      tracker: trackerCount,
+      watchdog: watchdogCount,
+      dividend: dividendCount
+    });
+
+    safeHistorySection('stock', function () {
     if (stockPane) {
       stockPane.innerHTML = stockCount
         ? renderHistoryPager('stock', 'Stock subscriptions', stockPage.page, stockPage.pages, stockCount) +
@@ -4742,7 +4796,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Subscribe to Stock Brief</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('b2b', function () {
     if (b2bPane) {
       b2bPane.innerHTML = b2bCount
         ? renderHistoryPager('b2b', 'Lead Scraper jobs', b2bPage.page, b2bPage.pages, b2bCount) +
@@ -4754,7 +4810,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Launch Lead Scraper</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('invoice', function () {
     if (invoicePane) {
       invoicePane.innerHTML = invoiceCount
         ? renderHistoryPager('invoice', 'Invoice OCR jobs', invoicePage.page, invoicePage.pages, invoiceCount) +
@@ -4766,7 +4824,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Run Invoice OCR</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('enricher', function () {
     if (enricherPane) {
       enricherPane.innerHTML = enricherCount
         ? renderHistoryPager('enricher', 'Lead Enricher jobs', enricherPage.page, enricherPage.pages, enricherCount) +
@@ -4778,7 +4838,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Launch Lead Enricher</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('review', function () {
     if (reviewPane) {
       reviewPane.innerHTML = reviewCount
         ? renderHistoryPager('review', 'Review Miner jobs', reviewPage.page, reviewPage.pages, reviewCount) +
@@ -4790,7 +4852,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Launch Review Miner</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('property', function () {
     if (propertyPane) {
       propertyPane.innerHTML = propertyCount
         ? renderHistoryPager('property', 'Property Sniper watches', propertyPage.page, propertyPage.pages, propertyCount) +
@@ -4802,7 +4866,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Start Deal Sniper</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('tracker', function () {
     if (trackerPane) {
       trackerPane.innerHTML = trackerCount
         ? renderHistoryPager('tracker', 'Competitor Tracker watches', trackerPage.page, trackerPage.pages, trackerCount) +
@@ -4814,7 +4880,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Start 7-Day Watch</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('watchdog', function () {
     if (watchdogPane) {
       watchdogPane.innerHTML = watchdogCount
         ? renderHistoryPager('watchdog', 'Website Watchdogs', watchdogPage.page, watchdogPage.pages, watchdogCount) +
@@ -4826,7 +4894,9 @@
           '<a class="btn btn-primary btn-sm" href="#agents">Start 30-Day Watchdog</a>' +
           '</div>';
     }
+    });
 
+    safeHistorySection('dividend', function () {
     if (dividendPane) {
       dividendPane.innerHTML = dividendCount
         ? renderHistoryPager('dividend', 'Dividend Radars', dividendPage.page, dividendPage.pages, dividendCount) +
@@ -4838,9 +4908,12 @@
           '<button type="button" class="btn btn-primary btn-sm" data-open-dividend>Configure Radar →</button>' +
           '</div>';
       $$('[data-open-dividend]', dividendPane).forEach(function (btn) {
-        btn.addEventListener('click', openDividendModal);
+        btn.addEventListener('click', function () {
+          if (window.openDividendModal) window.openDividendModal();
+        });
       });
     }
+    });
 
     /* Keep tab + section counters in sync. */
     const counts = {
@@ -5011,10 +5084,26 @@
         historyState.loading = false;
         if (body === null) return;
 
-        /* Worker #10 (Gold Price & News Brief) renders its own history pane. */
-        if (window.renderGoldHistory) window.renderGoldHistory(body);
-
         const source = historySource(body);
+        /* Defensive shape guards: never trust /account/history. Every worker
+           list must resolve to an array, even when a key is missing/null. */
+        const safeList = function (key) {
+          return Array.isArray(source[key]) ? source[key] : [];
+        };
+        const dividendRadarList = safeList('dividend_radar');
+        const goldTrackerList = safeList('gold_tracker');
+
+        /* Worker #10 (Gold Price & News Brief) renders its own history pane.
+           Kept isolated so a gold failure can never blank the other 9 workers. */
+        if (window.renderGoldHistory) {
+          try {
+            window.renderGoldHistory(
+              goldTrackerList.length ? { gold_tracker: goldTrackerList } : body
+            );
+          } catch (goldErr) {
+            console.warn('[LiteWork] Gold history render failed:', goldErr);
+          }
+        }
         const stockRaw = pickArray(source, [
           'stock_brief',
           'stock_briefs',
@@ -5076,12 +5165,14 @@
           'watchdog_jobs',
           'watchdog'
         ]);
-        const dividendRaw = pickArray(source, [
-          'dividend_radar',
-          'dividend_radars',
-          'dividend_jobs',
-          'dividends'
-        ]);
+        const dividendRaw = dividendRadarList.length
+          ? dividendRadarList
+          : pickArray(source, [
+              'dividend_radar',
+              'dividend_radars',
+              'dividend_jobs',
+              'dividends'
+            ]);
         const combined = pickArray(source, ['history', 'records', 'runs', 'items']);
         const stockExtra = [];
         const b2bExtra = [];
@@ -6497,13 +6588,19 @@
 
         const divView = event.target.closest('[data-dividend-view]');
         if (divView) {
-          openDividendHistoryJob(divView.getAttribute('data-dividend-view'));
+          if (window.openDividendHistoryJob) {
+            window.openDividendHistoryJob(divView.getAttribute('data-dividend-view'));
+          } else if (window.renderDividendResults) {
+            window.location.hash = '#dividend-results';
+          }
           return;
         }
 
         const divDownload = event.target.closest('[data-dividend-download]');
         if (divDownload) {
-          downloadDividendCalendar(divDownload.getAttribute('data-dividend-download'));
+          if (window.downloadDividendCalendar) {
+            window.downloadDividendCalendar(divDownload.getAttribute('data-dividend-download'));
+          }
         }
       });
     }
@@ -6832,14 +6929,14 @@
     /* Dividend & Ex-Date Radar (Worker #9): launch & download */
     $$('[data-open-dividend]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        openDividendModal();
+        if (window.openDividendModal) window.openDividendModal();
       });
     });
 
     const divDownloadBtn = $('#divDownloadBtn');
     if (divDownloadBtn) {
       divDownloadBtn.addEventListener('click', function () {
-        downloadDividendCalendar();
+        if (window.downloadDividendCalendar) window.downloadDividendCalendar();
       });
     }
 
@@ -14721,6 +14818,44 @@
     window.addEventListener('hashchange', onRouteChange);
     onRouteChange();
   }
+
+  /* ==========================================================================
+     Public bridge — a tiny, stable surface so standalone worker modules
+     (workers/dividend-radar.js, workers/gold-tracker.js, …) can reuse
+     LiteWork's modal, auth, navigation and STOCK_REGIONS helpers without
+     duplicating app.js internals. Read/call only; nothing here mutates logic.
+     ========================================================================== */
+  window.__LW = {
+    get state() {
+      return state;
+    },
+    get credits() {
+      return state && state.credits;
+    },
+    STOCK_REGIONS: STOCK_REGIONS,
+    API_BASE: API_BASE,
+    TOKEN_KEY: TOKEN_KEY,
+    isLoggedIn: isLoggedIn,
+    getToken: readToken,
+    authHeaders: authHeaders,
+    apiFetch: apiFetch,
+    escapeHtml: escapeHtml,
+    openModal: openModal,
+    closeModal: closeModal,
+    openAuthModal: openAuthModal,
+    openTopUpModal: function () {
+      window.location.hash = '#topup';
+    },
+    updateCreditsDisplay: function (value) {
+      var changed = setLiveCredits(value);
+      if (changed) syncCreditUI();
+      return changed;
+    },
+    navigate: function (hash) {
+      window.location.hash = String(hash || '#agents').charAt(0) === '#' ? hash : '#' + hash;
+    },
+    toast: toast
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
