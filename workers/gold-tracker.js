@@ -331,7 +331,7 @@
     return (
       '<h2 class="modal-title" id="modalTitle">' + esc(AGENT_NAME) + '</h2>' +
       '<p class="modal-sub">Daily 07:00 MYT email · 24K & 916 prices per gram · grounded news bullets</p>' +
-      '<div class="calc-card modal-calc modal-calc-dark"><div class="calc-grid">' +
+      '<div class="calc-card modal-calc"><div class="calc-grid">' +
       '<div class="calc-cell"><span class="calc-label">Available</span>' +
       '<span class="calc-value" id="goldAvailable">' +
       (availableCredits === null ? '—' : availableCredits) + ' Credits</span></div>' +
@@ -340,7 +340,8 @@
       '<div class="calc-cell"><span class="calc-label">Duration</span>' +
       '<span class="calc-value" id="goldDurationValue">' + durationFor(durationDays).label + '</span></div>' +
       '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
-      '<span class="calc-value" id="goldCost">' + durationFor(durationDays).credits + ' Credits</span></div>' +
+      '<span class="calc-value" id="goldCost">' + durationFor(durationDays).credits + ' Credits</span>' +
+      '<span class="calc-sub" id="goldRemaining"></span></div>' +
       '</div></div>' +
       '<form class="gold-form" id="goldForm" novalidate>' +
       '<div class="modal-section"><h3>Markets to track</h3>' +
@@ -463,6 +464,15 @@
     if (count) count.textContent = selectedCountries.length + ' / 4';
     if (durationValue) durationValue.textContent = duration.label;
     if (cost) cost.textContent = duration.credits + ' Credits';
+
+    var remainingEl = $('#goldRemaining');
+    if (remainingEl) {
+      remainingEl.textContent =
+        availableCredits === null
+          ? ''
+          : 'Remaining after activation: ' +
+            Math.max(0, availableCredits - duration.credits) + ' credits';
+    }
 
     if (availableCredits !== null) {
       var shortfall = duration.credits - availableCredits;

@@ -2236,15 +2236,25 @@ ol {
   position: absolute;
   top: 13px;
   right: 13px;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
   border-radius: 50%;
   border: 1.5px solid #cbd5e1;
   background: #fff;
   color: transparent;
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+/* Keep the tick SVG dead-centre inside the circle with zero clipping. */
+.stock-check svg {
+  display: block;
+  width: 12px;
+  height: 12px;
 }
 
 .stock-card.is-selected .stock-check {
@@ -10835,10 +10845,12 @@ body.is-authed #homeTemplate3 .t3-btn-guest {
   margin-bottom: 12px;
 }
 
+/* No inner scroll: the modal body owns the single scroll flow so cards are
+   never sliced in half by a nested max-height scrollbar. */
 .div-stock-grid {
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 2px;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
   margin-bottom: 14px;
 }
 

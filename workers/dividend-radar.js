@@ -351,38 +351,47 @@
     var cost = costFor(Object.keys(selected).length || 1);
     return (
       '<h2 class="modal-title" id="modalTitle">' + esc(AGENT_NAME) + '</h2>' +
-      '<p class="modal-sub">12-month Dividend Calendar (.xlsx) · 30-day radar · Ex-Date email alerts</p>' +
-      '<div class="div-cost-banner">' +
-      '<span class="mini-pill" id="divCostBadge">' + cost + ' credits · 30-day radar</span>' +
-      '<span class="fine" id="divAvailableNote">Available: — credits</span>' +
-      '</div>' +
+      '<p class="modal-sub">12-month Dividend Calendar (.xlsx) · ' + DIV_DAYS +
+      '-day radar · Ex-Date email alerts</p>' +
+      '<div class="calc-card modal-calc"><div class="calc-grid">' +
+      '<div class="calc-cell"><span class="calc-label">Available</span>' +
+      '<span class="calc-value" id="divAvailableValue">— Credits</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Selected</span>' +
+      '<span class="calc-value" id="divSelectedValue">0</span></div>' +
+      '<div class="calc-cell"><span class="calc-label">Duration</span>' +
+      '<span class="calc-value">' + DIV_DAYS + ' Days</span></div>' +
+      '<div class="calc-cell calc-cell-total"><span class="calc-label">Total cost</span>' +
+      '<span class="calc-value" id="divCostValue">' + cost + ' Credits</span>' +
+      '<span class="calc-sub" id="divRemainingValue"></span></div>' +
+      '</div></div>' +
       '<form class="gold-form" id="dividendForm" novalidate>' +
+      '<div class="modal-section"><h3>1. Select stocks</h3>' +
+      '<span class="fine">Select 1–' + DIV_MAX_STOCKS + ' across MY, SG & US</span></div>' +
       '<div class="field div-search-field"><label for="divStockSearch">Find a stock</label>' +
       '<input type="search" id="divStockSearch" placeholder="Search ticker or company…" autocomplete="off" value="' +
       esc(searchQuery) + '" /></div>' +
-      '<div class="modal-section"><h3>Pick a market</h3>' +
-      '<span class="fine">Select 1–' + DIV_MAX_STOCKS + ' stocks across MY, SG & US</span></div>' +
       '<div class="stock-region-tabs" id="divRegionTabs" role="tablist" aria-label="Market region"></div>' +
-      '<div class="stock-grid div-stock-grid" id="divStockGrid" role="group" aria-label="Select dividend stocks"></div>' +
-      '<div class="modal-section"><h3>Selected holdings</h3>' +
+      '<div class="stock-grid" id="divStockGrid" role="group" aria-label="Select dividend stocks"></div>' +
+      '<div class="modal-section"><h3>2. Selected holdings</h3>' +
       '<span class="fine">Shares are optional — add them for estimated cash payouts</span></div>' +
       '<div class="div-selected-list" id="divSelected"></div>' +
-      '<div class="div-lead-row">' +
-      '<div><strong>Ex-Date alert lead time</strong>' +
-      '<p class="fine" style="margin:2px 0 0">Email reminder before every Ex-Dividend Date</p></div>' +
-      '</div>' +
+      '<div class="modal-section"><h3>3. Ex-Date alert lead time</h3>' +
+      '<span class="fine">Email reminder before every Ex-Dividend Date</span></div>' +
       '<div class="gold-durations" id="divLeadPills" role="radiogroup" aria-label="Alert lead time">' +
       LEAD_OPTIONS.map(leadPillHtml).join('') +
       '</div>' +
+      '<div class="modal-section"><h3>4. Delivery details</h3>' +
+      '<span class="fine">Email only</span></div>' +
       '<div class="field"><label for="divEmail">Delivery email</label>' +
       '<input type="email" id="divEmail" class="is-locked" value="' + esc(accountEmail) + '" ' +
       'placeholder="Loading your account email…" disabled tabindex="-1" /></div>' +
-      '<p class="fine">Your 12-month Dividend Calendar is generated instantly. Ex-Date alerts are emailed automatically.</p>' +
       '<div class="modal-actions">' +
       '<div class="scraper-modal-error" id="divFormError" role="alert"></div>' +
       '<p class="scraper-shortfall" id="divShortfall" hidden></p>' +
-      '<button type="submit" class="btn btn-activate" id="divStartBtn">Activate 30-Day Radar</button>' +
-      '<p class="fine">5 credits for 1–5 stocks · 10 credits for 6–15 stocks. Deducted immediately.</p>' +
+      '<button type="submit" class="btn btn-activate" id="divStartBtn">Confirm & Spend ' +
+      cost + ' Credits (' + DIV_DAYS + '-Day Radar)</button>' +
+      '<p class="fine">Your 12-month Dividend Calendar is generated instantly. ' +
+      '5 credits for 1–5 stocks · 10 credits for 6–15 stocks. Deducted immediately.</p>' +
       '</div>' +
       '</form>'
     );
@@ -405,7 +414,9 @@
     return (
       '<button type="button" class="stock-card' + (on ? ' is-selected' : '') + '"' +
       ' data-div-ticker="' + esc(stock.symbol) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
-      '<span class="stock-check" aria-hidden="true">✓</span>' +
+      '<span class="stock-check" aria-hidden="true">' +
+      '<svg viewBox="0 0 20 20" width="12" height="12"><path d="M4.5 10.5l3.4 3.4 7.6-7.6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</span>' +
       '<span class="stock-symbol">' + esc(stock.symbol) + '</span>' +
       '<span class="stock-name">' + esc(stock.name) + '</span>' +
       '<span class="stock-tag">' + esc(stock.tag || (region ? region.id.toUpperCase() : '')) + '</span>' +
@@ -499,13 +510,29 @@
     var count = selectedList().length;
     var cost = costFor(count || 1);
 
-    var costBadge = $('#divCostBadge');
-    if (costBadge) costBadge.textContent = cost + ' credits · 30-day radar';
+    var setText = function (selector, text) {
+      var el = $(selector);
+      if (el) el.textContent = text;
+    };
 
-    var availNote = $('#divAvailableNote');
-    if (availNote) {
-      availNote.textContent =
-        'Available: ' + (availableCredits === null ? '—' : availableCredits) + ' credits';
+    setText(
+      '#divAvailableValue',
+      (availableCredits === null ? '—' : availableCredits) + ' Credits'
+    );
+    setText('#divSelectedValue', String(count));
+    setText('#divCostValue', cost + ' Credits');
+
+    var remaining =
+      availableCredits === null ? null : Math.max(0, availableCredits - cost);
+    setText(
+      '#divRemainingValue',
+      remaining === null ? '' : 'Remaining after activation: ' + remaining + ' credits'
+    );
+
+    var startBtn = $('#divStartBtn');
+    if (startBtn && !inFlight) {
+      startBtn.textContent =
+        'Confirm & Spend ' + cost + ' Credits (' + DIV_DAYS + '-Day Radar)';
     }
 
     $$('[data-div-lead]').forEach(function (pill) {
@@ -673,8 +700,8 @@
         if (button) {
           button.disabled = false;
           button.classList.remove('is-busy');
-          button.textContent = 'Activate 30-Day Radar';
         }
+        syncModalState();
         setFormError(
           (err && err.message) ||
             'Could not activate the radar. Please try again in a moment.'
