@@ -6782,20 +6782,20 @@
       if (!list || !pager) return;
 
       const PAGE_SIZE = 5;
-      const items = Array.prototype.slice
-        .call(list.children)
-        .filter(function (el) { return el.tagName === 'LI'; });
-      if (items.length <= PAGE_SIZE) {
-        pager.hidden = true;
-        return;
-      }
-
       const info = $('#home2PagerInfo');
       const nums = $('#home2PagerNums');
       const prev = $('#home2PagerPrev');
       const next = $('#home2PagerNext');
-      const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+
+      let items = [];
+      let pages = 1;
       let page = 1;
+
+      function listItems() {
+        return Array.prototype.slice
+          .call(list.children)
+          .filter(function (el) { return el.tagName === 'LI'; });
+      }
 
       function paint() {
         page = clamp(page, 1, pages);
@@ -6858,7 +6858,35 @@
         });
       }
 
-      paint();
+      /* Re-scan on every sync so the pager always fits however many worker
+         rows the list currently holds (13 rows → 3 pages, 14 → 3, etc.). */
+      function sync() {
+        items = listItems();
+        pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+        if (items.length <= PAGE_SIZE) {
+          pager.hidden = true;
+          page = 1;
+          items.forEach(function (item) { item.hidden = false; });
+          return;
+        }
+        pager.hidden = false;
+        if (page > pages) page = pages;
+        paint();
+      }
+
+      /* Future-proof: if rows are added/removed at runtime, re-paginate. */
+      if (window.MutationObserver) {
+        let syncTimer = null;
+        new window.MutationObserver(function () {
+          if (syncTimer) window.clearTimeout(syncTimer);
+          syncTimer = window.setTimeout(function () {
+            syncTimer = null;
+            sync();
+          }, 120);
+        }).observe(list, { childList: true });
+      }
+
+      sync();
     })();
 
     /* Coming-soon waitlist buttons */
