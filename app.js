@@ -3349,7 +3349,8 @@
   /* ---------------- Subscriptions & run history (per agent) --------------
      Loaded from GET /webhook/account/history with the session bearer token.
      Both agents are kept in separate lists so the UI can render clean tabs. */
-  const HISTORY_PAGE_SIZE = 5;
+  /* Render every run so the compact toolbar can collapse/search the full list. */
+  const HISTORY_PAGE_SIZE = 100;
   let historyState = {
     loaded: false,
     loading: false,
