@@ -6167,6 +6167,11 @@ table.leads-table {
   margin-left: auto;
 }
 
+/* Desktop keeps the word "Refresh"; the ↻ glyph is mobile-only. */
+.af-refresh-icon {
+  display: none;
+}
+
 .af-toggle {
   margin-top: 10px;
 }
@@ -6331,6 +6336,90 @@ table.leads-table {
   .af-search input {
     padding: 8px 10px;
     font-size: 0.82rem;
+  }
+}
+
+/* --- Mobile (≤640px): 3-row thumb-friendly My Activity toolbar ----------
+   Row 1 search + compact ↻ square · Row 2 full-width worker dropdown ·
+   Row 3 full-width All / Active / Past segmented toggle. */
+@media (max-width: 640px) {
+  .history-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 14px;
+  }
+
+  /* Row 1: search grows to fill, refresh is a 42 × 42 icon square. */
+  .af-search {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  #historySearchInput {
+    width: 100%;
+    height: 42px;
+  }
+
+  /* ID selector so the later `.view .btn` mobile rule can't stretch it. */
+  #historyRefresh {
+    grid-column: 2;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    margin-left: 0;
+    align-self: center;
+    border-radius: 10px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .af-refresh-label {
+    display: none;
+  }
+
+  .af-refresh-icon {
+    display: inline-block;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
+  /* Row 2: full-width worker dropdown — long names never truncate. */
+  #historyWorkerSelect {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    height: 42px;
+  }
+
+  /* Row 3: three equal full-width status segments. */
+  #historyStatusFilter {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3px;
+    width: 100%;
+    height: 38px;
+    padding: 3px;
+  }
+
+  #historyStatusFilter .af-seg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 0 6px;
+    font-size: 0.76rem;
   }
 }
 
