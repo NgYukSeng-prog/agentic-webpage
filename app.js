@@ -6706,9 +6706,11 @@
         if (info) {
           const start = list.length ? (page - 1) * PAGE_SIZE + 1 : 0;
           const end = Math.min(page * PAGE_SIZE, list.length);
-          info.textContent =
-            'Showing ' + start + '–' + end + ' of ' + list.length + ' workers · Page ' +
-            page + ' of ' + pages;
+          /* Numbers get <strong> so they render crisp #f8fafc on dark glass. */
+          info.innerHTML =
+            'Showing <strong>' + start + '–' + end + '</strong> of <strong>' +
+            list.length + '</strong> workers · Page <strong>' + page +
+            '</strong> of <strong>' + pages + '</strong>';
         }
 
         if (nums) {

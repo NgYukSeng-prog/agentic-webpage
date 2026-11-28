@@ -371,8 +371,10 @@
       if (entry.matched.length > ITEMS_PER_PAGE) {
         var pane = paneOf(entry.group);
         if (pane) {
+          /* Top-mounted pager: sits directly under the section header so
+             mobile users can switch pages without scrolling past 5 cards. */
           pane.insertAdjacentHTML(
-            'beforeend',
+            'afterbegin',
             pagerHtml(entry.key, current, pages, entry.matched.length)
           );
         }
