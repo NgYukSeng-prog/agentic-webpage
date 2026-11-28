@@ -8988,6 +8988,11 @@ table.leads-table {
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 
+/* The base rule above sets display:grid, so [hidden] must be forced. */
+.home2-worker-list li[hidden] {
+  display: none;
+}
+
 .home2-worker-copy {
   display: flex;
   flex-direction: column;
@@ -9025,6 +9030,147 @@ table.leads-table {
   color: #a5f3fc;
 }
 
+/* --- Live "alive" dot beside the 13 Live Workers eyebrow --------------- */
+.home2-live-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home2-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  flex: 0 0 auto;
+  animation: home2LivePulse 2.6s ease-in-out infinite;
+}
+
+@keyframes home2LivePulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.82);
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 10px 2px rgba(52, 211, 153, 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home2-live-dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* --- Top-mounted 5-per-page worker navigation (dark glass) ------------- */
+.home2-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin: 0 0 22px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.55);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.home2-pager[hidden] {
+  display: none;
+}
+
+.home2-pager-info {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.home2-pager-info strong {
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.home2-pager-nums {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 auto;
+}
+
+.home2-pager-num {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(30, 41, 59, 0.6);
+  color: #cbd5e1;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.home2-pager-num:hover {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #ffffff;
+}
+
+.home2-pager-num.is-active {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.32);
+}
+
+.home2-pager-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home2-pager-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(30, 41, 59, 0.75);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.home2-pager-btn:hover:not(:disabled) {
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.home2-pager-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
+}
+
 @media (max-width: 900px) {
   .home2-hero {
     padding: 72px 0 48px;
@@ -9047,6 +9193,28 @@ table.leads-table {
       "copy launch"
       "cost launch";
     row-gap: 8px;
+  }
+
+  .home2-pager {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .home2-pager-info {
+    flex: 1 1 100%;
+    text-align: center;
+    order: 1;
+  }
+
+  .home2-pager-nums {
+    order: 2;
+    margin: 0;
+  }
+
+  .home2-pager-actions {
+    order: 3;
   }
 
   .home2-worker-copy {

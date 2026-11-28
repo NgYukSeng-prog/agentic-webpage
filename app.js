@@ -6775,6 +6775,92 @@
       paintPages();
     })();
 
+    /* Home (Template 2) directory: strict 5 workers per page, nav on top */
+    (function bindHomeWorkerPager() {
+      const list = $('#home2WorkerList');
+      const pager = $('#home2WorkerPager');
+      if (!list || !pager) return;
+
+      const PAGE_SIZE = 5;
+      const items = Array.prototype.slice
+        .call(list.children)
+        .filter(function (el) { return el.tagName === 'LI'; });
+      if (items.length <= PAGE_SIZE) {
+        pager.hidden = true;
+        return;
+      }
+
+      const info = $('#home2PagerInfo');
+      const nums = $('#home2PagerNums');
+      const prev = $('#home2PagerPrev');
+      const next = $('#home2PagerNext');
+      const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+      let page = 1;
+
+      function paint() {
+        page = clamp(page, 1, pages);
+        items.forEach(function (item, index) {
+          item.hidden = index < (page - 1) * PAGE_SIZE || index >= page * PAGE_SIZE;
+        });
+
+        if (info) {
+          const start = (page - 1) * PAGE_SIZE + 1;
+          const end = Math.min(page * PAGE_SIZE, items.length);
+          info.innerHTML =
+            'Showing <strong>' + start + '–' + end + '</strong> of <strong>' +
+            items.length + '</strong> workers';
+        }
+
+        if (nums) {
+          let html = '';
+          for (let i = 1; i <= pages; i += 1) {
+            html +=
+              '<button type="button" class="home2-pager-num' +
+              (i === page ? ' is-active' : '') + '" data-home2-page="' + i +
+              '" aria-label="Page ' + i + '"' +
+              (i === page ? ' aria-current="page"' : '') + '>' + i + '</button>';
+          }
+          nums.innerHTML = html;
+        }
+
+        if (prev) {
+          const off = page <= 1;
+          prev.disabled = off;
+          prev.setAttribute('aria-disabled', off ? 'true' : 'false');
+        }
+        if (next) {
+          const off = page >= pages;
+          next.disabled = off;
+          next.setAttribute('aria-disabled', off ? 'true' : 'false');
+        }
+      }
+
+      if (prev) {
+        prev.addEventListener('click', function () {
+          if (page <= 1) return;
+          page -= 1;
+          paint();
+        });
+      }
+      if (next) {
+        next.addEventListener('click', function () {
+          if (page >= pages) return;
+          page += 1;
+          paint();
+        });
+      }
+      if (nums) {
+        nums.addEventListener('click', function (event) {
+          const btn = event.target.closest ? event.target.closest('[data-home2-page]') : null;
+          if (!btn) return;
+          page = toPositiveInt(btn.getAttribute('data-home2-page'), 1);
+          paint();
+        });
+      }
+
+      paint();
+    })();
+
     /* Coming-soon waitlist buttons */
     $$('[data-waitlist]').forEach(function (btn) {
       btn.addEventListener('click', function () {
