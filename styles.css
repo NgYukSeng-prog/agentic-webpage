@@ -662,7 +662,10 @@ ol {
   line-height: 1.2;
 }
 
-.nav-cta-mobile {
+/* The center pill bar shows exactly 4 route links on desktop. The mobile-only
+   Top Up CTA lives inside the drawer, so it must beat `.nav-links a`'s
+   `display: inline-flex` specificity (0,2,1 > 0,1,1). */
+.nav-links a.nav-cta-mobile {
   display: none;
 }
 
@@ -3291,11 +3294,12 @@ ol {
     font-size: 0.95rem;
   }
 
-  .nav-cta {
+  /* Mobile keeps a single Top Up CTA — inside the opened drawer. */
+  .navbar .nav-actions .nav-cta {
     display: none;
   }
 
-  .nav-cta-mobile {
+  .nav-links a.nav-cta-mobile {
     display: inline-flex;
     justify-content: center;
     margin-top: 6px;
