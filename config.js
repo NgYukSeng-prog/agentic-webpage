@@ -601,6 +601,17 @@ window.CONFIG = {
   audioIntelDownloadUrl:
     'https://n8n.20.205.96.122.sslip.io/webhook/download-audio-intel',
 
+  /* --- Packaging & Shelf QC Sentinel (12th live worker) -------------------
+     Compare approved artwork vs supplier proofs / shelf photos.
+     5 credits (1–5 photos) / 8 credits (6–10 photos) · 1 master + photos. */
+  PACKAGING_QC_AGENT_ID: 'packaging-qc',
+  PACKAGING_QC_AGENT_NAME: 'Packaging & Shelf QC Sentinel',
+  PACKAGING_QC_MAX_PHOTOS: 10,
+  packagingQcStartUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/packaging-qc-start',
+  packagingQcDownloadUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-packaging-qc',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [

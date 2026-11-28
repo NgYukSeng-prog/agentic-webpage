@@ -706,9 +706,10 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — 11 Live Workers, One Credit Wallet',
+    agents: 'AI Agents — 12 Live Workers, One Credit Wallet',
     plans: 'My Activity · LiteWork',
     'audio-results': 'Audio-to-Intel — LiteWork',
+    'packaging-results': 'Packaging & Shelf QC — LiteWork',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
     configure: 'Configure Your Worker — LiteWork',
@@ -2280,6 +2281,7 @@
     'dividend-results',
     'gold-results',
     'audio-results',
+    'packaging-results',
     'success'
   ];
 
@@ -2304,6 +2306,7 @@
         route === 'scraper-results' ||
         route === 'invoice-results' ||
         route === 'audio-results' ||
+        route === 'packaging-results' ||
         route === 'enricher-results' ||
         route === 'review-results' ||
         route === 'property-results' ||
@@ -2352,6 +2355,7 @@
     if (route === 'dividend-results' && window.renderDividendResults) window.renderDividendResults();
     if (route === 'gold-results' && window.renderGoldResults) window.renderGoldResults();
     if (route === 'audio-results' && window.renderAudioIntelResults) window.renderAudioIntelResults();
+    if (route === 'packaging-results' && window.renderPackagingQcResults) window.renderPackagingQcResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -4957,7 +4961,7 @@
       name === 'stock' || name === 'b2b' || name === 'invoice' ||
       name === 'enricher' || name === 'review' ||
       name === 'property' || name === 'tracker' || name === 'watchdog' ||
-      name === 'dividend' || name === 'audio'
+      name === 'dividend' || name === 'audio' || name === 'packaging'
         ? name
         : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
@@ -4995,9 +4999,11 @@
     const watchdogPane = $('#historyWatchdog');
     const dividendPane = $('#historyDividend');
     const audioPane = $('#historyAudioIntel');
+    const packagingPane = $('#historyPackagingQc');
     if (
       !stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane &&
-      !propertyPane && !trackerPane && !watchdogPane && !dividendPane && !audioPane
+      !propertyPane && !trackerPane && !watchdogPane && !dividendPane &&
+      !audioPane && !packagingPane
     ) {
       return;
     }
@@ -5046,6 +5052,7 @@
       if (watchdogPane) watchdogPane.innerHTML = loginCard;
       if (dividendPane) dividendPane.innerHTML = loginCard;
       if (audioPane) audioPane.innerHTML = loginCard;
+      if (packagingPane) packagingPane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
       ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog', 'dividend'].forEach(function (key) {
@@ -5073,6 +5080,7 @@
     if (watchdogPane) watchdogPane.innerHTML = '<p class="empty-note">Loading your website watchdogs…</p>';
     if (dividendPane) dividendPane.innerHTML = '<p class="empty-note">Loading your dividend radars…</p>';
     if (audioPane) audioPane.innerHTML = '<p class="empty-note">Loading your audio batches…</p>';
+    if (packagingPane) packagingPane.innerHTML = '<p class="empty-note">Loading your packaging audits…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -5101,6 +5109,7 @@
         const dividendRadarList = safeList('dividend_radar');
         const goldTrackerList = safeList('gold_tracker');
         const audioIntelList = safeList('audio_intel');
+        const packagingQcList = safeList('packaging_qc');
 
         /* Worker #10 (Gold Price & News Brief) renders its own history pane.
            Kept isolated so a gold failure can never blank the other 9 workers. */
@@ -5122,6 +5131,17 @@
             );
           } catch (audioErr) {
             console.warn('[LiteWork] Audio history render failed:', audioErr);
+          }
+        }
+
+        /* Worker #12 (Packaging & Shelf QC) renders its own history pane. */
+        if (window.renderPackagingQcHistory) {
+          try {
+            window.renderPackagingQcHistory(
+              packagingQcList.length ? { packaging_qc: packagingQcList } : body
+            );
+          } catch (packErr) {
+            console.warn('[LiteWork] Packaging QC history render failed:', packErr);
           }
         }
         const stockRaw = pickArray(source, [
