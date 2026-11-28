@@ -706,7 +706,7 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — 9 Live Workers, One Credit Wallet',
+    agents: 'AI Agents — 10 Live Workers, One Credit Wallet',
     plans: 'Manage My Plan — Subscriptions & History',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
@@ -718,6 +718,7 @@
     'property-results': 'Property Sniper Results — LiteWork',
     'watchdog-results': 'Website Watchdog Report — LiteWork',
     'dividend-results': 'Dividend & Ex-Date Radar — LiteWork',
+    'gold-results': 'Gold Price & News Brief — LiteWork',
     success: 'Subscription Confirmed — LiteWork'
   };
 
@@ -2274,6 +2275,7 @@
     'property-results',
     'watchdog-results',
     'dividend-results',
+    'gold-results',
     'success'
   ];
 
@@ -2301,7 +2303,8 @@
         route === 'review-results' ||
         route === 'property-results' ||
         route === 'watchdog-results' ||
-        route === 'dividend-results';
+        route === 'dividend-results' ||
+        route === 'gold-results';
       const active = r === route || (agentRoutes && r === 'agents');
       link.classList.toggle('is-active', active);
       if (active) link.setAttribute('aria-current', 'page');
@@ -2342,6 +2345,7 @@
     if (route === 'property-results') renderPropertyResults();
     if (route === 'watchdog-results') renderWatchdogResults();
     if (route === 'dividend-results') renderDividendResults();
+    if (route === 'gold-results' && window.renderGoldResults) window.renderGoldResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -5006,6 +5010,9 @@
       .then(function (body) {
         historyState.loading = false;
         if (body === null) return;
+
+        /* Worker #10 (Gold Price & News Brief) renders its own history pane. */
+        if (window.renderGoldHistory) window.renderGoldHistory(body);
 
         const source = historySource(body);
         const stockRaw = pickArray(source, [

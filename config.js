@@ -581,6 +581,15 @@ window.CONFIG = {
   dividendCalendarDownloadUrl:
     'https://n8n.20.205.96.122.sslip.io/webhook/download-dividend-calendar',
 
+  /* --- Gold Price & News Brief (10th live worker) -------------------------
+     Daily 07:00 MYT email with live 24K (999) & 22K (916) gold prices per
+     gram in MYR / SGD / USD / CNY plus grounded news bullets explaining why
+     gold moved. 7 days = 5 credits · 30 days = 15 credits. */
+  GOLD_TRACKER_AGENT_ID: 'gold-tracker',
+  GOLD_TRACKER_AGENT_NAME: 'Gold Price & News Brief (MY / SG / US / CN)',
+  goldTrackerStartUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/gold-tracker-start',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
