@@ -706,10 +706,11 @@
 
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
-    agents: 'AI Agents — 12 Live Workers, One Credit Wallet',
+    agents: 'AI Agents — 13 Live Workers, One Credit Wallet',
     plans: 'My Activity · LiteWork',
     'audio-results': 'Audio-to-Intel — LiteWork',
     'packaging-results': 'Packaging & Shelf QC — LiteWork',
+    'shopee-results': 'Shopee Price Radar — LiteWork',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
     configure: 'Configure Your Worker — LiteWork',
@@ -2282,6 +2283,7 @@
     'gold-results',
     'audio-results',
     'packaging-results',
+    'shopee-results',
     'success'
   ];
 
@@ -2307,6 +2309,7 @@
         route === 'invoice-results' ||
         route === 'audio-results' ||
         route === 'packaging-results' ||
+        route === 'shopee-results' ||
         route === 'enricher-results' ||
         route === 'review-results' ||
         route === 'property-results' ||
@@ -2356,6 +2359,7 @@
     if (route === 'gold-results' && window.renderGoldResults) window.renderGoldResults();
     if (route === 'audio-results' && window.renderAudioIntelResults) window.renderAudioIntelResults();
     if (route === 'packaging-results' && window.renderPackagingQcResults) window.renderPackagingQcResults();
+    if (route === 'shopee-results' && window.renderShopeeResults) window.renderShopeeResults();
 
     renderScraperCardStatus();
     if (route === 'agents') ensureScraperRunning();
@@ -4961,7 +4965,7 @@
       name === 'stock' || name === 'b2b' || name === 'invoice' ||
       name === 'enricher' || name === 'review' ||
       name === 'property' || name === 'tracker' || name === 'watchdog' ||
-      name === 'dividend' || name === 'audio' || name === 'packaging'
+      name === 'dividend' || name === 'audio' || name === 'packaging' || name === 'shopee'
         ? name
         : 'all';
     $$('[data-history-tab]').forEach(function (btn) {
@@ -5000,10 +5004,11 @@
     const dividendPane = $('#historyDividend');
     const audioPane = $('#historyAudioIntel');
     const packagingPane = $('#historyPackagingQc');
+    const shopeePane = $('#historyShopee');
     if (
       !stockPane && !b2bPane && !invoicePane && !enricherPane && !reviewPane &&
       !propertyPane && !trackerPane && !watchdogPane && !dividendPane &&
-      !audioPane && !packagingPane
+      !audioPane && !packagingPane && !shopeePane
     ) {
       return;
     }
@@ -5053,6 +5058,7 @@
       if (dividendPane) dividendPane.innerHTML = loginCard;
       if (audioPane) audioPane.innerHTML = loginCard;
       if (packagingPane) packagingPane.innerHTML = loginCard;
+      if (shopeePane) shopeePane.innerHTML = loginCard;
       $$('[data-hist-count]').forEach(function (el) { el.textContent = '0'; });
       $$('[data-hist-count-label="stock"]').forEach(function (el) { el.textContent = '0 subscriptions'; });
       ['b2b', 'invoice', 'enricher', 'review', 'property', 'tracker', 'watchdog', 'dividend'].forEach(function (key) {
@@ -5081,6 +5087,7 @@
     if (dividendPane) dividendPane.innerHTML = '<p class="empty-note">Loading your dividend radars…</p>';
     if (audioPane) audioPane.innerHTML = '<p class="empty-note">Loading your audio batches…</p>';
     if (packagingPane) packagingPane.innerHTML = '<p class="empty-note">Loading your packaging audits…</p>';
+    if (shopeePane) shopeePane.innerHTML = '<p class="empty-note">Loading your Shopee radars…</p>';
 
     apiFetch(ACCOUNT_HISTORY_URL, { method: 'GET' }, 20000)
       .then(function (response) {
@@ -5110,6 +5117,7 @@
         const goldTrackerList = safeList('gold_tracker');
         const audioIntelList = safeList('audio_intel');
         const packagingQcList = safeList('packaging_qc');
+        const shopeeRadarList = safeList('shopee_radar');
 
         /* Worker #10 (Gold Price & News Brief) renders its own history pane.
            Kept isolated so a gold failure can never blank the other 9 workers. */
@@ -5142,6 +5150,17 @@
             );
           } catch (packErr) {
             console.warn('[LiteWork] Packaging QC history render failed:', packErr);
+          }
+        }
+
+        /* Worker #13 (Shopee Price & Deal Drop Radar) renders its own pane. */
+        if (window.renderShopeeHistory) {
+          try {
+            window.renderShopeeHistory(
+              shopeeRadarList.length ? { shopee_radar: shopeeRadarList } : body
+            );
+          } catch (shopeeErr) {
+            console.warn('[LiteWork] Shopee history render failed:', shopeeErr);
           }
         }
         const stockRaw = pickArray(source, [

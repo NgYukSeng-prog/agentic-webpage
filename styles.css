@@ -11000,6 +11000,20 @@ body.is-authed #homeTemplate3 .t3-btn-guest {
   border-color: #94a3b8;
 }
 
+/* Shopee Radar (Worker #13): high-contrast ghost CTA on light panels. */
+#view-shopee-results .btn-ghost {
+  color: #0f172a;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  font-weight: 650;
+}
+
+#view-shopee-results .btn-ghost:hover {
+  color: #0f172a;
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
 .div-preview-table th,
 .div-preview-table td {
   white-space: nowrap;

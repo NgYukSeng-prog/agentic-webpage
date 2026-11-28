@@ -612,6 +612,18 @@ window.CONFIG = {
   packagingQcDownloadUrl:
     'https://n8n.20.205.96.122.sslip.io/webhook/download-packaging-qc',
 
+  /* --- Shopee Price & Deal Drop Radar (13th live worker) ------------------
+     Tracks effective prices (after public vouchers) for 1–8 Shopee MY/SG
+     links for 30 days. 5 credits (1–3 links) / 10 credits (4–8 links). */
+  SHOPEE_RADAR_AGENT_ID: 'shopee-radar',
+  SHOPEE_RADAR_AGENT_NAME: 'Shopee Price & Deal Drop Radar (MY & SG)',
+  SHOPEE_RADAR_DAYS: 30,
+  SHOPEE_RADAR_MAX_ITEMS: 8,
+  shopeeRadarStartUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/shopee-radar-start',
+  shopeeHistoryDownloadUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-shopee-history',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
