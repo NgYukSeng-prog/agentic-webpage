@@ -590,6 +590,17 @@ window.CONFIG = {
   goldTrackerStartUrl:
     'https://n8n.20.205.96.122.sslip.io/webhook/gold-tracker-start',
 
+  /* --- Audio-to-Intel: Voice & Meeting-to-Excel (11th live worker) --------
+     Turn trade-show recordings, supplier calls and voice notes into a
+     side-by-side comparison Excel. 5 credits (1–5 files) / 10 credits (6–10). */
+  AUDIO_INTEL_AGENT_ID: 'audio-intel',
+  AUDIO_INTEL_AGENT_NAME: 'Audio-to-Intel: Voice & Meeting-to-Excel',
+  AUDIO_INTEL_MAX_FILES: 10,
+  audioIntelStartUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/audio-intel-start',
+  audioIntelDownloadUrl:
+    'https://n8n.20.205.96.122.sslip.io/webhook/download-audio-intel',
+
   /* The 21 fixed MY/SG summary fields written to Sheet 1 of the .xlsx.
      Sheet 2 holds the itemized line items for every invoice. */
   INVOICE_OCR_COLUMNS: [
