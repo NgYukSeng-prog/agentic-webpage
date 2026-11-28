@@ -10,7 +10,7 @@
    D. Hash router
    E. Credit UI (bottom-left pill, subscribe button states)
    F. Home / sample output rendering
-   G. Manage My Plan (packs, checkout modal, active subscriptions)
+   G. My Activity (packs, checkout modal, active subscriptions)
    H. Configure page (calculator, stock grid lock, activation form)
    I. Success page + webhook sync
    J. Wallet popover, modal, toast, init
@@ -707,7 +707,7 @@
   const TITLES = {
     home: 'LiteWork — Your Low-Cost AI Workforce',
     agents: 'AI Agents — 10 Live Workers, One Credit Wallet',
-    plans: 'Manage My Plan — Subscriptions & History',
+    plans: 'My Activity · LiteWork',
     topup: 'Top Up Credits — LiteWork',
     about: 'About Us — LiteWork',
     configure: 'Configure Your Worker — LiteWork',
@@ -14103,7 +14103,7 @@
             '<div class="watch-confirm-id">Watch ID <code>' +
             escapeHtml(displayId || watchId) + '</code></div>' +
             '<div class="modal-actions">' +
-            '<a class="btn btn-primary" href="#plans" data-modal-close>View in Manage My Plan →</a>' +
+            '<a class="btn btn-primary" href="#plans" data-modal-close>View in My Activity →</a>' +
             '</div>' +
             '</div>';
         }
